@@ -59,7 +59,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     marks = [];
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
-    traffic = spawnTraffic(path, P.traffic.v, P.speed.v, level.seed);
+    traffic = spawnTraffic(path, P.traffic.v, P.speed.v, level.seed, level.cars);
     ui.overlay.className = '';
   }
 

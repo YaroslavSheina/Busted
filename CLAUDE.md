@@ -105,14 +105,15 @@ src/
     main.ts        — панель, экспорт/импорт, «Играть» через createGame на той же странице
     canvas.ts      — холст: панорама, зум, точки; дорога рисуется drawRoad
     io.ts          — формат файла уровня, валидация импорта
-levels/*.json      — { name, points: [[x,y],…], width, traffic, speed, seed }
+levels/*.json      — { name, points: [[x,y],…], width, traffic, speed, seed, cars?: [{ s, lane, speed }] }
 docs/concept.md
 docs/prototype.html
 editor/index.html  — редактор уровней (вторая страница Vite, /editor/)
 ```
 
 Уровень задаёт стартовые `width/traffic/speed` (пишутся в `P` при загрузке), слайдеры панели тюнинга
-крутят их поверх. `seed` — детерминированный трафик уровня.
+крутят их поверх. `seed` — детерминированный трафик уровня. `cars` — явно расставленные машины (speed px/с, 0 — стоит),
+добавляются к seeded-трафику; при `traffic: 0` остаются только они.
 
 `physics.ts` не знает про canvas, DOM и дорогу. `road.ts` не знает про машину. Это позволяет тестировать физику числами.
 

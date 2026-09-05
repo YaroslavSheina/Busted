@@ -12,3 +12,8 @@
 .buttons button.primary{background:#f4b942;color:#1a1408;font-weight:600}
 #status:empty{display:none}
 #back{pointer-events:auto;background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:20px;padding:7px 13px;font-size:12px}
+.row input[type=checkbox]{width:16px;height:16px;margin:0 67px 0 0;accent-color:#f4b942}
+.row label small{opacity:.5;font-size:11px}
+.carBox{margin:8px 0;padding:8px 10px;border:1px solid rgba(244,185,66,.35);border-radius:10px}
+.carBox #carInfo{font-variant-numeric:tabular-nums;opacity:.8}
+.carBox button{width:100%;margin-top:4px;background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:8px;padding:6px 0;font-size:12px;cursor:pointer}

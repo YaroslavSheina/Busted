@@ -11,6 +11,9 @@ export interface Vehicle {
   col: string;
 }
 
+// Явно расставленная машина уровня: speed в px/с, 0 — стоит
+export interface TrafficCar { s: number; lane: number; speed: number }
+
 export interface Obb { c: [number, number][]; ax: [number, number][] }
 
 const COLORS = ['#8a94a6', '#b9b2a3', '#7a8a7e', '#a3877a', '#6f7f9a'];
@@ -25,7 +28,7 @@ export function rng(seed: number): () => number {
   };
 }
 
-export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number): Vehicle[] {
+export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number, cars: TrafficCar[] = []): Vehicle[] {
   const r = rng(seed);
   const traffic: Vehicle[] = [];
   const n = Math.round(path.L / 380 * density);
@@ -37,6 +40,8 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
       break;
     }
   }
+  // Явные машины уровня добавляются к seeded-трафику; при density 0 остаются только они
+  cars.forEach((c, i) => traffic.push({ s: c.s, lane: c.lane, spd: c.speed, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[i % COLORS.length] }));
   return traffic;
 }
 

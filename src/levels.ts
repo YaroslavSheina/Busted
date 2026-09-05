@@ -1,5 +1,6 @@
 // Уровни — данные: levels/*.json, ключ уровня = имя файла без расширения.
 import type { Pt } from './road';
+import type { TrafficCar } from './traffic';
 
 export interface LevelData {
   name: string;
@@ -8,6 +9,7 @@ export interface LevelData {
   traffic: number;
   speed: number;
   seed: number;
+  cars?: TrafficCar[]; // необязательно: явно расставленные машины
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

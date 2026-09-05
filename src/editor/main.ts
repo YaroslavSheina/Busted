@@ -4,7 +4,7 @@ import { P, type Param } from '../config';
 import { LEVELS, type LevelData } from '../levels';
 import { createGame, type Game } from '../game';
 import { buildPath } from '../road';
-import { initCanvas } from './canvas';
+import { initCanvas, type Sel } from './canvas';
 import { fileName, formatLevel, parseLevel } from './io';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -12,23 +12,46 @@ const inp = (id: string) => $<HTMLInputElement>(id);
 
 // Стартовые значения — из config, чтобы новый уровень совпадал с тем, что крутится в панели тюнинга
 const level: LevelData = { name: 'Новый уровень', points: [], width: P.width.v, traffic: P.traffic.v, speed: P.speed.v, seed: 1 };
-let selected = -1;
+let sel: Sel = null;
 
 // ---------- холст ----------
 const canvas = initCanvas($<HTMLCanvasElement>('ec'), {
-  points: () => level.points,
-  width: () => level.width,
-  selected: () => selected,
-  add: p => { level.points.push(p); selected = level.points.length - 1; changed(); },
-  move: (i, p) => { level.points[i] = p; changed(); },
-  remove: i => { level.points.splice(i, 1); selected = -1; changed(); },
-  select: i => { selected = i; },
+  level: () => level,
+  selected: () => sel,
+  select: s => { sel = s; syncSel(); },
+  carMode: () => inp('carMode').checked,
+  addPoint: p => { level.points.push(p); select({ kind: 'point', i: level.points.length - 1 }); changed(); },
+  movePoint: (i, p) => { level.points[i] = p; changed(); },
+  removePoint: i => { level.points.splice(i, 1); select(null); changed(); },
+  addCar: c => { (level.cars ??= []).push(c); select({ kind: 'car', i: level.cars.length - 1 }); changed(); },
+  moveCar: (i, c) => { level.cars![i] = c; changed(); },
+  removeCar: i => { level.cars!.splice(i, 1); select(null); changed(); },
 });
 
+function select(s: Sel): void { sel = s; syncSel(); }
+
 function changed(): void {
-  const n = level.points.length;
-  $('stats').textContent = n < 2 ? `${n} ${n === 1 ? 'точка' : 'точек'} — нужно минимум 2` : `${n} точек · длина ${Math.round(buildPath(level.points).L)} px`;
+  const n = level.points.length, cars = level.cars?.length ?? 0;
+  $('stats').textContent = (n < 2 ? `${n} ${n === 1 ? 'точка' : 'точек'} — нужно минимум 2` : `${n} точек · длина ${Math.round(buildPath(level.points).L)} px`)
+    + (cars ? ` · машин: ${cars}` : '');
+  syncSel();
 }
+
+// Блок выбранной машины: положение и скорость
+function syncSel(): void {
+  const box = $('carBox');
+  if (sel?.kind !== 'car' || !level.cars?.[sel.i]) { box.hidden = true; return; }
+  const c = level.cars[sel.i];
+  box.hidden = false;
+  $('carInfo').textContent = `Машина ${sel.i} · s ${c.s} · полоса ${c.lane}`;
+  if (document.activeElement !== inp('carSpeed')) inp('carSpeed').value = String(c.speed);
+}
+inp('carSpeed').oninput = () => {
+  if (sel?.kind !== 'car' || !level.cars) return;
+  level.cars[sel.i].speed = Math.max(0, parseFloat(inp('carSpeed').value) || 0);
+  canvas.draw();
+};
+$('carDelete').onclick = () => { if (sel?.kind === 'car' && level.cars) { level.cars.splice(sel.i, 1); select(null); changed(); canvas.draw(); } };
 
 // ---------- панель ----------
 const status = (s: string) => { $('status').textContent = s; };
@@ -39,7 +62,7 @@ for (const k of ['width', 'traffic', 'speed'] as const) {
   inp(k).oninput = () => { level[k] = parseFloat(inp(k).value); $(k + 'V').textContent = String(level[k]); canvas.draw(); };
 }
 inp('name').oninput = () => { level.name = inp('name').value; };
-inp('seed').onchange = () => { level.seed = Math.round(parseFloat(inp('seed').value)) || 0; inp('seed').value = String(level.seed); };
+inp('seed').onchange = () => { level.seed = Math.round(parseFloat(inp('seed').value)) || 0; inp('seed').value = String(level.seed); canvas.draw(); };
 
 function syncPanel(): void {
   inp('name').value = level.name;
@@ -49,8 +72,9 @@ function syncPanel(): void {
 }
 
 function load(l: LevelData): void {
+  delete level.cars;
   Object.assign(level, structuredClone(l));
-  selected = -1;
+  select(null);
   syncPanel();
   canvas.fit();
 }
@@ -106,9 +130,14 @@ $('back').onclick = () => {
 
 // ---------- клавиатура ----------
 addEventListener('keydown', e => {
-  if (game || (e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT') return;
-  if ((e.key === 'Delete' || e.key === 'Backspace') && selected >= 0) { level.points.splice(selected, 1); selected = -1; changed(); canvas.draw(); }
-  if (e.key === 'Escape') { selected = -1; canvas.draw(); }
+  const tag = (e.target as HTMLElement).tagName;
+  if (game || tag === 'INPUT' || tag === 'SELECT') return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
+    if (sel.kind === 'point') level.points.splice(sel.i, 1);
+    else level.cars?.splice(sel.i, 1);
+    select(null); changed(); canvas.draw();
+  }
+  if (e.key === 'Escape') { select(null); canvas.draw(); }
 });
 
 syncPanel();

@@ -17,11 +17,17 @@
       <div class="row"><label>Плотность трафика</label><input id="traffic" type="range"><span id="trafficV"></span></div>
       <div class="row"><label>Скорость, px/с</label><input id="speed" type="range"><span id="speedV"></span></div>
       <div class="row"><label>Seed</label><input id="seed" type="number" step="1"></div>
+      <div class="row"><label>Ставить машины<br><small>или Shift+клик по дороге</small></label><input id="carMode" type="checkbox"></div>
+      <div id="carBox" class="carBox" hidden>
+        <div id="carInfo"></div>
+        <div class="row"><label>Скорость, px/с<br><small>0 — стоит</small></label><input id="carSpeed" type="number" min="0" step="10"></div>
+        <button id="carDelete">Удалить машину</button>
+      </div>
       <div id="stats"></div>
       <div class="buttons"><button id="export">Экспорт</button><button id="import">Импорт</button><button id="play" class="primary">Играть</button></div>
       <input id="file" type="file" accept=".json,application/json" hidden>
       <div id="status" class="hint"></div>
-      <div class="hint">Клик по пустому месту — точка в конец. Перетаскивание — сдвиг. Delete или долгое нажатие — удалить. Колесо или пинч — зум, тянуть пустое место — панорама.</div>
+      <div class="hint">Клик по пустому месту — точка в конец. Перетаскивание — сдвиг. Delete или долгое нажатие — удалить. Shift+клик по дороге — машина в ближайшую полосу. Колесо или пинч — зум, тянуть пустое место — панорама.</div>
     </div>
   </div>
 </div>
