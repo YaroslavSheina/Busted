@@ -90,21 +90,29 @@ x  += vx · dt ;  y += vy · dt
 
 ```
 src/
-  main.ts          — цикл, resize, DPR
+  main.ts          — страница игры: собирает UI, createGame, панель тюнинга
+  game.ts          — одна попытка: createGame(ui, level) — состояние, update, цикл, resize, DPR
   config.ts        — все тюнинг-параметры в одном месте (см. таблицу выше)
   physics.ts       — модель машины, чистые функции: step(car, input, params, dt)
   road.ts          — сплайн, сэмплирование, pathAt(s), nearest(pos, sGuess)
   traffic.ts       — спавн (seeded), движение, OBB, SAT
   input.ts         — зоны LEFT/RIGHT, клавиатура, трекинг длительности удержания
-  render.ts        — камера, дорога, машины, следы заноса, HUD
-  levels.ts        — загрузка JSON-уровней
+  render.ts        — камера, drawGrid/drawRoad (общие с редактором), машины, следы заноса, HUD
+  levels.ts        — загрузка levels/*.json через import.meta.glob, ключ = имя файла
   cars.ts          — таблица машин
   debug.ts         — панель тюнинга (в проде выключена)
-levels/*.json
+  editor/
+    main.ts        — панель, экспорт/импорт, «Играть» через createGame на той же странице
+    canvas.ts      — холст: панорама, зум, точки; дорога рисуется drawRoad
+    io.ts          — формат файла уровня, валидация импорта
+levels/*.json      — { name, points: [[x,y],…], width, traffic, speed, seed }
 docs/concept.md
 docs/prototype.html
-editor/            — редактор уровней (отдельная страница Vite)
+editor/index.html  — редактор уровней (вторая страница Vite, /editor/)
 ```
+
+Уровень задаёт стартовые `width/traffic/speed` (пишутся в `P` при загрузке), слайдеры панели тюнинга
+крутят их поверх. `seed` — детерминированный трафик уровня.
 
 `physics.ts` не знает про canvas, DOM и дорогу. `road.ts` не знает про машину. Это позволяет тестировать физику числами.
 
