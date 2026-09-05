@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Прототип — Left / Right</title>
+<style>
+  html,body{margin:0;height:100%;background:#15171c;overflow:hidden;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;color:#ece9e0;-webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none}
+  canvas{display:block;width:100vw;height:100vh}
+  #ui{position:fixed;inset:0;pointer-events:none}
+  .zone{position:absolute;bottom:0;height:36vh;width:50%;pointer-events:auto;display:flex;align-items:flex-end;justify-content:center;padding-bottom:calc(26px + env(safe-area-inset-bottom));box-sizing:border-box;font-weight:700;letter-spacing:.18em;font-size:13px;color:rgba(236,233,224,.3);background:linear-gradient(to top,rgba(255,255,255,.035),transparent 70%)}
+  .zone.on{color:#f4b942;background:linear-gradient(to top,rgba(244,185,66,.14),transparent 70%)}
+  #left{left:0;border-right:1px solid rgba(255,255,255,.05)} #right{right:0}
+  #top{position:absolute;top:calc(12px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:center}
+  #hud{font-size:12px;letter-spacing:.06em;opacity:.65;font-variant-numeric:tabular-nums;line-height:1.5}
+  #hud b{color:#f4b942;font-weight:700}
+  #gear{pointer-events:auto;background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:20px;padding:7px 13px;font-size:12px}
+  #panel{position:absolute;top:calc(50px + env(safe-area-inset-top));right:14px;width:min(290px,82vw);max-height:70vh;overflow:auto;background:rgba(21,23,28,.94);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px;pointer-events:auto;display:none;font-size:12px;backdrop-filter:blur(10px)}
+  #panel.open{display:block}
+  .row{display:flex;align-items:center;margin:7px 0;gap:8px}
+  .row label{flex:1;opacity:.8} .row span{width:40px;text-align:right;opacity:.55;font-variant-numeric:tabular-nums}
+  .row input{width:110px;accent-color:#f4b942}
+  .levels{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .levels button{background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:8px;padding:6px 10px;font-size:12px}
+  .levels button.on{background:#f4b942;color:#1a1408;font-weight:600}
+  .hint{opacity:.45;margin-top:8px;line-height:1.4}
+  #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;pointer-events:auto;background:rgba(21,23,28,.6)}
+  #overlay.show{display:flex}
+  #overlay.busted{animation:cop .5s steps(2) infinite}
+  @keyframes cop{0%{box-shadow:inset 0 0 140px rgba(235,60,60,.55)}50%{box-shadow:inset 0 0 140px rgba(60,100,235,.55)}}
+  #overlay h1{margin:0;font-size:52px;letter-spacing:.14em;font-weight:800}
+  #overlay p{margin:0;opacity:.7;font-size:14px;line-height:1.6;text-align:center}
+  #overlay small{opacity:.45;font-size:12px;letter-spacing:.1em;margin-top:8px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div id="top"><div id="hud"></div><button id="gear">⚙ тюнинг</button></div>
+  <div id="panel"></div>
+  <div class="zone" id="left">LEFT</div><div class="zone" id="right">RIGHT</div>
+  <div id="overlay"><h1 id="ovTitle"></h1><p id="ovSub"></p><small>нажми, чтобы повторить</small></div>
+</div>
+<script>
+// ---------- параметры (крутятся в панели) ----------
+const P = {
+  speed:   {v:300, min:120, max:700, step:10,  l:'Скорость, px/с'},
+  steer:   {v:5,   min:1,   max:14,  step:.5,  l:'Отклик руля'},
+  damp:    {v:3,   min:0,   max:8,   step:.25, l:'Гашение вращения'},
+  grip:    {v:7,   min:1,   max:16,  step:.5,  l:'Сцепление'},
+  spin:    {v:2.4, min:.8,  max:5,   step:.1,  l:'Порог заноса'},
+  skidGrip:{v:1.2, min:.2,  max:5,   step:.1,  l:'Сцепление в заносе'},
+  sens:    {v:1,   min:0,   max:2,   step:.1,  l:'Чувств. от скорости'},
+  width:   {v:150, min:80,  max:260, step:10,  l:'Ширина дороги'},
+  traffic: {v:.5,  min:0,   max:1.5, step:.05, l:'Плотность трафика'},
+  tol:     {v:8,   min:0,   max:30,  step:1,   l:'Прощение края'},
+};
+const LANES = 3;
+
+// ---------- уровни: контрольные точки сплайна ----------
+function ring(cx,cy,r,from,to,n){const a=[];for(let i=0;i<=n;i++){const t=from+(to-from)*i/n;a.push([cx+r*Math.sin(t),cy+r*Math.cos(t)]);}return a;}
+const LEVELS = {
+  straight:{name:'Прямая',      pts:[[0,0],[0,-800],[0,-1600],[0,-2400],[0,-3200],[0,-4000]]},
+  bend:    {name:'Изгиб 45°',   pts:[[0,0],[0,-700],[-60,-1100],[-350,-1600],[-750,-2100],[-1000,-2600],[-1000,-3200],[-1000,-3900]]},
+  turn:    {name:'Поворот 90°', pts:[[0,0],[0,-700],[0,-1100],[120,-1400],[400,-1560],[800,-1600],[1400,-1600],[2000,-1600],[2600,-1600]]},
+  uturn:   {name:'Разворот',    pts:[[0,0],[0,-700],[0,-1100],[90,-1380],[300,-1520],[520,-1400],[600,-1100],[600,-700],[600,0],[600,800],[600,1500]]},
+  ring:    {name:'Кольцо',      pts:[[0,600],[0,0],[0,-500],...ring(0,-1000,280,0,Math.PI*2.5,10),[280,-1500],[280,-2200],[280,-2900]]},
+};
+
+// ---------- дорога ----------
+function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
+  return [0.5*(2*p1[0]+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
+          0.5*(2*p1[1]+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)];}
+function buildPath(pts){
+  const pt=[];
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[Math.max(i-1,0)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(i+2,pts.length-1)];
+    const steps=Math.max(8,Math.ceil(Math.hypot(p2[0]-p1[0],p2[1]-p1[1])/6));
+    for(let k=0;k<steps;k++){const q=catmull(p0,p1,p2,p3,k/steps);pt.push({x:q[0],y:q[1]});}
+  }
+  pt.push({x:pts[pts.length-1][0],y:pts[pts.length-1][1]});
+  let s=0;
+  for(let i=0;i<pt.length;i++){
+    if(i>0)s+=Math.hypot(pt[i].x-pt[i-1].x,pt[i].y-pt[i-1].y);
+    pt[i].s=s;
+    const a=pt[Math.max(i-1,0)],b=pt[Math.min(i+1,pt.length-1)];
+    const dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1;
+    pt[i].tx=dx/l;pt[i].ty=dy/l;pt[i].nx=-pt[i].ty;pt[i].ny=pt[i].tx; // n = вправо по ходу
+  }
+  return {pt,L:s};
+}
+function idxAt(path,s){let lo=0,hi=path.pt.length-1;while(lo<hi){const m=(lo+hi)>>1;if(path.pt[m].s<s)lo=m+1;else hi=m;}return lo;}
+function pathAt(path,s){
+  s=Math.max(0,Math.min(path.L,s));const i=Math.max(1,idxAt(path,s));const a=path.pt[i-1],b=path.pt[i];
+  const t=(s-a.s)/((b.s-a.s)||1);
+  return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,tx:a.tx+(b.tx-a.tx)*t,ty:a.ty+(b.ty-a.ty)*t,nx:a.nx+(b.nx-a.nx)*t,ny:a.ny+(b.ny-a.ny)*t};
+}
+function nearest(path,x,y,sGuess){
+  const i0=idxAt(path,sGuess-200),i1=Math.min(path.pt.length-1,idxAt(path,sGuess+350));
+  let best=Infinity,bi=i0;
+  for(let i=i0;i<=i1;i++){const p=path.pt[i];const d=(p.x-x)**2+(p.y-y)**2;if(d<best){best=d;bi=i;}}
+  const p=path.pt[bi];return {s:p.s,off:(x-p.x)*p.nx+(y-p.y)*p.ny,p};
+}
+
+// ---------- состояние ----------
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){DPR=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;}
+addEventListener('resize',resize);resize();
+
+let path,levelKey='straight',car,traffic,cam,state,timeAlive,hold;
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const laneW=()=>P.width.v/LANES;
+const laneOff=i=>(i-(LANES-1)/2)*laneW();
+
+function loadLevel(k){levelKey=k;path=buildPath(LEVELS[k].pts);reset();buildPanel();}
+function reset(){
+  const p0=pathAt(path,0);
+  car={x:p0.x,y:p0.y,h:Math.atan2(p0.tx,-p0.ty),w:0,vx:p0.tx*P.speed.v,vy:p0.ty*P.speed.v,s:0,off:0,skid:false,W:28,L:52,marks:[]};
+  cam={x:car.x,y:car.y};
+  state='play';timeAlive=0;hold={dir:0,t:0,last:null};
+  const r=rng(1234+levelKey.length*7);traffic=[];
+  const n=Math.round(path.L/380*P.traffic.v);
+  for(let i=0;i<n;i++){
+    for(let tries=0;tries<20;tries++){
+      const s=250+r()*(path.L-500),lane=Math.floor(r()*LANES);
+      if(traffic.some(c=>c.lane===lane&&Math.abs(c.s-s)<130))continue;
+      traffic.push({s,lane,spd:P.speed.v*(0.4+r()*0.3),W:26,L:48,col:['#8a94a6','#b9b2a3','#7a8a7e','#a3877a','#6f7f9a'][Math.floor(r()*5)]});break;
+    }
+  }
+  overlay.className='';
+}
+
+// ---------- ввод ----------
+const held={left:false,right:false};
+const zones={left:document.getElementById('left'),right:document.getElementById('right')};
+for(const k in zones){const z=zones[k];
+  z.addEventListener('pointerdown',e=>{e.preventDefault();z.setPointerCapture(e.pointerId);held[k]=true;z.classList.add('on');});
+  const off=()=>{held[k]=false;z.classList.remove('on');};
+  z.addEventListener('pointerup',off);z.addEventListener('pointercancel',off);z.addEventListener('lostpointercapture',off);
+}
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a'){held.left=true;zones.left.classList.add('on');}if(e.key==='ArrowRight'||e.key==='d'){held.right=true;zones.right.classList.add('on');}});
+addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a'){held.left=false;zones.left.classList.remove('on');}if(e.key==='ArrowRight'||e.key==='d'){held.right=false;zones.right.classList.remove('on');}});
+const overlay=document.getElementById('overlay');
+overlay.addEventListener('pointerdown',e=>{e.preventDefault();if(state!=='play')reset();});
+addEventListener('keydown',e=>{if(e.key===' '&&state!=='play')reset();});
+
+// ---------- панель ----------
+const panel=document.getElementById('panel');
+document.getElementById('gear').onclick=()=>panel.classList.toggle('open');
+function buildPanel(){
+  panel.innerHTML='';
+  const lv=document.createElement('div');lv.className='levels';
+  for(const k in LEVELS){const b=document.createElement('button');b.textContent=LEVELS[k].name;if(k===levelKey)b.classList.add('on');b.onclick=()=>loadLevel(k);lv.appendChild(b);}
+  panel.appendChild(lv);
+  for(const k in P){const p=P[k];const row=document.createElement('div');row.className='row';
+    row.innerHTML=`<label>${p.l}</label><input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.v}"><span>${p.v}</span>`;
+    const inp=row.querySelector('input'),sp=row.querySelector('span');
+    inp.oninput=()=>{p.v=parseFloat(inp.value);sp.textContent=p.v;if(k==='width'||k==='traffic')reset();};
+    panel.appendChild(row);}
+  const h=document.createElement('div');h.className='hint';h.textContent='Left/Right — относительно машины, не экрана. На клавиатуре: стрелки или A/D, пробел — заново.';panel.appendChild(h);
+}
+
+// ---------- физика ----------
+function obb(x,y,h,w,l){const s=Math.sin(h),c=Math.cos(h);const fx=s,fy=-c,rx=c,ry=s;
+  return {c:[[x+fx*l/2+rx*w/2,y+fy*l/2+ry*w/2],[x+fx*l/2-rx*w/2,y+fy*l/2-ry*w/2],[x-fx*l/2-rx*w/2,y-fy*l/2-ry*w/2],[x-fx*l/2+rx*w/2,y-fy*l/2+ry*w/2]],ax:[[fx,fy],[rx,ry]]};}
+function hit(a,b){for(const ax of [...a.ax,...b.ax]){let a0=Infinity,a1=-Infinity,b0=Infinity,b1=-Infinity;
+  for(const c of a.c){const d=c[0]*ax[0]+c[1]*ax[1];a0=Math.min(a0,d);a1=Math.max(a1,d);}
+  for(const c of b.c){const d=c[0]*ax[0]+c[1]*ax[1];b0=Math.min(b0,d);b1=Math.max(b1,d);}
+  if(a1<b0||b1<a0)return false;}return true;}
+
+function update(dt){
+  if(state!=='play')return;
+  timeAlive+=dt;
+  const dir=(held.right?1:0)-(held.left?1:0);
+  if(dir!==hold.dir){if(hold.dir!==0)hold.last={dir:hold.dir,t:hold.t};hold.dir=dir;hold.t=0;}
+  if(dir!==0)hold.t+=dt;
+
+  const speed=P.speed.v;
+  const sensMul=1+(speed/300-1)*P.sens.v;
+  car.w+=dir*P.steer.v*sensMul*dt;
+  car.w-=car.w*(car.skid?P.damp.v*0.25:P.damp.v)*dt;
+  if(!car.skid&&Math.abs(car.w)>P.spin.v)car.skid=true;
+  if(car.skid&&Math.abs(car.w)<P.spin.v*0.4)car.skid=false;
+  car.h+=car.w*dt;
+  const fx=Math.sin(car.h),fy=-Math.cos(car.h);
+  const g=Math.min(1,(car.skid?P.skidGrip.v:P.grip.v)*dt);
+  car.vx+=(fx*speed-car.vx)*g;car.vy+=(fy*speed-car.vy)*g;
+  car.x+=car.vx*dt;car.y+=car.vy*dt;
+  if(car.skid){car.marks.push({x:car.x,y:car.y,a:1});}
+  for(const m of car.marks)m.a-=dt*0.4;car.marks=car.marks.filter(m=>m.a>0).slice(-200);
+
+  const nr=nearest(path,car.x,car.y,car.s);car.s=nr.s;car.off=nr.off;
+  if(Math.abs(car.off)>P.width.v/2+P.tol.v)return busted('вылет с дороги');
+  if(car.s>=path.L-60)return finish();
+
+  traffic.sort((a,b)=>a.s-b.s);
+  for(let i=0;i<traffic.length;i++){const c=traffic[i];let sp=c.spd;
+    for(let j=i+1;j<traffic.length;j++){const o=traffic[j];if(o.lane===c.lane){if(o.s-c.s<110)sp=Math.min(sp,o.spd);break;}}
+    c.s+=sp*dt;}
+  traffic=traffic.filter(c=>c.s<path.L-140);
+  const me=obb(car.x,car.y,car.h,car.W,car.L);
+  for(const c of traffic){if(Math.abs(c.s-car.s)>120)continue;const p=pathAt(path,c.s);const o=laneOff(c.lane);
+    const b=obb(p.x+p.nx*o,p.y+p.ny*o,Math.atan2(p.tx,-p.ty),c.W,c.L);if(hit(me,b))return busted('столкновение');}
+
+  const vl=Math.hypot(car.vx,car.vy)||1;
+  const tx=car.x+car.vx/vl*150,ty=car.y+car.vy/vl*150;
+  const cl=Math.min(1,6*dt);cam.x+=(tx-cam.x)*cl;cam.y+=(ty-cam.y)*cl;
+}
+function holdText(){
+  const name=d=>d<0?'LEFT':'RIGHT';
+  if(hold.dir!==0)return `Держал ${name(hold.dir)} ${hold.t.toFixed(1)} с — и не отпустил`;
+  if(hold.last)return `Последнее нажатие: ${name(hold.last.dir)}, ${hold.last.t.toFixed(1)} с`;
+  return 'Ни одного нажатия';
+}
+function busted(why){state='busted';overlay.className='show busted';ovTitle.textContent='BUSTED';ovSub.textContent=why+'\n'+holdText();}
+function finish(){state='done';overlay.className='show';ovTitle.textContent='DELIVERED';ovSub.textContent=`${timeAlive.toFixed(1)} с`;}
+
+// ---------- рендер ----------
+function poly(off,dash,color,lw){ctx.beginPath();const pt=path.pt;
+  for(let i=0;i<pt.length;i++){const p=pt[i];const x=p.x+p.nx*off,y=p.y+p.ny*off;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  ctx.setLineDash(dash);ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();ctx.setLineDash([]);}
+function drawCar(x,y,h,w,l,col,player){ctx.save();ctx.translate(x,y);ctx.rotate(h);
+  ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(-w/2,-l/2,w,l,6);ctx.fill();
+  ctx.fillStyle='rgba(20,22,28,.55)';ctx.fillRect(-w/2+4,-l/2+12,w-8,11);ctx.fillRect(-w/2+4,l/2-14,w-8,7);
+  if(player){ctx.fillStyle='#fff3c4';ctx.fillRect(-w/2+3,-l/2-1,6,3);ctx.fillRect(w/2-9,-l/2-1,6,3);}
+  else{ctx.fillStyle='#e04a3a';ctx.fillRect(-w/2+3,l/2-2,6,2);ctx.fillRect(w/2-9,l/2-2,6,2);}
+  ctx.restore();}
+function render(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#15171c';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.translate(W/2-cam.x,H/2-cam.y);
+  // сетка земли — ориентир для движения
+  const g=120,x0=Math.floor((cam.x-W/2)/g)*g,y0=Math.floor((cam.y-H/2)/g)*g;
+  ctx.strokeStyle='rgba(255,255,255,.035)';ctx.lineWidth=1;ctx.beginPath();
+  for(let x=x0;x<cam.x+W/2;x+=g){ctx.moveTo(x,cam.y-H/2);ctx.lineTo(x,cam.y+H/2);}
+  for(let y=y0;y<cam.y+H/2;y+=g){ctx.moveTo(cam.x-W/2,y);ctx.lineTo(cam.x+W/2,y);}ctx.stroke();
+  // дорога
+  const w=P.width.v;
+  poly(0,[],'#3a3d46',w+8);poly(0,[],'#262930',w);
+  for(let k=1;k<LANES;k++)poly(-w/2+k*laneW(),[26,22],'rgba(236,233,224,.28)',2);
+  poly(-w/2+3,[],'rgba(244,185,66,.5)',2);poly(w/2-3,[],'rgba(244,185,66,.5)',2);
+  // финиш
+  const e=pathAt(path,path.L-60);ctx.save();ctx.translate(e.x,e.y);ctx.rotate(Math.atan2(e.tx,-e.ty));
+  for(let i=0;i<8;i++){ctx.fillStyle=i%2?'#ece9e0':'#15171c';ctx.fillRect(-w/2+i*w/8,-6,w/8,12);}ctx.restore();
+  // следы заноса
+  for(const m of car.marks){ctx.fillStyle=`rgba(0,0,0,${m.a*0.35})`;ctx.beginPath();ctx.arc(m.x,m.y,9,0,7);ctx.fill();}
+  // трафик
+  for(const c of traffic){const p=pathAt(path,c.s);const o=laneOff(c.lane);drawCar(p.x+p.nx*o,p.y+p.ny*o,Math.atan2(p.tx,-p.ty),c.W,c.L,c.col,false);}
+  drawCar(car.x,car.y,car.h,car.W,car.L,'#f4b942',true);
+  ctx.restore();
+}
+
+// ---------- цикл ----------
+const hud=document.getElementById('hud');let last=performance.now(),hudT=0;
+function frame(now){const dt=Math.min(1/30,(now-last)/1000);last=now;update(dt);render();
+  hudT+=dt;if(hudT>0.1){hudT=0;hud.innerHTML=`${LEVELS[levelKey].name} · ${Math.round(car.s/path.L*100)}%<br>ω ${car.w.toFixed(2)}${car.skid?' <b>занос</b>':''}`;}
+  requestAnimationFrame(frame);}
+loadLevel('straight');requestAnimationFrame(frame);
+</script>
+</body>
+</html>
