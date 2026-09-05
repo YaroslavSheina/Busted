@@ -67,6 +67,13 @@ export function pathAt(path: Path, s: number): Pose {
   };
 }
 
+// Как pathAt, но при s < 0 продолжает дорогу прямо назад от старта — для преследователя за спиной
+export function pathAtExt(path: Path, s: number): Pose {
+  if (s >= 0) return pathAt(path, s);
+  const p = pathAt(path, 0);
+  return { ...p, x: p.x + p.tx * s, y: p.y + p.ty * s };
+}
+
 // Ближайшая точка в окне вокруг предыдущего s, а не глобальный поиск:
 // иначе на кольце и развороте машину «перебросит» на соседний участок дороги.
 export function nearest(path: Path, x: number, y: number, sGuess: number): { s: number; off: number; p: Sample } {

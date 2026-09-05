@@ -1,8 +1,8 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { CAM_AHEAD, CAM_LERP, MAX_DT, P, PLAYER_SIZE } from './config';
+import { CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, MAX_DT, P, PLAYER_SIZE, TRAFFIC_SIZE } from './config';
 import { step, type CarState } from './physics';
-import { buildPath, heading, nearest, pathAt, type Path } from './road';
-import { collides, moveTraffic, obb, spawnTraffic, type Vehicle } from './traffic';
+import { buildPath, heading, nearest, pathAt, pathAtExt, type Path } from './road';
+import { collides, hit, moveTraffic, obb, spawnTraffic, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { hudHtml, render, type Cam, type Mark } from './render';
 import type { LevelData } from './levels';
@@ -44,6 +44,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let cam: Cam;
   let state: State;
   let timeAlive = 0;
+  // Преследователь едет по сплайну с той же скоростью, поэтому догоняет только когда игрок теряет ход
+  let chaser: { s: number; off: number } | null = null;
 
   function load(l: LevelData): void {
     level = l;
@@ -60,6 +62,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
     traffic = spawnTraffic(path, P.traffic.v, P.speed.v, level.seed, level.cars);
+    chaser = level.chaser ? { s: -level.chaser.gap, off: 0 } : null;
     ui.overlay.className = '';
   }
 
@@ -70,6 +73,11 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   function finish(): void {
     state = 'done'; ui.overlay.className = 'show';
     ui.ovTitle.textContent = 'DELIVERED'; ui.ovSub.textContent = `${timeAlive.toFixed(1)} с`;
+  }
+
+  function chaserPose() {
+    const p = pathAtExt(path, chaser!.s);
+    return { x: p.x + p.nx * chaser!.off, y: p.y + p.ny * chaser!.off, h: heading(p.tx, p.ty) };
   }
 
   function update(dt: number): void {
@@ -89,7 +97,17 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (car.s >= path.L - 60) return finish();
 
     traffic = moveTraffic(traffic, path, dt);
-    if (collides(traffic, path, P.width.v, obb(car.x, car.y, car.h, car.W, car.L), car.s)) return busted('столкновение');
+    const me = obb(car.x, car.y, car.h, car.W, car.L);
+    if (collides(traffic, path, P.width.v, me, car.s)) return busted('столкновение');
+
+    if (chaser) {
+      chaser.s += P.speed.v * level.chaser!.speed * dt;
+      chaser.off += (car.off - chaser.off) * Math.min(1, CHASER_FOLLOW * dt);
+      const lim = P.width.v / 2 - TRAFFIC_SIZE.W / 2;
+      chaser.off = Math.max(-lim, Math.min(lim, chaser.off));
+      const c = chaserPose();
+      if (hit(me, obb(c.x, c.y, c.h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L))) return busted('догнали');
+    }
 
     // Камера: точка впереди по вектору скорости (не курса), плавный догон
     const vl = Math.hypot(car.vx, car.vy) || 1;
@@ -108,9 +126,13 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   function frame(now: number): void {
     const dt = Math.min(MAX_DT, (now - last) / 1000); last = now;
     update(dt);
-    render(ctx, view, { path, width: P.width.v, car, traffic, marks, cam });
+    const tail = chaser ? car.s - chaser.s : undefined;
+    render(ctx, view, {
+      path, width: P.width.v, car, traffic, marks, cam, t: timeAlive,
+      chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
+    });
     hudT += dt;
-    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(level.name, car.s / path.L, car); }
+    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(level.name, car.s / path.L, car, tail); }
     raf = requestAnimationFrame(frame);
   }
   load(first);

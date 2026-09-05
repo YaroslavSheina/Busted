@@ -28,5 +28,8 @@ export const TRAFFIC_SIZE = { W: 26, L: 48 };
 export const CAM_AHEAD = 150;
 export const CAM_LERP = 6;
 
+// Преследователь: как быстро он повторяет боковое смещение игрока, 1/с
+export const CHASER_FOLLOW = 4;
+
 // Предел dt на кадр — защита от рывка после паузы вкладки
 export const MAX_DT = 1 / 30;

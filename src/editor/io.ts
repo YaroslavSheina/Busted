@@ -9,7 +9,8 @@ export function formatLevel(l: LevelData): string {
   const cars = l.cars?.length
     ? `,\n  "cars": [\n${l.cars.map(c => `    { "s": ${c.s}, "lane": ${c.lane}, "speed": ${c.speed} }`).join(',\n')}\n  ]`
     : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "speed": ${l.speed},\n  "seed": ${l.seed}${cars}\n}\n`;
+  const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed} }` : '';
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "speed": ${l.speed},\n  "seed": ${l.seed}${cars}${chaser}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -31,6 +32,11 @@ export function parseLevel(raw: unknown): LevelData {
       if (typeof c !== 'object' || c === null || !isNum(c.s) || !isNum(c.lane) || !isNum(c.speed)) throw new Error(`машина ${i} не { s, lane, speed }`);
       return { s: c.s, lane: c.lane, speed: c.speed };
     });
+  }
+  if (o.chaser !== undefined) {
+    const c = o.chaser as Record<string, unknown>;
+    if (typeof c !== 'object' || c === null || !isNum(c.gap) || !isNum(c.speed)) throw new Error('«chaser» не { gap, speed }');
+    level.chaser = { gap: c.gap, speed: c.speed };
   }
   return level;
 }

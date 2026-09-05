@@ -1,8 +1,8 @@
 // Холст редактора: панорама, зум (колесо/пинч), точки сплайна и явные машины трафика.
 // Дорога и машины рисуются теми же drawRoad/drawCar, что и в игре.
 import { LANES } from '../config';
-import { buildPath, type Path, type Pt } from '../road';
-import { drawCar, drawGrid, drawRoad } from '../render';
+import { buildPath, pathAtExt, type Path, type Pt } from '../road';
+import { drawCar, drawGrid, drawPolice, drawRoad } from '../render';
 import { spawnTraffic, vehiclePose, type TrafficCar, type Vehicle } from '../traffic';
 import type { LevelData } from '../levels';
 
@@ -66,6 +66,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     explicit = [];
     if (path) {
       drawRoad(ctx, path, l.width);
+      if (l.chaser) { const p = pathAtExt(path, -l.chaser.gap); ctx.globalAlpha = 0.6; drawPolice(ctx, p.x, p.y, Math.atan2(p.tx, -p.ty), 0); ctx.globalAlpha = 1; }
       // seeded-трафик — полупрозрачно, как ориентир для расстановки явных машин
       ctx.globalAlpha = 0.3;
       for (const c of spawnTraffic(path, l.traffic, l.speed, l.seed)) { const v = vehiclePose(path, c, l.width); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }

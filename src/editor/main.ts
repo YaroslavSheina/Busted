@@ -64,7 +64,21 @@ for (const k of ['width', 'traffic', 'speed'] as const) {
 inp('name').oninput = () => { level.name = inp('name').value; };
 inp('seed').onchange = () => { level.seed = Math.round(parseFloat(inp('seed').value)) || 0; inp('seed').value = String(level.seed); canvas.draw(); };
 
+// Преследователь: включён — блок с дистанцией и скоростью
+inp('chaser').onchange = () => {
+  if (inp('chaser').checked) level.chaser = { gap: 200, speed: 1 }; else delete level.chaser;
+  syncChaser(); canvas.draw();
+};
+inp('chaserGap').onchange = () => { if (level.chaser) { level.chaser.gap = Math.max(60, Math.round(parseFloat(inp('chaserGap').value) || 200)); inp('chaserGap').value = String(level.chaser.gap); canvas.draw(); } };
+inp('chaserSpeed').onchange = () => { if (level.chaser) { level.chaser.speed = Math.max(0.5, parseFloat(inp('chaserSpeed').value) || 1); inp('chaserSpeed').value = String(level.chaser.speed); } };
+function syncChaser(): void {
+  inp('chaser').checked = !!level.chaser;
+  $('chaserBox').hidden = !level.chaser;
+  if (level.chaser) { inp('chaserGap').value = String(level.chaser.gap); inp('chaserSpeed').value = String(level.chaser.speed); }
+}
+
 function syncPanel(): void {
+  syncChaser();
   inp('name').value = level.name;
   for (const k of ['width', 'traffic', 'speed'] as const) { inp(k).value = String(level[k]); $(k + 'V').textContent = String(level[k]); }
   inp('seed').value = String(level.seed);
@@ -72,7 +86,7 @@ function syncPanel(): void {
 }
 
 function load(l: LevelData): void {
-  delete level.cars;
+  delete level.cars; delete level.chaser;
   Object.assign(level, structuredClone(l));
   select(null);
   syncPanel();

@@ -19,5 +19,6 @@
   "width": 160,
   "traffic": 0.25,
   "speed": 300,
-  "seed": 109
+  "seed": 109,
+  "chaser": { "gap": 150, "speed": 1.02 }
 }

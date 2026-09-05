@@ -1,5 +1,5 @@
 // Камера, дорога, машины, следы заноса, HUD. drawGrid/drawRoad также использует редактор.
-import { LANES } from './config';
+import { LANES, TRAFFIC_SIZE } from './config';
 import { heading, pathAt, type Path } from './road';
 import { vehiclePose, type Vehicle } from './traffic';
 import type { CarState } from './physics';
@@ -15,6 +15,8 @@ export interface Scene {
   traffic: Vehicle[];
   marks: Mark[];
   cam: Cam;
+  t?: number;                                                    // время попытки — для мигалки
+  chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
 
 function poly(ctx: CanvasRenderingContext2D, path: Path, off: number, dash: number[], color: string, lw: number): void {
@@ -35,6 +37,19 @@ export function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: 
   ctx.fillStyle = 'rgba(20,22,28,.55)'; ctx.fillRect(-w / 2 + 4, -l / 2 + 12, w - 8, 11); ctx.fillRect(-w / 2 + 4, l / 2 - 14, w - 8, 7);
   if (player) { ctx.fillStyle = '#fff3c4'; ctx.fillRect(-w / 2 + 3, -l / 2 - 1, 6, 3); ctx.fillRect(w / 2 - 9, -l / 2 - 1, 6, 3); }
   else { ctx.fillStyle = '#e04a3a'; ctx.fillRect(-w / 2 + 3, l / 2 - 2, 6, 2); ctx.fillRect(w / 2 - 9, l / 2 - 2, 6, 2); }
+  ctx.restore();
+}
+
+// Полицейская машина с мигалкой; t — время для чередования цветов
+export function drawPolice(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, t: number): void {
+  const red = Math.floor(t / 0.12) % 2 === 0;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(h);
+  ctx.fillStyle = red ? 'rgba(235,60,60,.22)' : 'rgba(70,110,235,.22)'; ctx.beginPath(); ctx.arc(0, 0, 46, 0, 7); ctx.fill();
+  ctx.restore();
+  drawCar(ctx, x, y, h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L, '#e6e8ee', false);
+  ctx.save(); ctx.translate(x, y); ctx.rotate(h);
+  ctx.fillStyle = red ? '#ff4a4a' : '#3b6cff'; ctx.fillRect(-9, -5, 7, 5);
+  ctx.fillStyle = red ? '#3b6cff' : '#ff4a4a'; ctx.fillRect(2, -5, 7, 5);
   ctx.restore();
 }
 
@@ -69,10 +84,19 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   for (const m of marks) { ctx.fillStyle = `rgba(0,0,0,${m.a * 0.35})`; ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, 7); ctx.fill(); }
   // трафик
   for (const c of traffic) { const v = vehiclePose(path, c, w); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
+  if (sc.chaser) drawPolice(ctx, sc.chaser.x, sc.chaser.y, sc.chaser.h, sc.t ?? 0);
   drawCar(ctx, car.x, car.y, car.h, car.W, car.L, '#f4b942', true);
   ctx.restore();
+  // отсвет мигалки снизу экрана — тем ярче, чем ближе преследователь
+  if (sc.chaser && sc.chaser.danger > 0) {
+    const a = Math.min(0.45, sc.chaser.danger * 0.5);
+    const red = Math.floor((sc.t ?? 0) / 0.12) % 2 === 0;
+    const g = ctx.createLinearGradient(0, H, 0, H * 0.55);
+    g.addColorStop(0, red ? `rgba(235,60,60,${a})` : `rgba(70,110,235,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
 }
 
-export function hudHtml(levelName: string, progress: number, car: CarState): string {
-  return `${levelName} · ${Math.round(progress * 100)}%<br>ω ${car.w.toFixed(2)}${car.skid ? ' <b>занос</b>' : ''}`;
+export function hudHtml(levelName: string, progress: number, car: CarState, tail?: number): string {
+  return `${levelName} · ${Math.round(progress * 100)}%${tail !== undefined ? ` · хвост ${Math.round(tail)}` : ''}<br>ω ${car.w.toFixed(2)}${car.skid ? ' <b>занос</b>' : ''}`;
 }

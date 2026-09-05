@@ -2,6 +2,9 @@
 import type { Pt } from './road';
 import type { TrafficCar } from './traffic';
 
+// Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же)
+export interface Chaser { gap: number; speed: number }
+
 export interface LevelData {
   name: string;
   points: Pt[];
@@ -10,6 +13,7 @@ export interface LevelData {
   speed: number;
   seed: number;
   cars?: TrafficCar[]; // необязательно: явно расставленные машины
+  chaser?: Chaser;     // необязательно: полиция на хвосте
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });
