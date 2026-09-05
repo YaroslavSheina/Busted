@@ -26,22 +26,36 @@ export function holdText(): string {
   return 'Ни одного нажатия';
 }
 
-export function initInput(zones: { left: HTMLElement; right: HTMLElement }, onRestart: () => void): void {
+// Возвращает функцию отключения: редактор запускает и останавливает игру без перезагрузки страницы
+export function initInput(zones: { left: HTMLElement; right: HTMLElement }, onRestart: () => void): () => void {
+  const disposers: (() => void)[] = [];
   for (const k of ['left', 'right'] as const) {
     const z = zones[k];
-    z.addEventListener('pointerdown', e => { e.preventDefault(); z.setPointerCapture(e.pointerId); held[k] = true; z.classList.add('on'); });
+    const down = (e: PointerEvent) => { e.preventDefault(); z.setPointerCapture(e.pointerId); held[k] = true; z.classList.add('on'); };
     const off = () => { held[k] = false; z.classList.remove('on'); };
+    z.addEventListener('pointerdown', down);
     z.addEventListener('pointerup', off);
     z.addEventListener('pointercancel', off);
     z.addEventListener('lostpointercapture', off);
+    disposers.push(() => {
+      z.removeEventListener('pointerdown', down);
+      z.removeEventListener('pointerup', off);
+      z.removeEventListener('pointercancel', off);
+      z.removeEventListener('lostpointercapture', off);
+      off();
+    });
   }
-  addEventListener('keydown', e => {
+  const keydown = (e: KeyboardEvent) => {
     if (e.key === 'ArrowLeft' || e.key === 'a') { held.left = true; zones.left.classList.add('on'); }
     if (e.key === 'ArrowRight' || e.key === 'd') { held.right = true; zones.right.classList.add('on'); }
     if (e.key === ' ') onRestart();
-  });
-  addEventListener('keyup', e => {
+  };
+  const keyup = (e: KeyboardEvent) => {
     if (e.key === 'ArrowLeft' || e.key === 'a') { held.left = false; zones.left.classList.remove('on'); }
     if (e.key === 'ArrowRight' || e.key === 'd') { held.right = false; zones.right.classList.remove('on'); }
-  });
+  };
+  addEventListener('keydown', keydown);
+  addEventListener('keyup', keyup);
+  disposers.push(() => { removeEventListener('keydown', keydown); removeEventListener('keyup', keyup); });
+  return () => { for (const d of disposers) d(); };
 }

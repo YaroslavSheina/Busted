@@ -1,4 +1,4 @@
-// Камера, дорога, машины, следы заноса, HUD.
+// Камера, дорога, машины, следы заноса, HUD. drawGrid/drawRoad также использует редактор.
 import { LANES } from './config';
 import { heading, pathAt, type Path } from './road';
 import { vehiclePose, type Vehicle } from './traffic';
@@ -38,26 +38,33 @@ function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: number,
   ctx.restore();
 }
 
+// Сетка земли — ориентир для движения. Границы — видимый прямоугольник в мировых координатах.
+export function drawGrid(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, g = 120, lw = 1): void {
+  const gx = Math.floor(x0 / g) * g, gy = Math.floor(y0 / g) * g;
+  ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = lw; ctx.beginPath();
+  for (let x = gx; x < x1; x += g) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
+  for (let y = gy; y < y1; y += g) { ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
+  ctx.stroke();
+}
+
+// Дорога с обочиной, полосами, краями и финишем — в мировых координатах
+export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number): void {
+  poly(ctx, path, 0, [], '#3a3d46', w + 8); poly(ctx, path, 0, [], '#262930', w);
+  for (let k = 1; k < LANES; k++) poly(ctx, path, -w / 2 + k * (w / LANES), [26, 22], 'rgba(236,233,224,.28)', 2);
+  poly(ctx, path, -w / 2 + 3, [], 'rgba(244,185,66,.5)', 2); poly(ctx, path, w / 2 - 3, [], 'rgba(244,185,66,.5)', 2);
+  const e = pathAt(path, path.L - 60);
+  ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(heading(e.tx, e.ty));
+  for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#ece9e0' : '#15171c'; ctx.fillRect(-w / 2 + i * w / 8, -6, w / 8, 12); }
+  ctx.restore();
+}
+
 export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): void {
   const { W, H, DPR } = view;
   const { path, width: w, car, traffic, marks, cam } = sc;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = '#15171c'; ctx.fillRect(0, 0, W, H);
   ctx.save(); ctx.translate(W / 2 - cam.x, H / 2 - cam.y);
-  // сетка земли — ориентир для движения
-  const g = 120, x0 = Math.floor((cam.x - W / 2) / g) * g, y0 = Math.floor((cam.y - H / 2) / g) * g;
-  ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = 1; ctx.beginPath();
-  for (let x = x0; x < cam.x + W / 2; x += g) { ctx.moveTo(x, cam.y - H / 2); ctx.lineTo(x, cam.y + H / 2); }
-  for (let y = y0; y < cam.y + H / 2; y += g) { ctx.moveTo(cam.x - W / 2, y); ctx.lineTo(cam.x + W / 2, y); }
-  ctx.stroke();
-  // дорога
-  poly(ctx, path, 0, [], '#3a3d46', w + 8); poly(ctx, path, 0, [], '#262930', w);
-  for (let k = 1; k < LANES; k++) poly(ctx, path, -w / 2 + k * (w / LANES), [26, 22], 'rgba(236,233,224,.28)', 2);
-  poly(ctx, path, -w / 2 + 3, [], 'rgba(244,185,66,.5)', 2); poly(ctx, path, w / 2 - 3, [], 'rgba(244,185,66,.5)', 2);
-  // финиш
-  const e = pathAt(path, path.L - 60);
-  ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(heading(e.tx, e.ty));
-  for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#ece9e0' : '#15171c'; ctx.fillRect(-w / 2 + i * w / 8, -6, w / 8, 12); }
-  ctx.restore();
+  drawGrid(ctx, cam.x - W / 2, cam.y - H / 2, cam.x + W / 2, cam.y + H / 2);
+  drawRoad(ctx, path, w);
   // следы заноса
   for (const m of marks) { ctx.fillStyle = `rgba(0,0,0,${m.a * 0.35})`; ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, 7); ctx.fill(); }
   // трафик
