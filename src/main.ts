@@ -5,7 +5,7 @@ import { buildPath, heading, nearest, pathAt, type Path } from './road';
 import { collides, moveTraffic, obb, spawnTraffic, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { hudHtml, render, type Cam, type Mark } from './render';
-import { LEVELS, type LevelKey } from './levels';
+import { levelByName, type LevelData } from './levels';
 import { buildPanel, initGear } from './debug';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -25,7 +25,8 @@ addEventListener('resize', resize); resize();
 type State = 'play' | 'busted' | 'done';
 type Car = CarState & { s: number; off: number; W: number; L: number };
 
-let levelKey: LevelKey = 'straight';
+let levelKey = 'straight';
+let level: LevelData;
 let path: Path;
 let car: Car;
 let traffic: Vehicle[];
@@ -34,9 +35,12 @@ let cam: Cam;
 let state: State;
 let timeAlive = 0;
 
-function loadLevel(k: LevelKey): void {
+function loadLevel(k: string): void {
   levelKey = k;
-  path = buildPath(LEVELS[k].pts);
+  level = levelByName(k);
+  path = buildPath(level.points);
+  // Уровень задаёт стартовые значения, слайдеры панели дальше крутят их поверх
+  P.width.v = level.width; P.traffic.v = level.traffic; P.speed.v = level.speed;
   reset();
   buildPanel(panel, levelKey, {
     onLevel: loadLevel,
@@ -50,7 +54,7 @@ function reset(): void {
   marks = [];
   cam = { x: car.x, y: car.y };
   state = 'play'; timeAlive = 0; resetHold();
-  traffic = spawnTraffic(path, P.traffic.v, P.speed.v, 1234 + levelKey.length * 7);
+  traffic = spawnTraffic(path, P.traffic.v, P.speed.v, level.seed);
   overlay.className = '';
 }
 
@@ -102,7 +106,7 @@ function frame(now: number): void {
   update(dt);
   render(ctx, view, { path, width: P.width.v, car, traffic, marks, cam });
   hudT += dt;
-  if (hudT > 0.1) { hudT = 0; hud.innerHTML = hudHtml(LEVELS[levelKey].name, car.s / path.L, car); }
+  if (hudT > 0.1) { hudT = 0; hud.innerHTML = hudHtml(level.name, car.s / path.L, car); }
   requestAnimationFrame(frame);
 }
 loadLevel('straight');
