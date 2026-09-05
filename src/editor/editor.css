@@ -1,0 +1,14 @@
+#editor{position:fixed;inset:0}
+#epanel{position:absolute;top:calc(12px + env(safe-area-inset-top));right:14px;width:min(300px,86vw);max-height:calc(100vh - 40px);overflow:auto;background:rgba(21,23,28,.94);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px;font-size:12px;backdrop-filter:blur(10px);box-sizing:border-box}
+#epanel h2{margin:0;font-size:12px;letter-spacing:.12em;font-weight:700;display:flex;justify-content:space-between;align-items:center;opacity:.8}
+#epanel h2 button{background:none;border:0;color:#ece9e0;font-size:14px;padding:0 4px;cursor:pointer}
+#epanel.collapsed .body{display:none}
+#epanel .body{margin-top:6px}
+.row select,.row input[type=text],.row input[type=number]{width:150px;background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:8px;padding:6px 8px;font-size:12px;box-sizing:border-box}
+.row select option{background:#1e2128}
+#stats{opacity:.55;margin-top:8px;font-variant-numeric:tabular-nums}
+.buttons{display:flex;gap:6px;margin-top:10px}
+.buttons button{flex:1;background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:8px;padding:8px 0;font-size:12px;cursor:pointer}
+.buttons button.primary{background:#f4b942;color:#1a1408;font-weight:600}
+#status:empty{display:none}
+#back{pointer-events:auto;background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:20px;padding:7px 13px;font-size:12px}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Редактор уровней — Left / Right</title>
+</head>
+<body>
+<div id="editor">
+  <canvas id="ec"></canvas>
+  <div id="epanel">
+    <h2>Редактор уровней <button id="toggle" title="свернуть">▾</button></h2>
+    <div class="body">
+      <div class="row"><label>Открыть</label><select id="open"></select></div>
+      <div class="row"><label>Название</label><input id="name" type="text"></div>
+      <div class="row"><label>Ширина дороги</label><input id="width" type="range"><span id="widthV"></span></div>
+      <div class="row"><label>Плотность трафика</label><input id="traffic" type="range"><span id="trafficV"></span></div>
+      <div class="row"><label>Скорость, px/с</label><input id="speed" type="range"><span id="speedV"></span></div>
+      <div class="row"><label>Seed</label><input id="seed" type="number" step="1"></div>
+      <div id="stats"></div>
+      <div class="buttons"><button id="export">Экспорт</button><button id="import">Импорт</button><button id="play" class="primary">Играть</button></div>
+      <input id="file" type="file" accept=".json,application/json" hidden>
+      <div id="status" class="hint"></div>
+      <div class="hint">Клик по пустому месту — точка в конец. Перетаскивание — сдвиг. Delete или долгое нажатие — удалить. Колесо или пинч — зум, тянуть пустое место — панорама.</div>
+    </div>
+  </div>
+</div>
+<div id="play-view" hidden>
+  <canvas id="c"></canvas>
+  <div id="ui">
+    <div id="top"><div id="hud"></div><button id="back">← редактор</button></div>
+    <div class="zone" id="left">LEFT</div><div class="zone" id="right">RIGHT</div>
+    <div id="overlay"><h1 id="ovTitle"></h1><p id="ovSub"></p><small>нажми, чтобы повторить</small></div>
+  </div>
+</div>
+<script type="module" src="/src/editor/main.ts"></script>
+</body>
+</html>
