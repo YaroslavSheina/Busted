@@ -15,7 +15,8 @@ export interface BranchDef {
 
 export function buildBranchPath(main: Path, b: BranchDef): Path {
   const at = (s: number): Pt => { const p = pathAt(main, s); return [p.x, p.y]; };
-  return buildPath([at(b.from - BRANCH.lead), at(b.from), ...b.points, at(b.to), at(b.to + BRANCH.lead)]);
+  // По точке на главной с каждой стороны стыка: тангенс в стыке идёт вдоль главной, ветка не выгибается наружу
+  return buildPath([at(b.from - BRANCH.lead), at(b.from), at(b.from + BRANCH.lead), ...b.points, at(b.to - BRANCH.lead), at(b.to), at(b.to + BRANCH.lead)]);
 }
 
 // s на ветке → эквивалентный s главной дороги (для прогресса и HUD)
