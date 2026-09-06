@@ -10,8 +10,8 @@ export interface LevelData {
   points: Pt[];
   width: number;
   traffic: number;
-  speed: number;
   seed: number;
+  car?: string;        // ключ из cars.ts; по умолчанию sedan. Скорость и физику задаёт машина
   cars?: TrafficCar[]; // необязательно: явно расставленные машины
   chaser?: Chaser;     // необязательно: полиция на хвосте
 }

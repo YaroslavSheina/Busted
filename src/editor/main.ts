@@ -2,6 +2,7 @@ import '../style.css';
 import './editor.css';
 import { P, type Param } from '../config';
 import { LEVEL_KEYS, LEVELS, type LevelData } from '../levels';
+import { CARS, DEFAULT_CAR, type CarKey } from '../cars';
 import { createGame, type Game } from '../game';
 import { buildPath } from '../road';
 import { initCanvas, type Sel } from './canvas';
@@ -11,7 +12,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const inp = (id: string) => $<HTMLInputElement>(id);
 
 // Стартовые значения — из config, чтобы новый уровень совпадал с тем, что крутится в панели тюнинга
-const level: LevelData = { name: 'Новый уровень', points: [], width: P.width.v, traffic: P.traffic.v, speed: P.speed.v, seed: 1 };
+const level: LevelData = { name: 'Новый уровень', points: [], width: P.width.v, traffic: P.traffic.v, seed: 1, car: DEFAULT_CAR };
 let sel: Sel = null;
 
 // ---------- холст ----------
@@ -56,9 +57,12 @@ $('carDelete').onclick = () => { if (sel?.kind === 'car' && level.cars) { level.
 // ---------- панель ----------
 const status = (s: string) => { $('status').textContent = s; };
 const setRange = (el: HTMLInputElement, p: Param) => { el.min = String(p.min); el.max = String(p.max); el.step = String(p.step); };
-setRange(inp('width'), P.width); setRange(inp('traffic'), P.traffic); setRange(inp('speed'), P.speed);
+setRange(inp('width'), P.width); setRange(inp('traffic'), P.traffic);
+const carSel = $<HTMLSelectElement>('car');
+carSel.innerHTML = (Object.keys(CARS) as CarKey[]).map(k => `<option value="${k}">${CARS[k].name} · ${CARS[k].speed} px/с</option>`).join('');
+carSel.onchange = () => { level.car = carSel.value; canvas.draw(); };
 
-for (const k of ['width', 'traffic', 'speed'] as const) {
+for (const k of ['width', 'traffic'] as const) {
   inp(k).oninput = () => { level[k] = parseFloat(inp(k).value); $(k + 'V').textContent = String(level[k]); canvas.draw(); };
 }
 inp('name').oninput = () => { level.name = inp('name').value; };
@@ -80,7 +84,8 @@ function syncChaser(): void {
 function syncPanel(): void {
   syncChaser();
   inp('name').value = level.name;
-  for (const k of ['width', 'traffic', 'speed'] as const) { inp(k).value = String(level[k]); $(k + 'V').textContent = String(level[k]); }
+  for (const k of ['width', 'traffic'] as const) { inp(k).value = String(level[k]); $(k + 'V').textContent = String(level[k]); }
+  carSel.value = level.car ?? DEFAULT_CAR;
   inp('seed').value = String(level.seed);
   changed();
 }
@@ -88,6 +93,7 @@ function syncPanel(): void {
 function load(l: LevelData): void {
   delete level.cars; delete level.chaser;
   Object.assign(level, structuredClone(l));
+  level.car ??= DEFAULT_CAR;
   select(null);
   syncPanel();
   canvas.fit();
@@ -97,7 +103,7 @@ const open = $<HTMLSelectElement>('open');
 open.innerHTML = '<option value="">— новый —</option>' + LEVEL_KEYS.map(k => `<option value="${k}">${k} — ${LEVELS[k].name}</option>`).join('');
 open.onchange = () => {
   if (open.value) load(LEVELS[open.value]);
-  else load({ name: 'Новый уровень', points: [], width: level.width, traffic: level.traffic, speed: level.speed, seed: level.seed });
+  else load({ name: 'Новый уровень', points: [], width: level.width, traffic: level.traffic, seed: level.seed, car: level.car });
   status('');
 };
 

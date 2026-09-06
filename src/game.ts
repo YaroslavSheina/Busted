@@ -1,5 +1,6 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, MAX_DT, P, PLAYER_SIZE, TRAFFIC_SIZE } from './config';
+import { CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, MAX_DT, P, TRAFFIC_SIZE } from './config';
+import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
 import { buildPath, heading, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
 import { collides, hit, moveTraffic, obb, spawnTraffic, type Vehicle } from './traffic';
@@ -37,6 +38,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
 
   let level: LevelData;
+  let spec: CarSpec;
   let path: Path;
   let car: Car;
   let traffic: Vehicle[];
@@ -49,15 +51,17 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   function load(l: LevelData): void {
     level = l;
+    spec = carByKey(l.car);
     path = buildPath(l.points);
-    // Уровень задаёт стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
-    P.width.v = l.width; P.traffic.v = l.traffic; P.speed.v = l.speed;
+    // Машина и уровень задают стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
+    P.width.v = l.width; P.traffic.v = l.traffic;
+    P.speed.v = spec.speed; P.steer.v = spec.steer; P.damp.v = spec.damp; P.grip.v = spec.grip; P.spin.v = spec.spin; P.skidGrip.v = spec.skidGrip;
     reset();
   }
 
   function reset(): void {
     const p0 = pathAt(path, 0);
-    car = { x: p0.x, y: p0.y, h: heading(p0.tx, p0.ty), w: 0, vx: p0.tx * P.speed.v, vy: p0.ty * P.speed.v, s: 0, off: 0, skid: false, ...PLAYER_SIZE };
+    car = { x: p0.x, y: p0.y, h: heading(p0.tx, p0.ty), w: 0, vx: p0.tx * P.speed.v, vy: p0.ty * P.speed.v, s: 0, off: 0, skid: false, W: spec.W, L: spec.L };
     marks = [];
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
@@ -132,11 +136,11 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     update(dt);
     const tail = chaser ? car.s - chaser.s : undefined;
     render(ctx, view, {
-      path, width: P.width.v, car, traffic, marks, cam, t: timeAlive,
+      path, width: P.width.v, car, spec, traffic, marks, cam, t: timeAlive,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
     });
     hudT += dt;
-    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(level.name, car.s / path.L, car, tail); }
+    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, car.s / path.L, car, tail); }
     raf = requestAnimationFrame(frame);
   }
   load(first);

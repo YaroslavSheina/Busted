@@ -5,6 +5,8 @@ import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road
 import { drawCar, drawGrid, drawPolice, drawRoad } from '../render';
 import { spawnTraffic, vehiclePose, type TrafficCar, type Vehicle } from '../traffic';
 import type { LevelData } from '../levels';
+import { carByKey } from '../cars';
+import { drawPlayer } from '../render';
 
 export type Sel = { kind: 'point' | 'car'; i: number } | null;
 
@@ -69,9 +71,10 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       if (l.chaser) { const p = pathAtExt(path, -l.chaser.gap); ctx.globalAlpha = 0.6; drawPolice(ctx, p.x, p.y, Math.atan2(p.tx, -p.ty), 0); ctx.globalAlpha = 1; }
       // seeded-трафик — полупрозрачно, как ориентир для расстановки явных машин
       ctx.globalAlpha = 0.3;
-      for (const c of spawnTraffic(path, l.traffic, l.speed, l.seed)) { const v = vehiclePose(path, c, l.width); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
+      const spec = carByKey(l.car);
+      for (const c of spawnTraffic(path, l.traffic, spec.speed, l.seed)) { const v = vehiclePose(path, c, l.width); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
       ctx.globalAlpha = 1;
-      explicit = spawnTraffic(path, 0, l.speed, l.seed, l.cars ?? []);
+      explicit = spawnTraffic(path, 0, spec.speed, l.seed, l.cars ?? []);
       explicit.forEach((c, i) => {
         const v = vehiclePose(path!, c, l.width);
         drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false);
@@ -82,6 +85,8 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
         }
         if (c.spd === 0) { ctx.fillStyle = '#e04a3a'; ctx.beginPath(); ctx.arc(v.x, v.y, 3 / zoom, 0, 7); ctx.fill(); } // стоящая
       });
+      // машина игрока на старте — видно кузов и габарит
+      const p0 = path.pt[0]; drawPlayer(ctx, p0.x, p0.y, Math.atan2(p0.tx, -p0.ty), spec);
     }
 
     // контрольный полигон и точки — поверх дороги, размер не зависит от зума

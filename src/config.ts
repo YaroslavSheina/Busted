@@ -20,8 +20,7 @@ export type ParamKey = keyof typeof P;
 
 export const LANES = 3;
 
-// Габариты машин, px
-export const PLAYER_SIZE = { W: 28, L: 52 };
+// Габариты машин трафика, px (игрок — см. cars.ts)
 export const TRAFFIC_SIZE = { W: 26, L: 48 };
 
 // Камера: точка впереди по вектору скорости и скорость догона

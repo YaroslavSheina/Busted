@@ -3,6 +3,7 @@ import { LANES, TRAFFIC_SIZE } from './config';
 import { heading, pathAt, type Path } from './road';
 import { vehiclePose, type Vehicle } from './traffic';
 import type { CarState } from './physics';
+import type { CarSpec } from './cars';
 
 export interface View { W: number; H: number; DPR: number }
 export interface Mark { x: number; y: number; a: number }
@@ -12,6 +13,7 @@ export interface Scene {
   path: Path;
   width: number;
   car: CarState & { W: number; L: number };
+  spec: CarSpec;
   traffic: Vehicle[];
   marks: Mark[];
   cam: Cam;
@@ -37,6 +39,50 @@ export function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: 
   ctx.fillStyle = 'rgba(20,22,28,.55)'; ctx.fillRect(-w / 2 + 4, -l / 2 + 12, w - 8, 11); ctx.fillRect(-w / 2 + 4, l / 2 - 14, w - 8, 7);
   if (player) { ctx.fillStyle = '#fff3c4'; ctx.fillRect(-w / 2 + 3, -l / 2 - 1, 6, 3); ctx.fillRect(w / 2 - 9, -l / 2 - 1, 6, 3); }
   else { ctx.fillStyle = '#e04a3a'; ctx.fillRect(-w / 2 + 3, l / 2 - 2, 6, 2); ctx.fillRect(w / 2 - 9, l / 2 - 2, 6, 2); }
+  ctx.restore();
+}
+
+// Машина игрока: силуэт и детали зависят от кузова. Векторные заглушки до комикс-арта (фаза H).
+export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, spec: CarSpec): void {
+  const { W: w, L: l } = spec;
+  const glass = 'rgba(20,22,28,.6)', trim = 'rgba(20,22,28,.35)', lamp = '#fff3c4';
+  ctx.save(); ctx.translate(x, y); ctx.rotate(h);
+  switch (spec.body) {
+    case 'sedan':
+      ctx.fillStyle = '#f4b942'; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 6); ctx.fill();
+      ctx.fillStyle = glass; ctx.fillRect(-w / 2 + 4, -l / 2 + 12, w - 8, 11); ctx.fillRect(-w / 2 + 4, l / 2 - 14, w - 8, 7);
+      ctx.fillStyle = lamp; ctx.fillRect(-w / 2 + 3, -l / 2 - 1, 6, 3); ctx.fillRect(w / 2 - 9, -l / 2 - 1, 6, 3);
+      break;
+    case 'minivan':
+      // коробка со скруглённым носом, лобовое у самого носа, длинные боковые окна, рейлинги
+      ctx.fillStyle = '#e8b64c'; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 9); ctx.fill();
+      ctx.fillStyle = glass; ctx.fillRect(-w / 2 + 4, -l / 2 + 7, w - 8, 12);
+      ctx.fillRect(-w / 2 + 2, -l / 2 + 22, 4, l - 34); ctx.fillRect(w / 2 - 6, -l / 2 + 22, 4, l - 34);
+      ctx.fillRect(-w / 2 + 4, l / 2 - 10, w - 8, 6);
+      ctx.fillStyle = trim; ctx.fillRect(-w / 2 + 8, -l / 2 + 22, 2, l - 34); ctx.fillRect(w / 2 - 10, -l / 2 + 22, 2, l - 34);
+      ctx.fillStyle = lamp; ctx.fillRect(-w / 2 + 3, -l / 2 - 1, 7, 3); ctx.fillRect(w / 2 - 10, -l / 2 - 1, 7, 3);
+      break;
+    case 'supercar':
+      // клин: узкий нос, широкая корма, низкий кокпит, антикрыло
+      ctx.fillStyle = '#ffcf3d'; ctx.beginPath();
+      ctx.moveTo(-w / 2 + 6, -l / 2); ctx.lineTo(w / 2 - 6, -l / 2); ctx.lineTo(w / 2, -l / 2 + 16); ctx.lineTo(w / 2, l / 2 - 4);
+      ctx.lineTo(-w / 2, l / 2 - 4); ctx.lineTo(-w / 2, -l / 2 + 16); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = glass; ctx.beginPath();
+      ctx.moveTo(-w / 2 + 7, -l / 2 + 18); ctx.lineTo(w / 2 - 7, -l / 2 + 18); ctx.lineTo(w / 2 - 5, -l / 2 + 30); ctx.lineTo(-w / 2 + 5, -l / 2 + 30); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = trim; ctx.fillRect(-4, -l / 2 + 32, 8, l / 2 - 40); ctx.fillRect(-w / 2 + 3, -l / 2 + 4, 6, 3); ctx.fillRect(w / 2 - 9, -l / 2 + 4, 6, 3);
+      ctx.fillStyle = '#1a1408'; ctx.fillRect(-w / 2 - 2, l / 2 - 6, w + 4, 4);
+      ctx.fillStyle = lamp; ctx.fillRect(-w / 2 + 7, -l / 2 - 1, 5, 2); ctx.fillRect(w / 2 - 12, -l / 2 - 1, 5, 2);
+      break;
+    case 'bus':
+      // длинный корпус, ряд окон по бортам, большое лобовое, световая полоса по крыше
+      ctx.fillStyle = '#f0c050'; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 5); ctx.fill();
+      ctx.fillStyle = glass; ctx.fillRect(-w / 2 + 3, -l / 2 + 4, w - 6, 11);
+      for (let yy = -l / 2 + 20; yy < l / 2 - 14; yy += 12) { ctx.fillRect(-w / 2 + 2, yy, 4, 8); ctx.fillRect(w / 2 - 6, yy, 4, 8); }
+      ctx.fillRect(-w / 2 + 4, l / 2 - 9, w - 8, 5);
+      ctx.fillStyle = trim; ctx.fillRect(-2, -l / 2 + 18, 4, l - 30);
+      ctx.fillStyle = lamp; ctx.fillRect(-w / 2 + 3, -l / 2 - 1, 7, 3); ctx.fillRect(w / 2 - 10, -l / 2 - 1, 7, 3);
+      break;
+  }
   ctx.restore();
 }
 
@@ -85,7 +131,7 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   // трафик
   for (const c of traffic) { const v = vehiclePose(path, c, w); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
   if (sc.chaser) drawPolice(ctx, sc.chaser.x, sc.chaser.y, sc.chaser.h, sc.t ?? 0);
-  drawCar(ctx, car.x, car.y, car.h, car.W, car.L, '#f4b942', true);
+  drawPlayer(ctx, car.x, car.y, car.h, sc.spec);
   ctx.restore();
   // отсвет мигалки снизу экрана — тем ярче, чем ближе преследователь
   if (sc.chaser && sc.chaser.danger > 0) {
