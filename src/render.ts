@@ -24,7 +24,7 @@ export interface Scene {
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
 
-function poly(ctx: CanvasRenderingContext2D, path: Path, off: number, dash: number[], color: string, lw: number): void {
+function poly(ctx: CanvasRenderingContext2D, path: Path, off: number, dash: number[], color: string, lw: number, cap: CanvasLineCap = 'round'): void {
   ctx.beginPath();
   const pt = path.pt;
   for (let i = 0; i < pt.length; i++) {
@@ -32,7 +32,7 @@ function poly(ctx: CanvasRenderingContext2D, path: Path, off: number, dash: numb
     const x = p.x + p.nx * off, y = p.y + p.ny * off;
     i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
   }
-  ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = cap;
   ctx.stroke(); ctx.setLineDash([]);
 }
 
@@ -152,7 +152,9 @@ export function drawGrid(ctx: CanvasRenderingContext2D, x0: number, y0: number, 
 
 // Дорога с обочиной, полосами, краями и финишем — в мировых координатах
 export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number, finish = true): void {
-  poly(ctx, path, 0, [], '#3a3d46', w + 8); poly(ctx, path, 0, [], '#262930', w);
+  // у веток торцы плоские: концы лежат на главной дороге и должны прятаться под ней
+  const cap: CanvasLineCap = finish ? 'round' : 'butt';
+  poly(ctx, path, 0, [], '#3a3d46', w + 8, cap); poly(ctx, path, 0, [], '#262930', w, cap);
   for (let k = 1; k < LANES; k++) poly(ctx, path, -w / 2 + k * (w / LANES), [26, 22], 'rgba(236,233,224,.28)', 2);
   poly(ctx, path, -w / 2 + 3, [], 'rgba(244,185,66,.5)', 2); poly(ctx, path, w / 2 - 3, [], 'rgba(244,185,66,.5)', 2);
   if (!finish) return;
