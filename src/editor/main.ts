@@ -1,7 +1,7 @@
 import '../style.css';
 import './editor.css';
 import { P, type Param } from '../config';
-import { LEVELS, type LevelData } from '../levels';
+import { LEVEL_KEYS, LEVELS, type LevelData } from '../levels';
 import { createGame, type Game } from '../game';
 import { buildPath } from '../road';
 import { initCanvas, type Sel } from './canvas';
@@ -94,7 +94,7 @@ function load(l: LevelData): void {
 }
 
 const open = $<HTMLSelectElement>('open');
-open.innerHTML = '<option value="">— новый —</option>' + Object.entries(LEVELS).map(([k, l]) => `<option value="${k}">${k} — ${l.name}</option>`).join('');
+open.innerHTML = '<option value="">— новый —</option>' + LEVEL_KEYS.map(k => `<option value="${k}">${k} — ${LEVELS[k].name}</option>`).join('');
 open.onchange = () => {
   if (open.value) load(LEVELS[open.value]);
   else load({ name: 'Новый уровень', points: [], width: level.width, traffic: level.traffic, speed: level.speed, seed: level.seed });

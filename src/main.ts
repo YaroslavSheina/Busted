@@ -1,11 +1,11 @@
 import './style.css';
 import { createGame } from './game';
-import { LEVELS, levelByName } from './levels';
+import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initGear } from './debug';
 
 const $ = (id: string) => document.getElementById(id)!;
 const panel = $('panel');
-const FIRST = Object.keys(LEVELS)[0]; // первый по имени файла: 01.json
+const FIRST = LEVEL_KEYS[0];
 
 const game = createGame({
   canvas: $('c') as HTMLCanvasElement,

@@ -18,9 +18,14 @@ export interface LevelData {
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });
 
+const keyOf = (file: string) => file.replace(/^.*\/(.+)\.json$/, '$1');
+
 export const LEVELS: Record<string, LevelData> = Object.fromEntries(
-  Object.entries(files).map(([file, level]) => [file.replace(/^.*\/(.+)\.json$/, '$1'), level]),
+  Object.entries(files).map(([file, level]) => [keyOf(file), level]),
 );
+
+// Порядок по имени файла. Отдельный список, потому что объект ставит ключи вроде «10» впереди «01»
+export const LEVEL_KEYS: string[] = Object.keys(files).map(keyOf).sort();
 
 export function levelByName(key: string): LevelData {
   const l = LEVELS[key];

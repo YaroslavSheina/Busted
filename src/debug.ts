@@ -1,6 +1,6 @@
 // Панель тюнинга: выбор тестовой дороги и слайдеры для всех параметров из config.
 import { P, type ParamKey } from './config';
-import { LEVELS } from './levels';
+import { LEVEL_KEYS, LEVELS } from './levels';
 
 export interface PanelHandlers {
   onLevel: (k: string) => void;
@@ -14,7 +14,7 @@ export function initGear(button: HTMLElement, panel: HTMLElement): void {
 export function buildPanel(panel: HTMLElement, levelKey: string, h: PanelHandlers): void {
   panel.innerHTML = '';
   const lv = document.createElement('div'); lv.className = 'levels';
-  for (const k of Object.keys(LEVELS)) {
+  for (const k of LEVEL_KEYS) {
     const b = document.createElement('button');
     b.textContent = LEVELS[k].name;
     if (k === levelKey) b.classList.add('on');
