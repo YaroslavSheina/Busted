@@ -7,8 +7,9 @@ export interface PanelHandlers {
   onParam: (k: ParamKey) => void;
 }
 
-export function initGear(button: HTMLElement, panel: HTMLElement): void {
-  button.onclick = () => panel.classList.toggle('open');
+// Кнопка открывает свою панель и закрывает остальные
+export function initToggle(button: HTMLElement, panel: HTMLElement, others: HTMLElement[]): void {
+  button.onclick = () => { const open = panel.classList.toggle('open'); if (open) for (const o of others) o.classList.remove('open'); };
 }
 
 export function buildPanel(panel: HTMLElement, levelKey: string, h: PanelHandlers): void {
