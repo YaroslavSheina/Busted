@@ -19,5 +19,5 @@
   "traffic": 0.5,
   "speed": 360,
   "seed": 110,
-  "chaser": { "gap": 120, "speed": 1.03 }
+  "chaser": { "gap": 200, "speed": 1 }
 }
