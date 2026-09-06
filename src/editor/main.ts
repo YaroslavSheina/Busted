@@ -3,6 +3,7 @@ import './editor.css';
 import { P, type Param } from '../config';
 import { LEVEL_KEYS, LEVELS, type LevelData } from '../levels';
 import { CARS, DEFAULT_CAR, type CarKey } from '../cars';
+import type { Block } from '../blocks';
 import { createGame, type Game } from '../game';
 import { buildPath } from '../road';
 import { initCanvas, type Sel } from './canvas';
@@ -36,6 +37,7 @@ function changed(): void {
   $('stats').textContent = (n < 2 ? `${n} ${n === 1 ? 'точка' : 'точек'} — нужно минимум 2` : `${n} точек · длина ${Math.round(buildPath(level.points).L)} px`)
     + (cars ? ` · машин: ${cars}` : '');
   syncSel();
+  syncBlocks();
 }
 
 // Блок выбранной машины: положение и скорость
@@ -81,6 +83,32 @@ function syncChaser(): void {
   if (level.chaser) { inp('chaserGap').value = String(level.chaser.gap); inp('chaserSpeed').value = String(level.chaser.speed); }
 }
 
+// Заграждения: четыре типа как пресеты данных (docs/mechanics.md, M1)
+const BLOCK_PRESETS: Record<string, (s: number) => Block> = {
+  gap: s => ({ s, police: [0, 2] }),
+  full: s => ({ s, police: [0, 1, 2], bypass: 'right' }),
+  spikes: s => ({ s, police: [0], spikes: [2] }),
+  works: s => ({ s, works: [1, 2], len: 500 }),
+};
+const blockLabel = (b: Block) => [b.police && `пост ${b.police.join('')}`, b.spikes && `ежи ${b.spikes.join('')}`, b.works && `ремонт ${b.works.join('')}×${b.len ?? ''}`, b.bypass && `обочина ${b.bypass}`].filter(Boolean).join(', ');
+function syncBlocks(): void {
+  const list = $('blockList'); list.innerHTML = '';
+  (level.blocks ?? []).forEach((b, i) => {
+    const row = document.createElement('div');
+    const span = document.createElement('span'); span.textContent = `s ${b.s} · ${blockLabel(b)}`;
+    const del = document.createElement('button'); del.textContent = '×';
+    del.onclick = () => { level.blocks!.splice(i, 1); if (!level.blocks!.length) delete level.blocks; changed(); canvas.draw(); };
+    row.appendChild(span); row.appendChild(del); list.appendChild(row);
+  });
+}
+$('blockAdd').onclick = () => {
+  const s = Math.round(parseFloat(inp('blockS').value));
+  if (!Number.isFinite(s)) { status('Укажи s заграждения'); return; }
+  (level.blocks ??= []).push(BLOCK_PRESETS[$<HTMLSelectElement>('blockType').value](s));
+  level.blocks.sort((a, b) => a.s - b.s);
+  changed(); canvas.draw();
+};
+
 function syncPanel(): void {
   syncChaser();
   inp('name').value = level.name;
@@ -91,7 +119,7 @@ function syncPanel(): void {
 }
 
 function load(l: LevelData): void {
-  delete level.cars; delete level.chaser;
+  delete level.cars; delete level.chaser; delete level.blocks;
   Object.assign(level, structuredClone(l));
   level.car ??= DEFAULT_CAR;
   select(null);

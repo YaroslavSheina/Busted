@@ -136,13 +136,16 @@ src/
   render.ts        — камера, drawGrid/drawRoad (общие с редактором), машины, следы заноса, HUD
   levels.ts        — загрузка levels/*.json через import.meta.glob, ключ = имя файла
   cars.ts          — таблица машин: name, body (рисунок), W/L, speed, steer, damp, grip, spin, skidGrip
+  blocks.ts        — заграждения: данные уровня → геометрия (посты, ежи, ремонт, обочины)
   debug.ts         — панель «уровень»: список уровней + кнопка «тюнинг» со слайдерами (в проде слайдеры выключены)
   editor/
     main.ts        — панель, экспорт/импорт, «Играть» через createGame на той же странице
     canvas.ts      — холст: панорама, зум, точки; дорога рисуется drawRoad
     io.ts          — формат файла уровня, валидация импорта
-levels/*.json      — { name, points: [[x,y],…], width, traffic, seed, car?, cars?: [{ s, lane, speed }], chaser?: { gap, speed } }
+levels/*.json      — { name, points: [[x,y],…], width, traffic, seed, car?, cars?, chaser?, blocks? } — см. docs/mechanics.md
 docs/concept.md
+docs/design.md     — диздок BUSTED
+docs/mechanics.md  — лаборатория механик: карточки идей со статусами, формат данных каждой
 docs/prototype.html
 docs/prototype-roads/ — пять дорог прототипа (эталон для покадрового сравнения, в игру не грузятся)
 editor/index.html  — редактор уровней (вторая страница Vite, /editor/)

@@ -1,6 +1,7 @@
 // Уровни — данные: levels/*.json, ключ уровня = имя файла без расширения.
 import type { Pt } from './road';
 import type { TrafficCar } from './traffic';
+import type { Block } from './blocks';
 
 // Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же)
 export interface Chaser { gap: number; speed: number }
@@ -14,6 +15,7 @@ export interface LevelData {
   car?: string;        // ключ из cars.ts; по умолчанию sedan. Скорость и физику задаёт машина
   cars?: TrafficCar[]; // необязательно: явно расставленные машины
   chaser?: Chaser;     // необязательно: полиция на хвосте
+  blocks?: Block[];    // необязательно: заграждения (docs/mechanics.md, M1)
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

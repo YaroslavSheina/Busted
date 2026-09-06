@@ -4,6 +4,8 @@ import { heading, pathAt, type Path } from './road';
 import { vehiclePose, type Vehicle } from './traffic';
 import type { CarState } from './physics';
 import type { CarSpec } from './cars';
+import type { Layout } from './blocks';
+import { BLOCK } from './config';
 
 export interface View { W: number; H: number; DPR: number }
 export interface Mark { x: number; y: number; a: number }
@@ -17,6 +19,7 @@ export interface Scene {
   traffic: Vehicle[];
   marks: Mark[];
   cam: Cam;
+  blocks?: Layout;                                               // заграждения
   t?: number;                                                    // время попытки — для мигалки
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
@@ -86,6 +89,45 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.restore();
 }
 
+// Полоса вдоль дороги между s0 и s1 со смещением off от осевой — обочина-объезд
+function strip(ctx: CanvasRenderingContext2D, path: Path, s0: number, s1: number, off: number, w: number, color: string): void {
+  ctx.beginPath(); let first = true;
+  for (const p of path.pt) {
+    if (p.s < s0 || p.s > s1) continue;
+    const x = p.x + p.nx * off, y = p.y + p.ny * off;
+    first ? ctx.moveTo(x, y) : ctx.lineTo(x, y); first = false;
+  }
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'butt'; ctx.lineJoin = 'round'; ctx.stroke();
+}
+
+// Заграждения: обочины, полицейские машины поперёк, ежи, ремонт. Общее для игры и редактора.
+export function drawBlocks(ctx: CanvasRenderingContext2D, path: Path, width: number, b: Layout, t: number): void {
+  for (const bp of b.bypasses) {
+    const off = bp.side * (width / 2 + BLOCK.bypassW / 2);
+    strip(ctx, path, bp.s0, bp.s1, off, BLOCK.bypassW, '#30333c');
+    ctx.setLineDash([10, 8]); strip(ctx, path, bp.s0, bp.s1, off + bp.side * (BLOCK.bypassW / 2 - 2), 2, 'rgba(236,233,224,.35)'); ctx.setLineDash([]);
+  }
+  for (const w of b.works) {
+    ctx.save(); ctx.translate(w.x, w.y); ctx.rotate(w.h);
+    ctx.fillStyle = 'rgba(244,120,40,.12)'; ctx.fillRect(-w.w / 2, -w.l / 2, w.w, w.l);
+    // барьер в начале закрытого отрезка (дальний по ходу край — это -l/2, машина едет к -y)
+    for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? '#f0f0f0' : '#f0782a'; ctx.fillRect(-w.w / 2 + i * w.w / 6, w.l / 2 - 8, w.w / 6, 8); }
+    for (let y = w.l / 2 - 30; y > -w.l / 2; y -= 40) { // конусы вдоль
+      ctx.fillStyle = '#f0782a'; ctx.beginPath(); ctx.moveTo(-w.w / 2 + 6, y + 5); ctx.lineTo(-w.w / 2 + 11, y - 5); ctx.lineTo(-w.w / 2 + 16, y + 5); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(w.w / 2 - 16, y + 5); ctx.lineTo(w.w / 2 - 11, y - 5); ctx.lineTo(w.w / 2 - 6, y + 5); ctx.fill();
+    }
+    ctx.restore();
+  }
+  for (const s of b.spikes) {
+    ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.h);
+    ctx.fillStyle = '#1a1c22'; ctx.fillRect(-s.w / 2, -s.l / 2, s.w, s.l);
+    ctx.fillStyle = '#c9ccd4';
+    for (let x = -s.w / 2 + 4; x < s.w / 2 - 2; x += 7) { ctx.beginPath(); ctx.moveTo(x, s.l / 2); ctx.lineTo(x + 2.5, -s.l / 2 - 2); ctx.lineTo(x + 5, s.l / 2); ctx.fill(); }
+    ctx.restore();
+  }
+  for (const p of b.police) drawPolice(ctx, p.x, p.y, p.h, t);
+}
+
 // Полицейская машина с мигалкой; t — время для чередования цветов
 export function drawPolice(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, t: number): void {
   const red = Math.floor(t / 0.12) % 2 === 0;
@@ -126,6 +168,7 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   ctx.save(); ctx.translate(W / 2 - cam.x, H / 2 - cam.y);
   drawGrid(ctx, cam.x - W / 2, cam.y - H / 2, cam.x + W / 2, cam.y + H / 2);
   drawRoad(ctx, path, w);
+  if (sc.blocks) drawBlocks(ctx, path, w, sc.blocks, sc.t ?? 0);
   // следы заноса
   for (const m of marks) { ctx.fillStyle = `rgba(0,0,0,${m.a * 0.35})`; ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, 7); ctx.fill(); }
   // трафик
