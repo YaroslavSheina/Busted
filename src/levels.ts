@@ -2,6 +2,7 @@
 import type { Pt } from './road';
 import type { TrafficCar } from './traffic';
 import type { Block } from './blocks';
+import type { BranchDef } from './roads';
 
 // Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же)
 export interface Chaser { gap: number; speed: number }
@@ -16,6 +17,7 @@ export interface LevelData {
   cars?: TrafficCar[]; // необязательно: явно расставленные машины
   chaser?: Chaser;     // необязательно: полиция на хвосте
   blocks?: Block[];    // необязательно: заграждения (docs/mechanics.md, M1)
+  branches?: BranchDef[]; // необязательно: ветки дороги (docs/mechanics.md, M5)
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

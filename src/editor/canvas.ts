@@ -4,12 +4,14 @@ import { LANES } from '../config';
 import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road';
 import { drawBlocks, drawCar, drawGrid, drawPolice, drawRoad } from '../render';
 import { layoutBlocks } from '../blocks';
+import { buildBranchPath } from '../roads';
 import { spawnTraffic, vehiclePose, type TrafficCar, type Vehicle } from '../traffic';
 import type { LevelData } from '../levels';
 import { carByKey } from '../cars';
 import { drawPlayer } from '../render';
 
-export type Sel = { kind: 'point' | 'car'; i: number } | null;
+// b — индекс ветки для точки ветки (−1 — главная дорога)
+export type Sel = { kind: 'point'; i: number; b: number } | { kind: 'car'; i: number } | null;
 
 export interface CanvasHooks {
   level(): LevelData;
@@ -17,8 +19,8 @@ export interface CanvasHooks {
   select(s: Sel): void;
   carMode(): boolean; // липкий Shift для тач-экранов
   addPoint(p: Pt): void;
-  movePoint(i: number, p: Pt): void;
-  removePoint(i: number): void;
+  movePoint(b: number, i: number, p: Pt): void;   // b = −1 — главная, иначе ветка
+  removePoint(b: number, i: number): void;
   addCar(c: TrafficCar): void;
   moveCar(i: number, c: TrafficCar): void;
   removeCar(i: number): void;
@@ -68,6 +70,20 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     path = pts.length >= 2 ? buildPath(pts) : null;
     explicit = [];
     if (path) {
+      // ветки: под главной, без финиша; их промежуточные точки — синие
+      (l.branches ?? []).forEach((b, bi) => {
+        try {
+          const bp = buildBranchPath(path!, b);
+          drawRoad(ctx, bp, l.width, false);
+          if (b.blocks?.length) drawBlocks(ctx, bp, l.width, layoutBlocks(bp, l.width, b.blocks), 0);
+        } catch { /* ветка с from/to вне дороги — не рисуем */ }
+        b.points.forEach((p, i) => {
+          const on = sel?.kind === 'point' && sel.b === bi && sel.i === i;
+          ctx.beginPath(); ctx.arc(p[0], p[1], (on ? HANDLE + 3 : HANDLE) / zoom, 0, 7);
+          ctx.fillStyle = '#6fa8ff'; ctx.fill();
+          if (on) { ctx.lineWidth = 2 / zoom; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+        });
+      });
       drawRoad(ctx, path, l.width);
       if (l.blocks?.length) drawBlocks(ctx, path, l.width, layoutBlocks(path, l.width, l.blocks), 0);
       if (l.chaser) { const p = pathAtExt(path, -l.chaser.gap); ctx.globalAlpha = 0.6; drawPolice(ctx, p.x, p.y, Math.atan2(p.tx, -p.ty), 0); ctx.globalAlpha = 1; }
@@ -96,7 +112,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]);
     ctx.font = `${12 / zoom}px sans-serif`;
     pts.forEach((p, i) => {
-      const on = sel?.kind === 'point' && sel.i === i;
+      const on = sel?.kind === 'point' && sel.b === -1 && sel.i === i;
       ctx.beginPath(); ctx.arc(p[0], p[1], (on ? HANDLE + 3 : HANDLE) / zoom, 0, 7);
       ctx.fillStyle = i === 0 ? '#6fcf7a' : i === pts.length - 1 ? '#ece9e0' : '#f4b942'; ctx.fill();
       if (on) { ctx.lineWidth = 2 / zoom; ctx.strokeStyle = '#fff'; ctx.stroke(); }
@@ -134,15 +150,19 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
   // ---------- указатели ----------
   const ptrs = new Map<number, Pt>();
   let mode: 'none' | 'pan' | 'drag' | 'dragCar' | 'pinch' = 'none';
-  let dragIdx = -1, moved = false, down: Pt = [0, 0], longTimer = 0, shift = false;
+  let dragIdx = -1, dragBranch = -1, moved = false, down: Pt = [0, 0], longTimer = 0, shift = false;
   let pinch = { d: 1, zoom: 1, mid: [0, 0] as Pt, cam: { x: 0, y: 0 } };
 
   const pos = (e: PointerEvent): Pt => [e.clientX, e.clientY];
   const round = (p: Pt): Pt => [Math.round(p[0]), Math.round(p[1])];
-  function hitPoint(sx: number, sy: number): number {
-    const pts = h.level().points;
-    let best = -1, bd = (HANDLE + 6) ** 2;
-    for (let i = pts.length - 1; i >= 0; i--) { const [x, y] = toScreen(pts[i]); const d = (x - sx) ** 2 + (y - sy) ** 2; if (d < bd) { bd = d; best = i; } }
+  // Точка под курсором: [ветка (−1 — главная), индекс] или null
+  function hitPoint(sx: number, sy: number): [number, number] | null {
+    let best: [number, number] | null = null, bd = (HANDLE + 6) ** 2;
+    const test = (pts: Pt[], b: number) => {
+      for (let i = pts.length - 1; i >= 0; i--) { const [x, y] = toScreen(pts[i]); const d = (x - sx) ** 2 + (y - sy) ** 2; if (d < bd) { bd = d; best = [b, i]; } }
+    };
+    test(h.level().points, -1);
+    (h.level().branches ?? []).forEach((br, bi) => test(br.points, bi));
     return best;
   }
   function hitCar(sx: number, sy: number): number {
@@ -165,10 +185,10 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     }
     if (ptrs.size > 2) return;
     down = pos(e); moved = false; shift = e.shiftKey;
-    const pi = hitPoint(down[0], down[1]);
-    if (pi >= 0) {
-      mode = 'drag'; dragIdx = pi; h.select({ kind: 'point', i: pi }); draw();
-      armLongPress(() => h.removePoint(dragIdx));
+    const pt = hitPoint(down[0], down[1]);
+    if (pt) {
+      mode = 'drag'; dragBranch = pt[0]; dragIdx = pt[1]; h.select({ kind: 'point', i: pt[1], b: pt[0] }); draw();
+      armLongPress(() => h.removePoint(dragBranch, dragIdx));
       return;
     }
     const ci = hitCar(down[0], down[1]);
@@ -195,7 +215,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     }
     if (!moved && Math.hypot(p[0] - down[0], p[1] - down[1]) > 6) { moved = true; clearTimeout(longTimer); }
     if (mode === 'pan') { cam.x -= (p[0] - prev[0]) / zoom; cam.y -= (p[1] - prev[1]) / zoom; draw(); }
-    else if (mode === 'drag' && moved) { h.movePoint(dragIdx, round(toWorld(p[0], p[1]))); draw(); }
+    else if (mode === 'drag' && moved) { h.movePoint(dragBranch, dragIdx, round(toWorld(p[0], p[1]))); draw(); }
     else if (mode === 'dragCar' && moved) {
       const at = onRoad(...toWorld(p[0], p[1]));
       if (at) { h.moveCar(dragIdx, { ...at, speed: h.level().cars![dragIdx].speed }); draw(); }

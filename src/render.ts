@@ -11,15 +11,15 @@ export interface View { W: number; H: number; DPR: number }
 export interface Mark { x: number; y: number; a: number }
 export interface Cam { x: number; y: number }
 
+export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout }
+
 export interface Scene {
-  path: Path;
+  roads: RoadScene[]; // 0 — главная (финиш на ней), дальше ветки
   width: number;
   car: CarState & { W: number; L: number };
   spec: CarSpec;
-  traffic: Vehicle[];
   marks: Mark[];
   cam: Cam;
-  blocks?: Layout;                                               // заграждения
   t?: number;                                                    // время попытки — для мигалки
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
@@ -151,10 +151,11 @@ export function drawGrid(ctx: CanvasRenderingContext2D, x0: number, y0: number, 
 }
 
 // Дорога с обочиной, полосами, краями и финишем — в мировых координатах
-export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number): void {
+export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number, finish = true): void {
   poly(ctx, path, 0, [], '#3a3d46', w + 8); poly(ctx, path, 0, [], '#262930', w);
   for (let k = 1; k < LANES; k++) poly(ctx, path, -w / 2 + k * (w / LANES), [26, 22], 'rgba(236,233,224,.28)', 2);
   poly(ctx, path, -w / 2 + 3, [], 'rgba(244,185,66,.5)', 2); poly(ctx, path, w / 2 - 3, [], 'rgba(244,185,66,.5)', 2);
+  if (!finish) return;
   const e = pathAt(path, path.L - 60);
   ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(heading(e.tx, e.ty));
   for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#ece9e0' : '#15171c'; ctx.fillRect(-w / 2 + i * w / 8, -6, w / 8, 12); }
@@ -163,16 +164,17 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number): 
 
 export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): void {
   const { W, H, DPR } = view;
-  const { path, width: w, car, traffic, marks, cam } = sc;
+  const { roads, width: w, car, marks, cam } = sc;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = '#15171c'; ctx.fillRect(0, 0, W, H);
   ctx.save(); ctx.translate(W / 2 - cam.x, H / 2 - cam.y);
   drawGrid(ctx, cam.x - W / 2, cam.y - H / 2, cam.x + W / 2, cam.y + H / 2);
-  drawRoad(ctx, path, w);
-  if (sc.blocks) drawBlocks(ctx, path, w, sc.blocks, sc.t ?? 0);
+  // ветки под главной: её разметка и финиш сверху на стыках
+  for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, w, i === 0);
+  for (const r of roads) drawBlocks(ctx, r.path, w, r.blocks, sc.t ?? 0);
   // следы заноса
   for (const m of marks) { ctx.fillStyle = `rgba(0,0,0,${m.a * 0.35})`; ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, 7); ctx.fill(); }
   // трафик
-  for (const c of traffic) { const v = vehiclePose(path, c, w); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
+  for (const r of roads) for (const c of r.traffic) { const v = vehiclePose(r.path, c, w); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
   if (sc.chaser) drawPolice(ctx, sc.chaser.x, sc.chaser.y, sc.chaser.h, sc.t ?? 0);
   drawPlayer(ctx, car.x, car.y, car.h, sc.spec);
   ctx.restore();

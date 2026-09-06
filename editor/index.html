@@ -31,6 +31,8 @@
       <div class="row"><label>Заграждение<br><small>на s, px от старта</small></label><select id="blockType"><option value="gap">пост с просветом</option><option value="full">перекрытие + обочина</option><option value="spikes">машина + ежи</option><option value="works">ремонт дороги</option></select></div>
       <div class="row"><label></label><input id="blockS" type="number" step="10" placeholder="s"><button id="blockAdd" class="mini">+</button></div>
       <div id="blockList"></div>
+      <div class="row"><label>Ветка<br><small>от s до s по главной</small></label><input id="branchFrom" type="number" step="10" placeholder="от"><input id="branchTo" type="number" step="10" placeholder="до"><button id="branchAdd" class="mini">+</button></div>
+      <div id="branchList"></div>
       <div id="stats"></div>
       <div class="buttons"><button id="export">Экспорт</button><button id="import">Импорт</button><button id="play" class="primary">Играть</button></div>
       <input id="file" type="file" accept=".json,application/json" hidden>

@@ -4,6 +4,7 @@ import { P, type Param } from '../config';
 import { LEVEL_KEYS, LEVELS, type LevelData } from '../levels';
 import { CARS, DEFAULT_CAR, type CarKey } from '../cars';
 import type { Block } from '../blocks';
+import { pathAt } from '../road';
 import { createGame, type Game } from '../game';
 import { buildPath } from '../road';
 import { initCanvas, type Sel } from './canvas';
@@ -22,9 +23,13 @@ const canvas = initCanvas($<HTMLCanvasElement>('ec'), {
   selected: () => sel,
   select: s => { sel = s; syncSel(); },
   carMode: () => inp('carMode').checked,
-  addPoint: p => { level.points.push(p); select({ kind: 'point', i: level.points.length - 1 }); changed(); },
-  movePoint: (i, p) => { level.points[i] = p; changed(); },
-  removePoint: i => { level.points.splice(i, 1); select(null); changed(); },
+  addPoint: p => { level.points.push(p); select({ kind: 'point', i: level.points.length - 1, b: -1 }); changed(); },
+  movePoint: (b, i, p) => { (b < 0 ? level.points : level.branches![b].points)[i] = p; changed(); },
+  removePoint: (b, i) => {
+    if (b < 0) level.points.splice(i, 1);
+    else { const br = level.branches![b]; if (br.points.length > 1) br.points.splice(i, 1); } // у ветки хотя бы одна своя точка
+    select(null); changed();
+  },
   addCar: c => { (level.cars ??= []).push(c); select({ kind: 'car', i: level.cars.length - 1 }); changed(); },
   moveCar: (i, c) => { level.cars![i] = c; changed(); },
   removeCar: i => { level.cars!.splice(i, 1); select(null); changed(); },
@@ -35,9 +40,11 @@ function select(s: Sel): void { sel = s; syncSel(); }
 function changed(): void {
   const n = level.points.length, cars = level.cars?.length ?? 0;
   $('stats').textContent = (n < 2 ? `${n} ${n === 1 ? 'точка' : 'точек'} — нужно минимум 2` : `${n} точек · длина ${Math.round(buildPath(level.points).L)} px`)
-    + (cars ? ` · машин: ${cars}` : '');
+    + (cars ? ` · машин: ${cars}` : '')
+    + (level.branches?.length ? ` · веток: ${level.branches.length}` : '');
   syncSel();
   syncBlocks();
+  syncBranches();
 }
 
 // Блок выбранной машины: положение и скорость
@@ -101,6 +108,28 @@ function syncBlocks(): void {
     row.appendChild(span); row.appendChild(del); list.appendChild(row);
   });
 }
+// Ветки (docs/mechanics.md, M5): создаётся с тремя точками справа от главной, дальше их тянут мышью
+function syncBranches(): void {
+  const list = $('branchList'); list.innerHTML = '';
+  (level.branches ?? []).forEach((b, i) => {
+    const row = document.createElement('div');
+    const span = document.createElement('span'); span.textContent = `ветка ${i}: s ${b.from} → ${b.to}, точек ${b.points.length}`;
+    const del = document.createElement('button'); del.textContent = '×';
+    del.onclick = () => { level.branches!.splice(i, 1); if (!level.branches!.length) delete level.branches; select(null); changed(); canvas.draw(); };
+    row.appendChild(span); row.appendChild(del); list.appendChild(row);
+  });
+}
+$('branchAdd').onclick = () => {
+  const from = Math.round(parseFloat(inp('branchFrom').value)), to = Math.round(parseFloat(inp('branchTo').value));
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from + 200 || level.points.length < 2) { status('Ветка: нужны from и to (to − from ≥ 200) на готовой дороге'); return; }
+  const main = buildPath(level.points);
+  if (to > main.L - 100) { status(`Ветка: to не больше ${Math.round(main.L - 100)}`); return; }
+  const side = 250;
+  const points = [0.25, 0.5, 0.75].map(t => { const p = pathAt(main, from + (to - from) * t); return [Math.round(p.x + p.nx * side), Math.round(p.y + p.ny * side)] as [number, number]; });
+  (level.branches ??= []).push({ from, to, points });
+  changed(); canvas.draw();
+};
+
 $('blockAdd').onclick = () => {
   const s = Math.round(parseFloat(inp('blockS').value));
   if (!Number.isFinite(s)) { status('Укажи s заграждения'); return; }
@@ -119,7 +148,7 @@ function syncPanel(): void {
 }
 
 function load(l: LevelData): void {
-  delete level.cars; delete level.chaser; delete level.blocks;
+  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches;
   Object.assign(level, structuredClone(l));
   level.car ??= DEFAULT_CAR;
   select(null);
@@ -181,7 +210,7 @@ addEventListener('keydown', e => {
   const tag = (e.target as HTMLElement).tagName;
   if (game || tag === 'INPUT' || tag === 'SELECT') return;
   if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
-    if (sel.kind === 'point') level.points.splice(sel.i, 1);
+    if (sel.kind === 'point') { if (sel.b < 0) level.points.splice(sel.i, 1); else if (level.branches![sel.b].points.length > 1) level.branches![sel.b].points.splice(sel.i, 1); }
     else level.cars?.splice(sel.i, 1);
     select(null); changed(); canvas.draw();
   }

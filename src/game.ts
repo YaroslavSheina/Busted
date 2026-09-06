@@ -1,12 +1,13 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { BLOCK, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, TRAFFIC_SIZE } from './config';
-import { layoutBlocks, type Layout } from './blocks';
+import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, TRAFFIC_SIZE } from './config';
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
 import { buildPath, curvatureAt, heading, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
-import { collides, hit, moveTraffic, obb, spawnTraffic, type Obb, type Vehicle } from './traffic';
+import { buildBranchPath, mainEquivalent, type BranchDef } from './roads';
+import { layoutBlocks, type Block, type Layout } from './blocks';
+import { collides, hit, moveTraffic, obb, spawnTraffic, type Obb, type TrafficCar, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
-import { hudHtml, render, type Cam, type Mark } from './render';
+import { hudHtml, render, type Cam, type Mark, type RoadScene } from './render';
 import type { LevelData } from './levels';
 
 export interface GameUI {
@@ -27,7 +28,17 @@ export interface Game {
 }
 
 type State = 'play' | 'busted' | 'done';
-type Car = CarState & { s: number; off: number; W: number; L: number };
+type Car = CarState & { s: number; off: number; W: number; L: number; road: number };
+
+// Дорога графа: 0 — главная, дальше ветки. Всё, что живёт на дороге, лежит здесь
+interface Road {
+  path: Path;
+  def: BranchDef | null;   // null — главная
+  blocks: Layout;
+  solids: { obb: Obb; s: number; why: string }[];
+  cars: TrafficCar[];
+  traffic: Vehicle[];
+}
 
 export function createGame(ui: GameUI, first: LevelData): Game {
   const ctx = ui.canvas.getContext('2d')!;
@@ -41,44 +52,50 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   let level: LevelData;
   let spec: CarSpec;
-  let path: Path;
+  let roads: Road[];
   let car: Car;
-  let traffic: Vehicle[];
   let marks: Mark[];
   let cam: Cam;
   let state: State;
   let timeAlive = 0;
   let paused = false;
-  // Заграждения: твёрдые препятствия, ежи и обочины; flat — после ежей машина неуправляема
-  let blocks: Layout = { police: [], spikes: [], works: [], bypasses: [] };
-  let solids: { obb: Obb; s: number; why: string }[] = [];
-  let flat = false;
-  // Преследователь едет по сплайну с той же скоростью, поэтому догоняет только когда игрок теряет ход
-  let chaser: { s: number; off: number } | null = null;
+  let flat = false; // после ежей машина неуправляема
+  // Преследователь едет по сплайну с той же скоростью и сворачивает туда же, куда свернул игрок
+  let chaser: { road: number; s: number; off: number } | null = null;
+  let taken: Set<number>; // ветки, на которые свернул игрок
+
+  function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined): Road {
+    const layout = layoutBlocks(path, P.width.v, blocks);
+    return {
+      path, def, blocks: layout, cars: cars ?? [], traffic: [],
+      solids: [
+        ...layout.police.map(b => ({ obb: obb(b.x, b.y, b.h, b.w, b.l), s: b.s, why: 'врезался в пост' })),
+        ...layout.works.map(b => ({ obb: obb(b.x, b.y, b.h, b.w, b.l), s: b.s, why: 'заграждение' })),
+      ],
+    };
+  }
 
   function load(l: LevelData): void {
     level = l;
     spec = carByKey(l.car);
-    path = buildPath(l.points);
     // Машина и уровень задают стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
     P.width.v = l.width; P.traffic.v = l.traffic;
     P.speed.v = spec.speed; P.steer.v = spec.steer; P.damp.v = spec.damp; P.grip.v = spec.grip; P.spin.v = spec.spin; P.skidGrip.v = spec.skidGrip;
-    blocks = layoutBlocks(path, P.width.v, l.blocks);
-    solids = [
-      ...blocks.police.map(b => ({ obb: obb(b.x, b.y, b.h, b.w, b.l), s: b.s, why: 'врезался в пост' })),
-      ...blocks.works.map(b => ({ obb: obb(b.x, b.y, b.h, b.w, b.l), s: b.s, why: 'заграждение' })),
-    ];
+    const main = buildPath(l.points);
+    roads = [makeRoad(main, null, l.blocks, l.cars)];
+    for (const b of l.branches ?? []) roads.push(makeRoad(buildBranchPath(main, b), b, b.blocks, b.cars));
     reset();
   }
 
   function reset(): void {
-    const p0 = pathAt(path, 0);
-    car = { x: p0.x, y: p0.y, h: heading(p0.tx, p0.ty), w: 0, vx: p0.tx * P.speed.v, vy: p0.ty * P.speed.v, s: 0, off: 0, skid: false, W: spec.W, L: spec.L };
+    const p0 = pathAt(roads[0].path, 0);
+    car = { x: p0.x, y: p0.y, h: heading(p0.tx, p0.ty), w: 0, vx: p0.tx * P.speed.v, vy: p0.ty * P.speed.v, s: 0, off: 0, skid: false, W: spec.W, L: spec.L, road: 0 };
     marks = [];
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
-    traffic = spawnTraffic(path, P.traffic.v, P.speed.v, level.seed, level.cars);
-    chaser = level.chaser ? { s: -level.chaser.gap, off: 0 } : null;
+    roads.forEach((r, i) => { r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars); });
+    chaser = level.chaser ? { road: 0, s: -level.chaser.gap, off: 0 } : null;
+    taken = new Set();
     flat = false;
     ui.overlay.className = '';
   }
@@ -92,8 +109,36 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     ui.ovTitle.textContent = 'DELIVERED'; ui.ovSub.textContent = `${timeAlive.toFixed(1)} с`;
   }
 
+  // Прогресс по главной дороге, даже если машина на ветке
+  function mainS(road: number, s: number): number {
+    const r = roads[road];
+    return r.def ? mainEquivalent(r.def, r.path, s) : s;
+  }
+
+  // Развилка: в зоне после from сравниваем близость к главной и к ветке, ближняя побеждает.
+  // Слияние: в зоне перед концом ветки возвращаемся на главную у to.
+  function switchRoad(who: { road: number; s: number }, x: number, y: number) {
+    let nr = nearest(roads[who.road].path, x, y, who.s);
+    if (who.road === 0) {
+      for (let i = 1; i < roads.length; i++) {
+        const b = roads[i].def!;
+        if (who.s < b.from - BRANCH.lead || who.s > b.from + BRANCH.zone) continue;
+        const nb = nearest(roads[i].path, x, y, who.s - (b.from - BRANCH.lead));
+        if (nb.s > BRANCH.lead && Math.abs(nb.off) < Math.abs(nr.off)) { who.road = i; nr = nb; }
+      }
+    } else {
+      const r = roads[who.road], b = r.def!;
+      if (who.s > r.path.L - BRANCH.zone) {
+        const nm = nearest(roads[0].path, x, y, b.to - (r.path.L - who.s));
+        if (Math.abs(nm.off) <= Math.abs(nr.off) || who.s >= r.path.L - BRANCH.lead) { who.road = 0; nr = nm; }
+      }
+    }
+    who.s = nr.s;
+    return nr;
+  }
+
   function chaserPose() {
-    const p = pathAtExt(path, chaser!.s);
+    const p = pathAtExt(roads[chaser!.road].path, chaser!.s);
     return { x: p.x + p.nx * chaser!.off, y: p.y + p.ny * chaser!.off, h: heading(p.tx, p.ty) };
   }
 
@@ -110,24 +155,28 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     for (const m of marks) m.a -= dt * 0.4;
     marks = marks.filter(m => m.a > 0).slice(-200);
 
-    const nr = nearest(path, car.x, car.y, car.s);
-    car.s = nr.s; car.off = nr.off;
+    const before = car.road;
+    const nr = switchRoad(car, car.x, car.y);
+    car.off = nr.off;
+    if (car.road !== before && car.road !== 0) taken.add(car.road);
+    const rd = roads[car.road];
+
     // Обочина-объезд у полного перекрытия расширяет дорогу с одной стороны
     let limit = P.width.v / 2 + P.tol.v;
-    for (const b of blocks.bypasses) if (car.s >= b.s0 && car.s <= b.s1 && Math.sign(car.off) === b.side) limit += BLOCK.bypassW;
+    for (const b of rd.blocks.bypasses) if (car.s >= b.s0 && car.s <= b.s1 && Math.sign(car.off) === b.side) limit += BLOCK.bypassW;
     if (Math.abs(car.off) > limit) {
       if (flat) return busted('ежи');
       // Дорога под колёсами есть, но это другой участок маршрута (срезал кольцо, выехал на встречный рукав)
-      const onOther = Math.abs(nearestGlobal(path, car.x, car.y).off) <= P.width.v / 2 + P.tol.v;
+      const onOther = roads.some(r => Math.abs(nearestGlobal(r.path, car.x, car.y).off) <= P.width.v / 2 + P.tol.v);
       return busted(onOther ? 'съехал с маршрута' : 'вылет с дороги');
     }
-    if (car.s >= path.L - 60) return finish();
+    if (car.road === 0 && car.s >= rd.path.L - 60) return finish();
 
-    traffic = moveTraffic(traffic, path, dt);
+    for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt);
     const me = obb(car.x, car.y, car.h, car.W, car.L);
-    if (collides(traffic, path, P.width.v, me, car.s)) return busted('столкновение');
-    for (const o of solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
-    if (!flat) for (const sp of blocks.spikes) {
+    if (collides(rd.traffic, rd.path, P.width.v, me, car.s)) return busted('столкновение');
+    for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
+    if (!flat) for (const sp of rd.blocks.spikes) {
       if (Math.abs(sp.s - car.s) > 120 || !hit(me, obb(sp.x, sp.y, sp.h, sp.w, sp.l))) continue;
       // Ежи: сцепления больше нет, машину сносит к ближайшему кювету
       flat = true; car.skid = true;
@@ -136,14 +185,24 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     }
 
     if (chaser) {
+      const cr = roads[chaser.road];
       // В повороте коп идёт по линии шириной CHASER_LINE и теряет ход, как приличный водитель; на прямой — нет
-      const line = Math.max(0.5, 1 - CHASER_LINE * curvatureAt(path, Math.max(0, chaser.s)));
+      const line = Math.max(0.5, 1 - CHASER_LINE * curvatureAt(cr.path, Math.max(0, chaser.s)));
       chaser.s += P.speed.v * level.chaser!.speed * line * dt;
+      // Коп повторяет выбор игрока на развилках и возвращается на главную в конце ветки
+      if (chaser.road === 0) {
+        for (let i = 1; i < roads.length; i++) {
+          const b = roads[i].def!;
+          if (taken.has(i) && chaser.s >= b.from && chaser.s < b.from + BRANCH.zone) { chaser.road = i; chaser.s = BRANCH.lead + (chaser.s - b.from); break; }
+        }
+      } else if (chaser.s >= cr.path.L - BRANCH.lead) {
+        chaser.s = cr.def!.to + (chaser.s - (cr.path.L - BRANCH.lead)); chaser.road = 0;
+      }
       chaser.off += (car.off - chaser.off) * Math.min(1, CHASER_FOLLOW * dt);
       const lim = P.width.v / 2 - TRAFFIC_SIZE.W / 2;
       chaser.off = Math.max(-lim, Math.min(lim, chaser.off));
       const c = chaserPose();
-      if (hit(me, obb(c.x, c.y, c.h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L))) return busted('догнали');
+      if (chaser.road === car.road && hit(me, obb(c.x, c.y, c.h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L))) return busted('догнали');
     }
 
     // Камера: точка впереди по вектору скорости (не курса), плавный догон
@@ -163,13 +222,15 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   function frame(now: number): void {
     const dt = Math.min(MAX_DT, (now - last) / 1000); last = now;
     if (!paused) update(dt);
-    const tail = chaser ? car.s - chaser.s : undefined;
+    // Хвост считаем по главной дороге, чтобы сравнивать положение на разных ветках
+    const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
+    const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks }));
     render(ctx, view, {
-      path, width: P.width.v, car, spec, traffic, marks, cam, t: timeAlive, blocks,
+      roads: scene, width: P.width.v, car, spec, marks, cam, t: timeAlive,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
     });
     hudT += dt;
-    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, car.s / path.L, car, tail); }
+    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, mainS(car.road, car.s) / roads[0].path.L, car, tail); }
     raf = requestAnimationFrame(frame);
   }
   load(first);
