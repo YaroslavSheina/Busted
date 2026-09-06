@@ -74,6 +74,13 @@ export function pathAtExt(path: Path, s: number): Pose {
   return { ...p, x: p.x + p.tx * s, y: p.y + p.ty * s };
 }
 
+// Кривизна дороги в точке s, 1/px: угол поворота касательной на отрезке ds
+export function curvatureAt(path: Path, s: number, ds = 24): number {
+  const a = pathAt(path, s), b = pathAt(path, s + ds);
+  const cross = a.tx * b.ty - a.ty * b.tx, dot = a.tx * b.tx + a.ty * b.ty;
+  return Math.abs(Math.atan2(cross, dot)) / ds;
+}
+
 // Ближайшая точка в окне вокруг предыдущего s, а не глобальный поиск:
 // иначе на кольце и развороте машину «перебросит» на соседний участок дороги.
 export function nearest(path: Path, x: number, y: number, sGuess: number): { s: number; off: number; p: Sample } {

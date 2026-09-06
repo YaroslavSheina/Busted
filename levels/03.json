@@ -79,5 +79,5 @@
   "traffic": 0.3,
   "seed": 103,
   "car": "sedan",
-  "chaser": { "gap": 260, "speed": 0.98 }
+  "chaser": { "gap": 160, "speed": 1 }
 }

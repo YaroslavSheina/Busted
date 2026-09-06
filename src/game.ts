@@ -1,8 +1,8 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, MAX_DT, P, TRAFFIC_SIZE } from './config';
+import { CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, TRAFFIC_SIZE } from './config';
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
-import { buildPath, heading, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
+import { buildPath, curvatureAt, heading, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
 import { collides, hit, moveTraffic, obb, spawnTraffic, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { hudHtml, render, type Cam, type Mark } from './render';
@@ -109,7 +109,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (collides(traffic, path, P.width.v, me, car.s)) return busted('столкновение');
 
     if (chaser) {
-      chaser.s += P.speed.v * level.chaser!.speed * dt;
+      // В повороте коп идёт по линии шириной CHASER_LINE и теряет ход, как приличный водитель; на прямой — нет
+      const line = Math.max(0.5, 1 - CHASER_LINE * curvatureAt(path, Math.max(0, chaser.s)));
+      chaser.s += P.speed.v * level.chaser!.speed * line * dt;
       chaser.off += (car.off - chaser.off) * Math.min(1, CHASER_FOLLOW * dt);
       const lim = P.width.v / 2 - TRAFFIC_SIZE.W / 2;
       chaser.off = Math.max(-lim, Math.min(lim, chaser.off));
