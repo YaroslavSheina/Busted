@@ -1,7 +1,7 @@
 // Холст редактора: панорама, зум (колесо/пинч), точки сплайна и явные машины трафика.
 // Дорога и машины рисуются теми же drawRoad/drawCar, что и в игре.
 import { LANES } from '../config';
-import { buildPath, pathAtExt, type Path, type Pt } from '../road';
+import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road';
 import { drawCar, drawGrid, drawPolice, drawRoad } from '../render';
 import { spawnTraffic, vehiclePose, type TrafficCar, type Vehicle } from '../traffic';
 import type { LevelData } from '../levels';
@@ -115,16 +115,13 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     draw();
   }
 
-  // Ближайшая точка дороги по всей длине (в игре nearest ищет в окне вокруг известного s)
+  // Ближайшая полоса под курсором
   function onRoad(wx: number, wy: number): { s: number; lane: number } | null {
     if (!path) return null;
-    let best = Infinity, bi = 0;
-    for (let i = 0; i < path.pt.length; i++) { const p = path.pt[i]; const d = (p.x - wx) ** 2 + (p.y - wy) ** 2; if (d < best) { best = d; bi = i; } }
-    const p = path.pt[bi], w = h.level().width;
-    const off = (wx - p.x) * p.nx + (wy - p.y) * p.ny;
+    const { s, off } = nearestGlobal(path, wx, wy), w = h.level().width;
     if (Math.abs(off) > w / 2 + 40) return null;
     const lane = Math.max(0, Math.min(LANES - 1, Math.round(off / (w / LANES) + (LANES - 1) / 2)));
-    return { s: Math.round(p.s), lane };
+    return { s: Math.round(s), lane };
   }
 
   // ---------- указатели ----------

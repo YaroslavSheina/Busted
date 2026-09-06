@@ -88,6 +88,18 @@ export function nearest(path: Path, x: number, y: number, sGuess: number): { s: 
   return { s: p.s, off: (x - p.x) * p.nx + (y - p.y) * p.ny, p };
 }
 
+// Ближайшая точка по всей длине — для редактора и для объяснения вылета (дорога есть, но не та)
+export function nearestGlobal(path: Path, x: number, y: number): { s: number; off: number; p: Sample } {
+  let best = Infinity, bi = 0;
+  for (let i = 0; i < path.pt.length; i++) {
+    const p = path.pt[i];
+    const d = (p.x - x) ** 2 + (p.y - y) ** 2;
+    if (d < best) { best = d; bi = i; }
+  }
+  const p = path.pt[bi];
+  return { s: p.s, off: (x - p.x) * p.nx + (y - p.y) * p.ny, p };
+}
+
 // Курс машины из касательной дороги (h = 0 — вверх по экрану)
 export const heading = (tx: number, ty: number) => Math.atan2(tx, -ty);
 

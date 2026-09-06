@@ -1,7 +1,7 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
 import { CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, MAX_DT, P, PLAYER_SIZE, TRAFFIC_SIZE } from './config';
 import { step, type CarState } from './physics';
-import { buildPath, heading, nearest, pathAt, pathAtExt, type Path } from './road';
+import { buildPath, heading, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
 import { collides, hit, moveTraffic, obb, spawnTraffic, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { hudHtml, render, type Cam, type Mark } from './render';
@@ -93,7 +93,11 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
     const nr = nearest(path, car.x, car.y, car.s);
     car.s = nr.s; car.off = nr.off;
-    if (Math.abs(car.off) > P.width.v / 2 + P.tol.v) return busted('вылет с дороги');
+    if (Math.abs(car.off) > P.width.v / 2 + P.tol.v) {
+      // Дорога под колёсами есть, но это другой участок маршрута (срезал кольцо, выехал на встречный рукав)
+      const onOther = Math.abs(nearestGlobal(path, car.x, car.y).off) <= P.width.v / 2 + P.tol.v;
+      return busted(onOther ? 'съехал с маршрута' : 'вылет с дороги');
+    }
     if (car.s >= path.L - 60) return finish();
 
     traffic = moveTraffic(traffic, path, dt);
