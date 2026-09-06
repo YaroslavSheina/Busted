@@ -21,6 +21,7 @@ export interface GameUI {
 export interface Game {
   load(level: LevelData): void;
   reset(): void;
+  pause(on: boolean): void; // меню открыто — мир стоит, кадр рисуется
   stop(): void;
 }
 
@@ -46,6 +47,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let cam: Cam;
   let state: State;
   let timeAlive = 0;
+  let paused = false;
   // Преследователь едет по сплайну с той же скоростью, поэтому догоняет только когда игрок теряет ход
   let chaser: { s: number; off: number } | null = null;
 
@@ -135,7 +137,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let raf = 0, last = performance.now(), hudT = 0;
   function frame(now: number): void {
     const dt = Math.min(MAX_DT, (now - last) / 1000); last = now;
-    update(dt);
+    if (!paused) update(dt);
     const tail = chaser ? car.s - chaser.s : undefined;
     render(ctx, view, {
       path, width: P.width.v, car, spec, traffic, marks, cam, t: timeAlive,
@@ -150,6 +152,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   return {
     load, reset,
+    pause(on) { paused = on; },
     stop() {
       cancelAnimationFrame(raf);
       disposeInput();

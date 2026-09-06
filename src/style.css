@@ -17,6 +17,9 @@ canvas{display:block;width:100vw;height:100vh}
 .levels button{background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:8px;padding:6px 10px;font-size:12px}
 .levels button.on{background:#f4b942;color:#1a1408;font-weight:600}
 .hint{opacity:.45;margin-top:8px;line-height:1.4}
+.tune{display:block;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#ece9e0;border-radius:8px;padding:7px 0;font-size:12px;margin-top:4px}
+.tune.on{border-color:rgba(244,185,66,.5);color:#f4b942}
+.details{margin-top:6px}
 #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;pointer-events:auto;background:rgba(21,23,28,.6)}
 #overlay.show{display:flex}
 #overlay.busted{animation:cop .5s steps(2) infinite}

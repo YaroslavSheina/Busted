@@ -54,7 +54,16 @@ function showPanel(key: string): void {
   });
 }
 
-initToggle($('gear'), panel, [carPanel]);
-initToggle($('carBtn'), carPanel, [panel]);
+// Пока открыто меню, мир стоит; тап по игровому полю закрывает меню и продолжает попытку
+const menus = [panel, carPanel];
+const syncPause = () => game.pause(menus.some(m => m.classList.contains('open')));
+initToggle($('levelBtn'), panel, [carPanel], syncPause);
+initToggle($('carBtn'), carPanel, [panel], syncPause);
+document.addEventListener('pointerdown', e => {
+  if (!menus.some(m => m.classList.contains('open'))) return;
+  if ((e.target as HTMLElement).closest('.panel, #top')) return;
+  for (const m of menus) m.classList.remove('open');
+  syncPause();
+}, true);
 showPanel(FIRST);
 showCarPanel();
