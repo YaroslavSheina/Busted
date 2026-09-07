@@ -22,19 +22,24 @@ export interface Crossing {
   hCross: number;           // курс машин, идущих в +n
   s: number;
   w: number; n: number; speed: number;
+  roadHalf: number;         // половина ширины маршрута в этом месте
   red: number;              // длительность красного, с
-  lead: number;             // машина 0 стартует с −reach за lead секунд до красного, чтобы въехать на дорогу ровно на красный
 }
 
 export interface CrossCar { x: number; y: number; h: number; W: number; L: number; obb: Obb }
+
+// Позиция в очереди машины m своего направления: от осевой маршрута наружу, первая — у края перекрёстка
+const queueAt = (c: Crossing, m: number) => c.roadHalf + CROSS.queueGap + m * (CROSS.carL + 16);
 
 export function layoutCrossings(path: Path, defs: CrossingDef[] = [], roadWidth: number): Crossing[] {
   return defs.map(def => {
     const p = pathAt(path, def.s);
     const n = def.cars ?? CROSS.cars, speed = def.speed ?? CROSS.speed, w = def.width ?? CROSS.width;
-    const lead = (CROSS.reach - roadWidth / 2 - CROSS.carL / 2) / speed;
-    const red = (n - 1) * CROSS.gapT + (roadWidth + CROSS.carL) / speed + 0.3;
-    return { def, x: p.x, y: p.y, tx: p.tx, ty: p.ty, nx: p.nx, ny: p.ny, hCross: Math.atan2(p.nx, -p.ny), s: def.s, w, n, speed, red, lead };
+    const c: Crossing = { def, x: p.x, y: p.y, tx: p.tx, ty: p.ty, nx: p.nx, ny: p.ny, hCross: Math.atan2(p.nx, -p.ny), s: def.s, w, n, speed, roadHalf: roadWidth / 2, red: 0 };
+    // красный — пока последняя машина группы не покинет проезжую часть
+    const mMax = Math.ceil(n / 2) - 1;
+    c.red = mMax * CROSS.gapT + (queueAt(c, mMax) + c.roadHalf + CROSS.carL / 2) / speed + 0.3;
+    return c;
   });
 }
 
@@ -51,19 +56,27 @@ export function lightAt(c: Crossing, time: number): 'green' | 'yellow' | 'red' {
   return 'green';
 }
 
-// Машины группы в момент time: чётные идут в +n по полосе −w/4, нечётные в −n по полосе +w/4
+// Машины группы в момент time. Машина m своего направления стоит в очереди у края перекрёстка на нашем зелёном
+// (видна заранее), на нашем красном трогается с задержкой m·gapT и уезжает за reach; во время нашего зелёного
+// с дальнего конца улицы подъезжает следующая и встаёт в ту же очередь к концу цикла
 export function crossCars(c: Crossing, time: number): CrossCar[] {
   const out: CrossCar[] = [];
-  const ph = phase(c, time);
-  for (let k = 0; k < c.n; k++) {
-    const t = ph - k * CROSS.gapT + c.lead; // сколько секунд машина k уже едет от −reach
-    if (t < 0) continue;
-    const d = -CROSS.reach + t * c.speed;    // расстояние от старта вдоль поперечной улицы
-    if (d > CROSS.reach) continue;
-    const dir = k % 2 === 0 ? 1 : -1, along = dir * d, lane = -dir * c.w / 4;
+  const ph = phase(c, time), T = c.def.period;
+  const add = (dir: 1 | -1, d: number) => { // d — расстояние вдоль поперечной улицы в направлении движения
+    const along = dir * d, lane = -dir * c.w / 4;
     const x = c.x + c.nx * along + c.tx * lane, y = c.y + c.ny * along + c.ty * lane;
     const h = dir > 0 ? c.hCross : c.hCross + Math.PI;
     out.push({ x, y, h, W: CROSS.carW, L: CROSS.carL, obb: obb(x, y, h, CROSS.carW, CROSS.carL) });
+  };
+  for (let k = 0; k < c.n; k++) {
+    const dir = k % 2 === 0 ? 1 : -1, m = Math.floor(k / 2);
+    const q = queueAt(c, m), tGo = m * CROSS.gapT;
+    // уехавшая или стоящая
+    if (ph >= tGo) { const d = -q + (ph - tGo) * c.speed; if (d <= CROSS.reach) add(dir, d); }
+    else add(dir, -q);
+    // подъезжающая на смену: к концу цикла встаёт в очередь
+    const arrive = T - 1.0 + m * 0.25, start = arrive - (CROSS.reach - q) / c.speed;
+    if (ph >= start && ph >= tGo) add(dir, Math.min(-q, -CROSS.reach + (ph - start) * c.speed));
   }
   return out;
 }
