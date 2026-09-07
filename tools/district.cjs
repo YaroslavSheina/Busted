@@ -1,7 +1,8 @@
 // Генератор районов: сетка кварталов; дороги — списки узлов сетки (главная и ветки с родителем), между узлами
 // прямые, на углах дуги радиуса R; перекрёстки там, где дорога проходит узел прямо; здания во всех кварталах.
 // Ветка отходит от прямого участка родителя за R до узла дугой и вливается в прямой участок дугой через R после узла.
-// Пишет levels/<file>.json для каждого района из SPECS. Фазы светофоров затем проверяются crosslanes.mjs / routebot.mjs.
+// Район = сетка, здания, машина, гараж; маршрут = свои дороги и старт при общем районе — один район даёт несколько уровней.
+// Пишет levels/<file>.json для каждого маршрута из DISTRICTS. Фазы светофоров затем проверяются routebot.mjs (SWEEP).
 const fs = require('fs');
 process.chdir(require('path').join(__dirname, '..')); // корень проекта
 
@@ -86,7 +87,8 @@ function straightNodes(legs) {
   return out;
 }
 
-function build(spec) {
+function build(district, route) {
+  const spec = { ...district, ...route };
   const rnd = mkRnd(spec.seed);
   const roads = [];
   spec.roads.forEach((rd, idx) => {
@@ -165,24 +167,39 @@ ${props.map(p => '    ' + JSON.stringify(p)).join(',\n')}
   console.log(`${spec.name}: точек ${main.pts.length}, зданий ${props.length}\n   ${desc.join('\n   ')}`);
 }
 
-const SPECS = [
+const DISTRICTS = [
   // «Район 1»: север 2 квартала, восток 2, север 2, восток 1 — гараж; квартальный объезд веткой через (1,−1)
-  { file: 'district1', name: 'Район 1', seed: 4242, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 },
-    blocks: { i: [-1, 3], j: [-5, 0] },
-    roads: [
-      { nodes: [[0, 0], [0, -2], [2, -2], [2, -4], [3, -4]], oncoming: 1, offsets: [3.2, 4.5, 7.5],
-        cars: h => [{ s: 300, lane: 2, speed: 0 }, { s: 620, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -2])) + 200, lane: 2, speed: 0 }] },
-      { nodes: [[0, -1], [1, -1], [1, -2]], oncoming: 1 },
+  { seed: 4242, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 3], j: [-5, 0] },
+    routes: [
+      { file: 'district1', name: 'Район 1', roads: [
+        { nodes: [[0, 0], [0, -2], [2, -2], [2, -4], [3, -4]], oncoming: 1, offsets: [3.2, 4.5, 7.5],
+          cars: h => [{ s: 300, lane: 2, speed: 0 }, { s: 620, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -2])) + 200, lane: 2, speed: 0 }] },
+        { nodes: [[0, -1], [1, -1], [1, -2]], oncoming: 1 },
+      ] },
     ] },
-  // «Район 2»: север 3, восток 3, север 1 — гараж. Ветка А: направо у (0,−1), прямо через (1,−1), налево у (2,−1),
-  // прямо через (2,−2), вливается в главную у (2,−3). Ветка Б от А: налево у (1,−1), направо у (1,−2), вливается в А у (2,−2)
-  { file: 'district2', name: 'Район 2', seed: 777, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 },
-    blocks: { i: [-1, 3], j: [-5, 0] },
-    roads: [
-      { nodes: [[0, 0], [0, -3], [3, -3], [3, -4]], oncoming: 1, offsets: [3.0, 2.5, 9.5, 6.5], // зелёный, красный, зелёный, красный при прибытии (routebot SWEEP)
-        cars: h => [{ s: 340, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -3])) + 220, lane: 2, speed: 0 }] },
-      { nodes: [[0, -1], [1, -1], [2, -1], [2, -2], [2, -3]], oncoming: 1, offsets: [4.5, 5.5] }, // зелёный, красный при прибытии
-      { nodes: [[1, -1], [1, -2], [2, -2]], parent: 0, oncoming: 1 },
+  // «Район 2»: гараж у (3,−4), три старта — три уровня в одном городе
+  { seed: 777, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 3], j: [-5, 0] },
+    routes: [
+      // маршрут 1: старт (0,0), север 3, восток 3, север 1. Ветка А: направо у (0,−1), прямо через (1,−1), налево у (2,−1),
+      // прямо через (2,−2), вливается в главную у (2,−3). Ветка Б от А: налево у (1,−1), направо у (1,−2), вливается в А у (2,−2)
+      { file: 'district2', name: 'Район 2 · маршрут 1', roads: [
+        { nodes: [[0, 0], [0, -3], [3, -3], [3, -4]], oncoming: 1, offsets: [3.0, 2.5, 9.5, 6.5], // зелёный, красный, зелёный, красный при прибытии (routebot SWEEP)
+          cars: h => [{ s: 340, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -3])) + 220, lane: 2, speed: 0 }] },
+        { nodes: [[0, -1], [1, -1], [2, -1], [2, -2], [2, -3]], oncoming: 1, offsets: [4.5, 5.5] }, // зелёный, красный при прибытии
+        { nodes: [[1, -1], [1, -2], [2, -2]], parent: 0, oncoming: 1 },
+      ] },
+      // маршрут 2: старт (3,0), север 1, запад 2, север 2, восток 2, север 1. Ветка: направо у (1,−2), налево у (2,−2), вливается у (2,−3)
+      { file: 'district2b', name: 'Район 2 · маршрут 2', roads: [
+        { nodes: [[3, 0], [3, -1], [1, -1], [1, -3], [3, -3], [3, -4]], oncoming: 1, offsets: [5.0, 6.0, 0.5], // зелёный, красный, зелёный при прибытии
+          cars: h => [{ s: 300, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -1])) + 260, lane: 2, speed: 0 }] },
+        { nodes: [[1, -2], [2, -2], [2, -3]], oncoming: 1 },
+      ] },
+      // маршрут 3: старт (1,0), север 2, восток 2, север 2. Ветка: направо у (1,−1), налево у (2,−1), вливается у (2,−2)
+      { file: 'district2c', name: 'Район 2 · маршрут 3', roads: [
+        { nodes: [[1, 0], [1, -2], [3, -2], [3, -4]], oncoming: 1, offsets: [3.2, 4.5, 7.5], // как в «Районе 1»: та же форма маршрута
+          cars: h => [{ s: 320, lane: 2, speed: 0 }, { s: h.sAt(...h.node([2, -2])) + 240, lane: 2, speed: 0 }] },
+        { nodes: [[1, -1], [2, -1], [2, -2]], oncoming: 1 },
+      ] },
     ] },
 ];
-for (const spec of SPECS.filter(s => !process.argv[2] || s.file === process.argv[2])) build(spec);
+for (const d of DISTRICTS) for (const r of d.routes) if (!process.argv[2] || r.file === process.argv[2]) build(d, r);
