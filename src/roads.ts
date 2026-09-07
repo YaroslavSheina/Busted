@@ -6,6 +6,8 @@ import { buildPath, pathAt, type Path, type Pt } from './road';
 import type { Block } from './blocks';
 import type { TrafficCar } from './traffic';
 import type { Narrow } from './narrow';
+import type { RailDef } from './rails';
+import type { CrossingDef } from './crossings';
 
 export interface BranchDef {
   from: number;    // s на родительской дороге, где ветка отходит
@@ -16,6 +18,8 @@ export interface BranchDef {
   cars?: TrafficCar[];
   narrows?: Narrow[]; // сужения по s ветки
   oncoming?: number;  // встречных полос на ветке
+  rails?: RailDef[];         // переезды по s ветки (M7)
+  crossings?: CrossingDef[]; // перекрёстки по s ветки (M9)
 }
 
 // Индекс родителя в списке дорог уровня (0 — главная, ветка i — i + 1)

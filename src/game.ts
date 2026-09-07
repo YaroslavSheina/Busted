@@ -115,6 +115,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       if (!path) throw new Error(`Уровень «${l.name}»: ветка ${i} ссылается на родителя ${b.parent}, которого нет раньше неё`);
       const r = makeRoad(path, b, b.blocks, b.cars, b.narrows);
       r.parent = parentRoad(b); r.oncoming = b.oncoming ?? 0;
+      r.rails = layoutRails(path, b.rails); r.crossings = layoutCrossings(path, b.crossings, l.width);
       roads.push(r);
     });
     reset();

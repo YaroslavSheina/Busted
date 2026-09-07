@@ -78,14 +78,19 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       const wMain = makeWidthFn(() => l.width, l.narrows);
       if (l.props?.length) drawProps(ctx, l.props);
       const crossings = layoutCrossings(path, l.crossings, l.width);
-      for (const c of crossings) drawCrossingRoad(ctx, c);
       const roadPaths = buildRoadPaths(path, l.branches);
+      // перекрёстки веток: поперечные улицы — под всеми дорогами, зебры и светофоры — поверх
+      const branchCross = (l.branches ?? []).map((b, bi) => roadPaths[bi + 1] ? layoutCrossings(roadPaths[bi + 1]!, b.crossings, l.width) : []);
+      for (const c of crossings) drawCrossingRoad(ctx, c);
+      for (const cs of branchCross) for (const c of cs) drawCrossingRoad(ctx, c);
       (l.branches ?? []).forEach((b, bi) => {
         const bp = roadPaths[bi + 1]; // null — родитель не построен
         if (bp) {
           const wb = makeWidthFn(() => l.width, b.narrows);
           drawRoad(ctx, bp, wb, false, b.oncoming ?? 0);
           if (b.blocks?.length) drawBlocks(ctx, bp, wb, layoutBlocks(bp, wb, b.blocks), 0);
+          if (b.rails?.length) drawRails(ctx, layoutRails(bp, b.rails), wb, 0);
+          for (const c of branchCross[bi]) drawCrossingTop(ctx, c, widthAt(wb, c.s), 0);
         }
         b.points.forEach((p, i) => {
           const on = sel?.kind === 'point' && sel.b === bi && sel.i === i;

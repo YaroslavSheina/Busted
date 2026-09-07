@@ -24,7 +24,7 @@ export function formatLevel(l: LevelData): string {
   const narrows = l.narrows?.length ? `,\n  "narrows": [\n${l.narrows.map(n => '    ' + JSON.stringify(n)).join(',\n')}\n  ]` : '';
   const blocks = l.blocks?.length ? `,\n  "blocks": [\n${l.blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ]` : '';
   const branches = l.branches?.length
-    ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}${b.parent !== undefined ? `, "parent": ${b.parent}` : ''}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.oncoming ? `, "oncoming": ${b.oncoming}` : ''}${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''} }`).join(',\n')}\n  ]`
+    ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}${b.parent !== undefined ? `, "parent": ${b.parent}` : ''}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.oncoming ? `, "oncoming": ${b.oncoming}` : ''}${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''}${b.rails?.length ? `, "rails": ${JSON.stringify(b.rails)}` : ''}${b.crossings?.length ? `, "crossings": ${JSON.stringify(b.crossings)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
   return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
@@ -77,6 +77,26 @@ function parseBlocks(v: unknown, what: string): Block[] {
   });
 }
 
+function parseCrossings(v: unknown, what: string): CrossingDef[] {
+  if (!Array.isArray(v)) throw new Error(`«${what}» должно быть массивом`);
+  return v.map((c, i): CrossingDef => {
+    if (typeof c !== 'object' || c === null || !isNum(c.s) || !isNum(c.period)) throw new Error(`${what} ${i}: нужны s и period`);
+    const out: CrossingDef = { s: c.s, period: c.period };
+    for (const k of ['offset', 'cars', 'speed', 'width'] as const) if (c[k] !== undefined) { if (!isNum(c[k])) throw new Error(`${what} ${i}: «${k}» число`); out[k] = c[k]; }
+    return out;
+  });
+}
+
+function parseRails(v: unknown, what: string): RailDef[] {
+  if (!Array.isArray(v)) throw new Error(`«${what}» должно быть массивом`);
+  return v.map((r, i): RailDef => {
+    if (typeof r !== 'object' || r === null || !isNum(r.s) || !isNum(r.period) || !isNum(r.speed) || !isNum(r.length)) throw new Error(`${what} ${i}: нужны s, period, speed, length`);
+    const out: RailDef = { s: r.s, period: r.period, speed: r.speed, length: r.length };
+    if (r.offset !== undefined) { if (!isNum(r.offset)) throw new Error(`${what} ${i}: offset число`); out.offset = r.offset; }
+    return out;
+  });
+}
+
 export function parseLevel(raw: unknown): LevelData {
   if (typeof raw !== 'object' || raw === null) throw new Error('не объект');
   const o = raw as Record<string, unknown>;
@@ -103,24 +123,8 @@ export function parseLevel(raw: unknown): LevelData {
       return out;
     });
   }
-  if (o.crossings !== undefined) {
-    if (!Array.isArray(o.crossings)) throw new Error('«crossings» должно быть массивом');
-    level.crossings = o.crossings.map((c, i): CrossingDef => {
-      if (typeof c !== 'object' || c === null || !isNum(c.s) || !isNum(c.period)) throw new Error(`перекрёсток ${i}: нужны s и period`);
-      const out: CrossingDef = { s: c.s, period: c.period };
-      for (const k of ['offset', 'cars', 'speed', 'width'] as const) if (c[k] !== undefined) { if (!isNum(c[k])) throw new Error(`перекрёсток ${i}: «${k}» число`); out[k] = c[k]; }
-      return out;
-    });
-  }
-  if (o.rails !== undefined) {
-    if (!Array.isArray(o.rails)) throw new Error('«rails» должно быть массивом');
-    level.rails = o.rails.map((r, i): RailDef => {
-      if (typeof r !== 'object' || r === null || !isNum(r.s) || !isNum(r.period) || !isNum(r.speed) || !isNum(r.length)) throw new Error(`переезд ${i}: нужны s, period, speed, length`);
-      const out: RailDef = { s: r.s, period: r.period, speed: r.speed, length: r.length };
-      if (r.offset !== undefined) { if (!isNum(r.offset)) throw new Error(`переезд ${i}: offset число`); out.offset = r.offset; }
-      return out;
-    });
-  }
+  if (o.crossings !== undefined) level.crossings = parseCrossings(o.crossings, 'перекрёсток');
+  if (o.rails !== undefined) level.rails = parseRails(o.rails, 'переезд');
   if (o.blocks !== undefined) level.blocks = parseBlocks(o.blocks, 'заграждение');
   if (o.branches !== undefined) {
     if (!Array.isArray(o.branches)) throw new Error('«branches» должно быть массивом');
@@ -132,6 +136,8 @@ export function parseLevel(raw: unknown): LevelData {
       if (b.cars !== undefined) out.cars = parseCars(b.cars, `ветка ${i}, cars`);
       if (b.narrows !== undefined) out.narrows = parseNarrows(b.narrows, `ветка ${i}, сужение`);
       if (b.oncoming !== undefined) { if (!isNum(b.oncoming)) throw new Error(`ветка ${i}: oncoming число`); out.oncoming = b.oncoming; }
+      if (b.rails !== undefined) out.rails = parseRails(b.rails, `ветка ${i}, переезд`);
+      if (b.crossings !== undefined) out.crossings = parseCrossings(b.crossings, `ветка ${i}, перекрёсток`);
       return out;
     });
   }
