@@ -1,13 +1,13 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
+import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, SCORE, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
-import { buildPath, curvatureAt, heading, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
+import { buildPath, curvatureAt, heading, laneOff, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
 import { buildBranchPath, mainEquivalent, type BranchDef } from './roads';
 import { layoutBlocks, type Block, type Layout } from './blocks';
 import { brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, vehiclePose, type Obb, type TrafficCar, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
-import { hudHtml, render, type Cam, type Mark, type RoadScene } from './render';
+import { fmtScore, hudHtml, render, type Cam, type Fx, type Mark, type RoadScene } from './render';
 import type { LevelData } from './levels';
 
 export interface GameUI {
@@ -66,6 +66,10 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   // Слоу-мо и зум провокации (M3): slow — остаток реального времени, zoom тянется к цели
   let slow = 0, zoom = 1;
   let flash: { text: string; t: number } | null = null; // короткая надпись в HUD («коп выбыл»)
+  // Очки попытки (фаза B): дистанция + события; fx — всплывающие надписи и искры
+  let score = 0;
+  let fx: Fx[] = [];
+  let buzzedPosts: Set<string>; // «дорога:индекс» полицейских машин постов, к которым уже прижимались
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined): Road {
     const layout = layoutBlocks(path, P.width.v, blocks);
@@ -101,16 +105,30 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     taken = new Set();
     flat = false;
     slow = 0; zoom = 1; flash = null;
+    score = 0; fx = []; buzzedPosts = new Set();
     ui.overlay.className = '';
   }
 
   function busted(why: string): void {
     state = 'busted'; ui.overlay.className = 'show busted';
-    ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = why + '\n' + holdText();
+    ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = why + '\n' + holdText() + `\nочки ${fmtScore(score)}`;
   }
   function finish(): void {
     state = 'done'; ui.overlay.className = 'show';
-    ui.ovTitle.textContent = 'DELIVERED'; ui.ovSub.textContent = `${timeAlive.toFixed(1)} с`;
+    ui.ovTitle.textContent = 'DELIVERED';
+    ui.ovSub.textContent = `${timeAlive.toFixed(1)} с · очки ${fmtScore(score)} × ${SCORE.finishMul} = ${fmtScore(score * SCORE.finishMul)}`;
+  }
+
+  // Начислить очки с надписью и искрами у борта машины (side: с какой стороны событие)
+  function addScore(pts: number, label: string, side: 1 | -1): void {
+    score += pts;
+    const rx = Math.cos(car.h), ry = Math.sin(car.h);
+    const x = car.x + rx * side * (car.W / 2 + 10), y = car.y + ry * side * (car.W / 2 + 10);
+    fx.push({ x, y: y - 20, t: 1.1, text: `+${pts} ${label}` });
+    for (let k = 0; k < 6; k++) {
+      const a = car.h + side * Math.PI / 2 + (k - 2.5) * 0.35;
+      fx.push({ x, y, t: 0.45, vx: Math.sin(a) * 260, vy: -Math.cos(a) * 260 });
+    }
   }
 
   // Прогресс по главной дороге, даже если машина на ветке
@@ -180,11 +198,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     for (const m of marks) m.a -= dt * 0.4;
     marks = marks.filter(m => m.a > 0).slice(-200);
 
-    const before = car.road;
+    const before = car.road, beforeMain = mainS(car.road, car.s);
     const nr = switchRoad(car, car.x, car.y);
     car.off = nr.off;
     if (car.road !== before && car.road !== 0) taken.add(car.road);
     const rd = roads[car.road];
+    score += Math.max(0, mainS(car.road, car.s) - beforeMain) * SCORE.perPx;
+    for (const f of fx) { f.t -= dt; if (f.vx !== undefined) { f.x += f.vx * dt; f.y += (f.vy ?? 0) * dt; f.vx *= 0.9; f.vy! *= 0.9; } else f.y -= 40 * dt; }
+    fx = fx.filter(f => f.t > 0);
 
     // Обочина-объезд у полного перекрытия расширяет дорогу с одной стороны
     let limit = P.width.v / 2 + P.tol.v;
@@ -203,16 +224,28 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     // Паникёр, пока мечется, не убивает игрока — провокация награда, а не ловушка; вставший у края — обычное препятствие
     if (collides(rd.traffic.filter(c => !(c.panic && !c.crashed)), rd.path, P.width.v, me, car.s)) return busted('столкновение');
     for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
-    // Проезд впритирку: одна провокация на машину; с шансом level.panic водитель пугается (M3)
-    if (level.panic) for (const c of rd.traffic) {
+    // Проезд впритирку (M2): Near Miss, один на машину; с шансом level.panic водитель ещё и пугается (M3)
+    for (const c of rd.traffic) {
       if (c.buzzed || c.crashed || Math.abs(c.s - car.s) > 120) continue;
       const side = brushSide(car.off, car.W, car.s, car.L, c, P.width.v, PANIC.margin);
       if (!side) continue;
       c.buzzed = true;
-      if (P.speed.v - c.v < PANIC.minRel) continue;
+      addScore(SCORE.nearMiss, 'NEAR MISS', side);
+      if (!level.panic || P.speed.v - c.v < PANIC.minRel) continue;
       const coin = ((Math.sin(c.pick * 91.7 + level.seed) * 10000) % 1 + 1) % 1;
       if (coin < level.panic) { c.panic = { side }; slow = PANIC.slow; }
     }
+    // Впритирку к полицейской машине поста — дороже: она стоит поперёк, её длина — вдоль ширины дороги
+    rd.blocks.police.forEach((p, i) => {
+      const key = `${car.road}:${i}`;
+      if (buzzedPosts.has(key) || Math.abs(p.s - car.s) > (car.L + p.w) / 2) return;
+      const off = laneOff(P.width.v, p.lane), gap = Math.abs(off - car.off) - (car.W + p.l) / 2;
+      if (gap < 0 || gap > PANIC.margin) return;
+      buzzedPosts.add(key);
+      addScore(SCORE.nearPolice, 'КОП', off > car.off ? 1 : -1);
+    });
+    // Спровоцированный паникёр встал в отбойник — очки за тактику
+    for (const c of rd.traffic) if (c.panic && c.crashed && !c.scored) { c.scored = true; addScore(SCORE.panic, 'ПРОВОКАЦИЯ', c.panic.side); }
     if (!flat) for (const sp of rd.blocks.spikes) {
       if (Math.abs(sp.s - car.s) > 120 || !hit(me, obb(sp.x, sp.y, sp.h, sp.w, sp.l))) continue;
       // Ежи: сцепления больше нет, машину сносит к ближайшему кювету
@@ -245,7 +278,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       for (const v of cr.traffic) {
         if (!v.panic || Math.abs(v.s - chaser.s) > 120) continue;
         const p = vehiclePose(cr.path, v, P.width.v);
-        if (hit(cop, obb(p.x, p.y, p.h, v.W, v.L))) { chaser = null; v.crashed = true; v.v = 0; flash = { text: 'коп выбыл', t: 1.5 }; break; }
+        if (hit(cop, obb(p.x, p.y, p.h, v.W, v.L))) { chaser = null; v.crashed = true; v.v = 0; v.scored = true; flash = { text: 'коп выбыл', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', v.panic.side); break; }
       }
     }
 
@@ -274,11 +307,11 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
     const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks }));
     render(ctx, view, {
-      roads: scene, width: P.width.v, car, spec, marks, cam, t: timeAlive, zoom,
+      roads: scene, width: P.width.v, car, spec, marks, cam, t: timeAlive, zoom, fx,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
     });
     hudT += dt;
-    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, mainS(car.road, car.s) / roads[0].path.L, car, tail) + (flash ? ` <b>${flash.text}</b>` : ''); }
+    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, mainS(car.road, car.s) / roads[0].path.L, car, tail, score) + (flash ? ` <b>${flash.text}</b>` : ''); }
     raf = requestAnimationFrame(frame);
   }
   load(first);

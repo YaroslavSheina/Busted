@@ -13,6 +13,9 @@ export interface Cam { x: number; y: number }
 
 export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout }
 
+// Эффекты очков: всплывающий текст или искра; t — остаток жизни, с
+export interface Fx { x: number; y: number; t: number; text?: string; vx?: number; vy?: number }
+
 export interface Scene {
   roads: RoadScene[]; // 0 — главная (финиш на ней), дальше ветки
   width: number;
@@ -22,6 +25,7 @@ export interface Scene {
   cam: Cam;
   t?: number;                                                    // время попытки — для мигалки
   zoom?: number;                                                 // зум камеры (слоу-мо провокации)
+  fx?: Fx[];                                                     // всплывающие очки и искры
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
 
@@ -188,6 +192,18 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   }
   if (sc.chaser) drawPolice(ctx, sc.chaser.x, sc.chaser.y, sc.chaser.h, sc.t ?? 0);
   drawPlayer(ctx, car.x, car.y, car.h, sc.spec);
+  // искры и всплывающие очки — в мире, но текст не вращается с камерой (камера и так не вращается)
+  for (const f of sc.fx ?? []) {
+    const a = Math.min(1, f.t * 2);
+    if (f.text) {
+      ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = `rgba(20,22,28,${a * 0.7})`; ctx.fillText(f.text, f.x + 1, f.y + 1);
+      ctx.fillStyle = `rgba(244,185,66,${a})`; ctx.fillText(f.text, f.x, f.y);
+    } else {
+      ctx.strokeStyle = `rgba(255,220,120,${a})`; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.moveTo(f.x, f.y); ctx.lineTo(f.x - (f.vx ?? 0) * 0.03, f.y - (f.vy ?? 0) * 0.03); ctx.stroke();
+    }
+  }
   ctx.restore();
   // отсвет мигалки снизу экрана — тем ярче, чем ближе преследователь
   if (sc.chaser && sc.chaser.danger > 0) {
@@ -199,6 +215,9 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   }
 }
 
-export function hudHtml(levelName: string, progress: number, car: CarState, tail?: number): string {
-  return `${levelName} · ${Math.round(progress * 100)}%${tail !== undefined ? ` · хвост ${Math.round(tail)}` : ''}<br>ω ${car.w.toFixed(2)}${car.skid ? ' <b>занос</b>' : ''}`;
+export const fmtScore = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+export function hudHtml(levelName: string, progress: number, car: CarState, tail?: number, score?: number): string {
+  const top = score !== undefined ? `<span class="score">${fmtScore(score)}</span><br>` : '';
+  return `${top}${levelName} · ${Math.round(progress * 100)}%${tail !== undefined ? ` · хвост ${Math.round(tail)}` : ''}<br>ω ${car.w.toFixed(2)}${car.skid ? ' <b>занос</b>' : ''}`;
 }
