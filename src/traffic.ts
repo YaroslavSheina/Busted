@@ -1,14 +1,27 @@
-// Трафик: детерминированный спавн, движение вдоль сплайна, OBB и SAT для столкновений.
-import { LANES, TRAFFIC_SIZE } from './config';
+// Трафик: детерминированный спавн, движение вдоль сплайна, перестроение перед заграждениями, OBB и SAT.
+import { LANES, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { heading, laneOff, pathAt, type Path } from './road';
+import type { Layout } from './blocks';
 
 export interface Vehicle {
   s: number;
-  lane: number;
-  spd: number;
+  lane: number;   // целевая полоса
+  shift: number;  // боковое смещение от центра целевой полосы, px: ненулевое во время перестроения
+  spd: number;    // желаемая скорость
+  v: number;      // фактическая скорость последнего кадра — по ней подстраиваются те, кто сзади
   W: number;
   L: number;
   col: string;
+}
+
+// Ближайшее заграждение в полосе на отрезке [s, s + look] по своей дороге; null — проезд свободен
+export function blockAhead(layout: Layout, lane: number, s: number, look: number): number | null {
+  let best: number | null = null;
+  const take = (bs: number) => { if (bs >= s - 20 && bs <= s + look && (best === null || bs < best)) best = bs; };
+  for (const p of layout.police) if (p.lane === lane) take(p.s);
+  for (const p of layout.spikes) if (p.lane === lane) take(p.s);
+  for (const w of layout.works) if (w.lane === lane) { const a = w.s - w.l / 2, b = w.s + w.l / 2; if (b >= s - 20 && a <= s + look) take(Math.max(a, s - 20)); }
+  return best;
 }
 
 // Явно расставленная машина уровня: speed в px/с, 0 — стоит
@@ -28,7 +41,7 @@ export function rng(seed: number): () => number {
   };
 }
 
-export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number, cars: TrafficCar[] = []): Vehicle[] {
+export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number, cars: TrafficCar[] = [], layout?: Layout): Vehicle[] {
   const r = rng(seed);
   const traffic: Vehicle[] = [];
   const n = Math.round(path.L / 380 * density);
@@ -36,25 +49,45 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
     for (let tries = 0; tries < 20; tries++) {
       const s = 250 + r() * (path.L - 500), lane = Math.floor(r() * LANES);
       if (traffic.some(c => c.lane === lane && Math.abs(c.s - s) < 130)) continue;
-      traffic.push({ s, lane, spd: playerSpeed * (0.4 + r() * 0.3), W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[Math.floor(r() * 5)] });
+      if (layout && blockAhead(layout, lane, s - 120, 240) !== null) continue; // не рождаться на посту
+      const spd = playerSpeed * (0.4 + r() * 0.3);
+      traffic.push({ s, lane, shift: 0, spd, v: spd, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[Math.floor(r() * 5)] });
       break;
     }
   }
   // Явные машины уровня добавляются к seeded-трафику; при density 0 остаются только они
-  cars.forEach((c, i) => traffic.push({ s: c.s, lane: c.lane, spd: c.speed, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[i % COLORS.length] }));
+  cars.forEach((c, i) => traffic.push({ s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[i % COLORS.length] }));
   return traffic;
 }
 
-// Сортирует по s, подстраивает под машину впереди в той же полосе, убирает доехавших до финиша
-export function moveTraffic(traffic: Vehicle[], path: Path, dt: number): Vehicle[] {
+// Сортирует по s, подстраивает под машину впереди в той же полосе, убирает доехавших до финиша.
+// С ai (docs/mechanics.md, M4): перед заграждением уходит в свободную полосу, а если её нет — встаёт в пробку
+export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number }): Vehicle[] {
   traffic.sort((a, b) => a.s - b.s);
   for (let i = 0; i < traffic.length; i++) {
     const c = traffic[i];
     let sp = c.spd;
     for (let j = i + 1; j < traffic.length; j++) {
       const o = traffic[j];
-      if (o.lane === c.lane) { if (o.s - c.s < 110) sp = Math.min(sp, o.spd); break; }
+      if (o.lane === c.lane) { if (o.s - c.s < 110) sp = Math.min(sp, o.v); break; }
     }
+    if (ai) {
+      const ahead = blockAhead(ai.layout, c.lane, c.s, TRAFFIC_AI.look);
+      if (ahead !== null) {
+        // свободная полоса — ближайшая по номеру, без заграждения впереди и без соседа рядом
+        let best = -1, bestD = LANES;
+        for (let l = 0; l < LANES; l++) {
+          if (l === c.lane || blockAhead(ai.layout, l, c.s, TRAFFIC_AI.look) !== null) continue;
+          if (traffic.some(o => o !== c && o.lane === l && Math.abs(o.s - c.s) < TRAFFIC_AI.safeGap)) continue;
+          const d = Math.abs(l - c.lane);
+          if (d < bestD) { bestD = d; best = l; }
+        }
+        if (best >= 0) { c.shift += laneOff(ai.width, c.lane) - laneOff(ai.width, best); c.lane = best; }
+        else { const dist = ahead - TRAFFIC_AI.stopGap - c.s; sp = dist < 2 ? 0 : Math.min(sp, dist * 3); }
+      }
+      if (c.shift !== 0) { const st = TRAFFIC_AI.laneChange * dt; c.shift = Math.abs(c.shift) <= st ? 0 : c.shift - Math.sign(c.shift) * st; }
+    }
+    c.v = sp;
     c.s += sp * dt;
   }
   return traffic.filter(c => c.s < path.L - 140);
@@ -62,7 +95,7 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number): Vehicle
 
 export function vehiclePose(path: Path, c: Vehicle, width: number): { x: number; y: number; h: number } {
   const p = pathAt(path, c.s);
-  const o = laneOff(width, c.lane);
+  const o = laneOff(width, c.lane) + c.shift;
   return { x: p.x + p.nx * o, y: p.y + p.ny * o, h: heading(p.tx, p.ty) };
 }
 

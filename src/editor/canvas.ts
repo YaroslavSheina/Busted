@@ -85,12 +85,13 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
         });
       });
       drawRoad(ctx, path, l.width);
-      if (l.blocks?.length) drawBlocks(ctx, path, l.width, layoutBlocks(path, l.width, l.blocks), 0);
+      const mainLayout = layoutBlocks(path, l.width, l.blocks);
+      if (l.blocks?.length) drawBlocks(ctx, path, l.width, mainLayout, 0);
       if (l.chaser) { const p = pathAtExt(path, -l.chaser.gap); ctx.globalAlpha = 0.6; drawPolice(ctx, p.x, p.y, Math.atan2(p.tx, -p.ty), 0); ctx.globalAlpha = 1; }
       // seeded-трафик — полупрозрачно, как ориентир для расстановки явных машин
       ctx.globalAlpha = 0.3;
       const spec = carByKey(l.car);
-      for (const c of spawnTraffic(path, l.traffic, spec.speed, l.seed)) { const v = vehiclePose(path, c, l.width); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
+      for (const c of spawnTraffic(path, l.traffic, spec.speed, l.seed, [], mainLayout)) { const v = vehiclePose(path, c, l.width); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
       ctx.globalAlpha = 1;
       explicit = spawnTraffic(path, 0, spec.speed, l.seed, l.cars ?? []);
       explicit.forEach((c, i) => {

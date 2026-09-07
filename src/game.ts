@@ -93,7 +93,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     marks = [];
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
-    roads.forEach((r, i) => { r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars); });
+    roads.forEach((r, i) => { r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars, r.blocks); });
     chaser = level.chaser ? { road: 0, s: -level.chaser.gap, off: 0 } : null;
     taken = new Set();
     flat = false;
@@ -172,7 +172,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     }
     if (car.road === 0 && car.s >= rd.path.L - 60) return finish();
 
-    for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt);
+    for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: P.width.v });
     const me = obb(car.x, car.y, car.h, car.W, car.L);
     if (collides(rd.traffic, rd.path, P.width.v, me, car.s)) return busted('столкновение');
     for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);

@@ -11,7 +11,7 @@ export interface Block {
   bypass?: 'left' | 'right'; // обочина-объезд вокруг поста
 }
 
-export interface Placed { x: number; y: number; h: number; w: number; l: number; s: number }
+export interface Placed { x: number; y: number; h: number; w: number; l: number; s: number; lane: number }
 export interface Bypass { s0: number; s1: number; side: 1 | -1 }
 
 export interface Layout {
@@ -31,13 +31,13 @@ export function layoutBlocks(path: Path, width: number, blocks: Block[] = []): L
       const o = laneOff(width, lane);
       return { x: q.x + q.nx * o, y: q.y + q.ny * o };
     };
-    for (const lane of b.police ?? []) out.police.push({ ...at(lane), h: hRoad + Math.PI / 2, w: TRAFFIC_SIZE.W, l: TRAFFIC_SIZE.L, s: b.s });
-    for (const lane of b.spikes ?? []) out.spikes.push({ ...at(lane), h: hRoad, w: laneW, l: BLOCK.spikeLen, s: b.s });
+    for (const lane of b.police ?? []) out.police.push({ ...at(lane), h: hRoad + Math.PI / 2, w: TRAFFIC_SIZE.W, l: TRAFFIC_SIZE.L, s: b.s, lane });
+    for (const lane of b.spikes ?? []) out.spikes.push({ ...at(lane), h: hRoad, w: laneW, l: BLOCK.spikeLen, s: b.s, lane });
     const len = b.len ?? BLOCK.worksLen;
     for (const lane of b.works ?? []) {
       const q = pathAt(path, b.s + len / 2);
       const o = laneOff(width, lane);
-      out.works.push({ x: q.x + q.nx * o, y: q.y + q.ny * o, h: heading(q.tx, q.ty), w: laneW, l: len, s: b.s + len / 2 });
+      out.works.push({ x: q.x + q.nx * o, y: q.y + q.ny * o, h: heading(q.tx, q.ty), w: laneW, l: len, s: b.s + len / 2, lane });
     }
     if (b.bypass) out.bypasses.push({ s0: b.s - BLOCK.bypassLen / 2, s1: b.s + BLOCK.bypassLen / 2, side: b.bypass === 'right' ? 1 : -1 });
   }
