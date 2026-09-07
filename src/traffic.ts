@@ -1,5 +1,5 @@
 // Трафик: детерминированный спавн, движение вдоль сплайна, перестроение перед заграждениями, OBB и SAT.
-import { LANES, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
+import { LANES, PANIC, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { heading, laneOff, pathAt, type Path } from './road';
 import type { Layout } from './blocks';
 
@@ -13,6 +13,19 @@ export interface Vehicle {
   L: number;
   col: string;
   pick: number;   // детерминированная «монетка» машины (0..1) — например, сворачивать ли на ветку
+  buzzed?: boolean;        // игрок уже проезжал впритирку — одна провокация на машину
+  panic?: { side: 1 | -1; back?: boolean }; // паника: рывок от игрока, затем перекоррекция через всю дорогу к другому краю
+  crashed?: boolean;       // встала в отбойник — стоит и не двигается
+}
+
+// Проезд впритирку (M2 Near Miss, M3 провокация): борта ближе margin при продольном перекрытии.
+// Возвращает сторону машины относительно игрока (+1 — машина правее) или 0
+export function brushSide(carOff: number, carW: number, carS: number, carL: number, c: Vehicle, width: number, margin: number): 0 | 1 | -1 {
+  const off = laneOff(width, c.lane) + c.shift;
+  if (Math.abs(c.s - carS) > (carL + c.L) / 2) return 0;
+  const gap = Math.abs(off - carOff) - (carW + c.W) / 2;
+  if (gap < 0 || gap > margin) return 0;
+  return off > carOff ? 1 : -1;
 }
 
 // Все полосы закрыты впереди — полное перекрытие
@@ -80,6 +93,18 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
   traffic.sort((a, b) => a.s - b.s);
   for (let i = 0; i < traffic.length; i++) {
     const c = traffic[i];
+    if (c.crashed) { c.v = 0; continue; }
+    if (c.panic && ai) {
+      // испуг: рывок от игрока почти до края, потом перекоррекция через всю дорогу к другому краю — там встаёт.
+      // Обратный проход метёт дорогу как раз когда подъезжает коп; ход при этом сбрасывается
+      const target = c.panic.back ? -c.panic.side * (ai.width / 2 + 4) : c.panic.side * (ai.width / 2 - 20);
+      const off = laneOff(ai.width, c.lane) + c.shift;
+      const st = PANIC.swerve * dt;
+      const next = Math.abs(target - off) <= st ? target : off + Math.sign(target - off) * st;
+      c.shift = next - laneOff(ai.width, c.lane);
+      if (next === target) { if (c.panic.back) { c.crashed = true; c.v = 0; continue; } c.panic.back = true; }
+      c.v = c.spd * PANIC.brake; c.s += c.v * dt; continue;
+    }
     let sp = c.spd;
     // у поста колонна растягивается до gateGap — иначе в единственную проходную полосу не втиснуться
     const follow = ai && anyBlockAhead(ai.layout, c.s, TRAFFIC_AI.look) ? TRAFFIC_AI.gateGap : 110;

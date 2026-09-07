@@ -18,6 +18,7 @@ export interface LevelData {
   chaser?: Chaser;     // необязательно: полиция на хвосте
   blocks?: Block[];    // необязательно: заграждения (docs/mechanics.md, M1)
   branches?: BranchDef[]; // необязательно: ветки дороги (docs/mechanics.md, M5)
+  panic?: number;      // необязательно: шанс паники трафика при проезде впритирку, 0..1 (docs/mechanics.md, M3)
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

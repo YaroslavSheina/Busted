@@ -12,12 +12,13 @@ export function formatLevel(l: LevelData): string {
     ? `,\n  "cars": [\n${l.cars.map(c => `    { "s": ${c.s}, "lane": ${c.lane}, "speed": ${c.speed} }`).join(',\n')}\n  ]`
     : '';
   const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed} }` : '';
+  const panic = l.panic ? `,\n  "panic": ${l.panic}` : '';
   const blocks = l.blocks?.length ? `,\n  "blocks": [\n${l.blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ]` : '';
   const branches = l.branches?.length
     ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${blocks}${branches}\n}\n`;
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${blocks}${branches}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -70,6 +71,7 @@ export function parseLevel(raw: unknown): LevelData {
     if (typeof c !== 'object' || c === null || !isNum(c.gap) || !isNum(c.speed)) throw new Error('«chaser» не { gap, speed }');
     level.chaser = { gap: c.gap, speed: c.speed };
   }
+  if (o.panic !== undefined) { if (!isNum(o.panic) || o.panic < 0 || o.panic > 1) throw new Error('«panic» — число 0..1'); level.panic = o.panic; }
   if (o.blocks !== undefined) level.blocks = parseBlocks(o.blocks, 'заграждение');
   if (o.branches !== undefined) {
     if (!Array.isArray(o.branches)) throw new Error('«branches» должно быть массивом');

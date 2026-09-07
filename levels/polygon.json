@@ -123,6 +123,7 @@
   ],
   "width": 160,
   "traffic": 0.3,
+  "panic": 0.35,
   "seed": 777,
   "chaser": { "gap": 160, "speed": 1 }
 }

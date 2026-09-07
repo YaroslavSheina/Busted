@@ -1,11 +1,11 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
+import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
 import { buildPath, curvatureAt, heading, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
 import { buildBranchPath, mainEquivalent, type BranchDef } from './roads';
 import { layoutBlocks, type Block, type Layout } from './blocks';
-import { collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, type Obb, type TrafficCar, type Vehicle } from './traffic';
+import { brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, vehiclePose, type Obb, type TrafficCar, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { hudHtml, render, type Cam, type Mark, type RoadScene } from './render';
 import type { LevelData } from './levels';
@@ -63,6 +63,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   // Преследователь едет по сплайну с той же скоростью и сворачивает туда же, куда свернул игрок
   let chaser: { road: number; s: number; off: number } | null = null;
   let taken: Set<number>; // ветки, на которые свернул игрок
+  // Слоу-мо и зум провокации (M3): slow — остаток реального времени, zoom тянется к цели
+  let slow = 0, zoom = 1;
+  let flash: { text: string; t: number } | null = null; // короткая надпись в HUD («коп выбыл»)
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined): Road {
     const layout = layoutBlocks(path, P.width.v, blocks);
@@ -97,6 +100,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     chaser = level.chaser ? { road: 0, s: -level.chaser.gap, off: 0 } : null;
     taken = new Set();
     flat = false;
+    slow = 0; zoom = 1; flash = null;
     ui.overlay.className = '';
   }
 
@@ -198,6 +202,16 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const me = obb(car.x, car.y, car.h, car.W, car.L);
     if (collides(rd.traffic, rd.path, P.width.v, me, car.s)) return busted('столкновение');
     for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
+    // Проезд впритирку: одна провокация на машину; с шансом level.panic водитель пугается (M3)
+    if (level.panic) for (const c of rd.traffic) {
+      if (c.buzzed || c.crashed || Math.abs(c.s - car.s) > 120) continue;
+      const side = brushSide(car.off, car.W, car.s, car.L, c, P.width.v, PANIC.margin);
+      if (!side) continue;
+      c.buzzed = true;
+      if (P.speed.v - c.v < PANIC.minRel) continue;
+      const coin = ((Math.sin(c.pick * 91.7 + level.seed) * 10000) % 1 + 1) % 1;
+      if (coin < level.panic) { c.panic = { side }; slow = PANIC.slow; }
+    }
     if (!flat) for (const sp of rd.blocks.spikes) {
       if (Math.abs(sp.s - car.s) > 120 || !hit(me, obb(sp.x, sp.y, sp.h, sp.w, sp.l))) continue;
       // Ежи: сцепления больше нет, машину сносит к ближайшему кювету
@@ -224,7 +238,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       const lim = P.width.v / 2 - TRAFFIC_SIZE.W / 2;
       chaser.off = Math.max(-lim, Math.min(lim, chaser.off));
       const c = chaserPose();
-      if (chaser.road === car.road && hit(me, obb(c.x, c.y, c.h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L))) return busted('догнали');
+      const cop = obb(c.x, c.y, c.h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L);
+      if (chaser.road === car.road && hit(me, cop)) return busted('догнали');
+      // Паникёр снёс копа — полиция выбывает из погони
+      for (const v of cr.traffic) {
+        if (!v.panic || Math.abs(v.s - chaser.s) > 120) continue;
+        const p = vehiclePose(cr.path, v, P.width.v);
+        if (hit(cop, obb(p.x, p.y, p.h, v.W, v.L))) { chaser = null; v.crashed = true; v.v = 0; flash = { text: 'коп выбыл', t: 1.5 }; break; }
+      }
     }
 
     // Камера: точка впереди по вектору скорости (не курса), плавный догон
@@ -243,16 +264,20 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let raf = 0, last = performance.now(), hudT = 0;
   function frame(now: number): void {
     const dt = Math.min(MAX_DT, (now - last) / 1000); last = now;
-    if (!paused) update(dt);
+    // слоу-мо провокации: мир идёт медленнее, камера чуть ближе; формула физики та же, меняется только dt
+    if (slow > 0) slow -= dt;
+    zoom += ((slow > 0 ? PANIC.zoom : 1) - zoom) * Math.min(1, 8 * dt);
+    if (flash) { flash.t -= dt; if (flash.t <= 0) flash = null; }
+    if (!paused) update(slow > 0 ? dt * PANIC.slowScale : dt);
     // Хвост считаем по главной дороге, чтобы сравнивать положение на разных ветках
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
     const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks }));
     render(ctx, view, {
-      roads: scene, width: P.width.v, car, spec, marks, cam, t: timeAlive,
+      roads: scene, width: P.width.v, car, spec, marks, cam, t: timeAlive, zoom,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
     });
     hudT += dt;
-    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, mainS(car.road, car.s) / roads[0].path.L, car, tail); }
+    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, mainS(car.road, car.s) / roads[0].path.L, car, tail) + (flash ? ` <b>${flash.text}</b>` : ''); }
     raf = requestAnimationFrame(frame);
   }
   load(first);

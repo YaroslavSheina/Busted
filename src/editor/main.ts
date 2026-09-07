@@ -75,6 +75,7 @@ for (const k of ['width', 'traffic'] as const) {
   inp(k).oninput = () => { level[k] = parseFloat(inp(k).value); $(k + 'V').textContent = String(level[k]); canvas.draw(); };
 }
 inp('name').oninput = () => { level.name = inp('name').value; };
+inp('panic').onchange = () => { const v = Math.max(0, Math.min(1, parseFloat(inp('panic').value) || 0)); if (v > 0) level.panic = v; else delete level.panic; inp('panic').value = String(v); };
 inp('seed').onchange = () => { level.seed = Math.round(parseFloat(inp('seed').value)) || 0; inp('seed').value = String(level.seed); canvas.draw(); };
 
 // Преследователь: включён — блок с дистанцией и скоростью
@@ -144,11 +145,12 @@ function syncPanel(): void {
   for (const k of ['width', 'traffic'] as const) { inp(k).value = String(level[k]); $(k + 'V').textContent = String(level[k]); }
   carSel.value = level.car ?? DEFAULT_CAR;
   inp('seed').value = String(level.seed);
+  inp('panic').value = String(level.panic ?? 0);
   changed();
 }
 
 function load(l: LevelData): void {
-  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches;
+  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic;
   Object.assign(level, structuredClone(l));
   level.car ??= DEFAULT_CAR;
   select(null);

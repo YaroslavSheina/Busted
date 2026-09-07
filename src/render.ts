@@ -21,6 +21,7 @@ export interface Scene {
   marks: Mark[];
   cam: Cam;
   t?: number;                                                    // время попытки — для мигалки
+  zoom?: number;                                                 // зум камеры (слоу-мо провокации)
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
 
@@ -167,16 +168,24 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number, f
 export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): void {
   const { W, H, DPR } = view;
   const { roads, width: w, car, marks, cam } = sc;
+  const z = sc.zoom ?? 1;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = '#15171c'; ctx.fillRect(0, 0, W, H);
-  ctx.save(); ctx.translate(W / 2 - cam.x, H / 2 - cam.y);
-  drawGrid(ctx, cam.x - W / 2, cam.y - H / 2, cam.x + W / 2, cam.y + H / 2);
+  ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-cam.x, -cam.y);
+  drawGrid(ctx, cam.x - W / 2 / z, cam.y - H / 2 / z, cam.x + W / 2 / z, cam.y + H / 2 / z);
   // ветки под главной: её разметка и финиш сверху на стыках
   for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, w, i === 0);
   for (const r of roads) drawBlocks(ctx, r.path, w, r.blocks, sc.t ?? 0);
   // следы заноса
   for (const m of marks) { ctx.fillStyle = `rgba(0,0,0,${m.a * 0.35})`; ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, 7); ctx.fill(); }
   // трафик
-  for (const r of roads) for (const c of r.traffic) { const v = vehiclePose(r.path, c, w); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
+  for (const r of roads) for (const c of r.traffic) {
+    const v = vehiclePose(r.path, c, w);
+    drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.crashed ? '#4a4d55' : c.col, false);
+    if (c.panic && !c.crashed) { // «!» над испуганным водителем
+      ctx.fillStyle = '#f4b942'; ctx.beginPath(); ctx.arc(v.x, v.y - 34, 11, 0, 7); ctx.fill();
+      ctx.fillStyle = '#1a1408'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', v.x, v.y - 33);
+    }
+  }
   if (sc.chaser) drawPolice(ctx, sc.chaser.x, sc.chaser.y, sc.chaser.h, sc.t ?? 0);
   drawPlayer(ctx, car.x, car.y, car.h, sc.spec);
   ctx.restore();

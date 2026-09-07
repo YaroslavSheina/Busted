@@ -17,6 +17,7 @@
   ],
   "width": 190,
   "traffic": 0,
+  "panic": 0.5,
   "seed": 555,
   "car": "sedan",
   "blocks": [
