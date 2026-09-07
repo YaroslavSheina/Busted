@@ -203,7 +203,19 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     timeAlive += dt;
     const dir = currentDir();
     trackHold(dir, dt);
-    if (jump) { jump.t += dt; if (jump.t >= RAMP.air) { const n = jump.over.size; jump = null; if (n) addScore(SCORE.flyOver * n, `ПЕРЕЛЁТ×${n}`, 1); } }
+    if (jump) {
+      jump.t += dt;
+      if (jump.t >= RAMP.air) {
+        const n = jump.over.size; jump = null;
+        // приземление: искры из-под обоих бортов, потом очки за перелёт
+        const rx = Math.cos(car.h), ry = Math.sin(car.h);
+        for (const side of [-1, 1]) for (let k = 0; k < 7; k++) {
+          const a = car.h + side * Math.PI / 2 + (k - 3) * 0.3 + Math.PI * 0.15;
+          fx.push({ x: car.x + rx * side * car.W / 2, y: car.y + ry * side * car.W / 2, t: 0.5, vx: Math.sin(a) * 300, vy: -Math.cos(a) * 300 });
+        }
+        if (n) addScore(SCORE.flyOver * n, `ПЕРЕЛЁТ×${n}`, 1);
+      }
+    }
 
     // После ежей сцепление — BLOCK.flatGrip: формула та же, меняются только числа
     const grip = flat ? BLOCK.flatGrip : P.grip.v, skidGrip = flat ? BLOCK.flatGrip : P.skidGrip.v;

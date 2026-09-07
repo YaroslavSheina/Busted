@@ -144,7 +144,12 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
     for (let j = i + 1; j < traffic.length; j++) {
       const o = traffic[j];
       // у поста задняя едет медленнее передней, пока окно не раскроется до gateGap; вне поста — просто не ближе 110
-      if (o.lane === c.lane) { if (o.s - c.s < follow) sp = Math.min(sp, follow > 110 ? Math.max(0, o.v - 60) : o.v); break; }
+      if (o.lane === c.lane) {
+        // рядом с грузовиком-рампой дистанция RAMP.follow: рампа едет за машиной, а не впритык к ней
+        const need = c.kind === 'ramp' || o.kind === 'ramp' ? Math.max(follow, RAMP.follow) : follow;
+        if (o.s - c.s < need) sp = Math.min(sp, need > 110 ? Math.max(0, o.v - 60) : o.v);
+        break;
+      }
     }
     if (ai) {
       const van = laneVanish(ai.width, c.lane, c.s, TRAFFIC_AI.look), blk = blockAhead(ai.layout, c.lane, c.s, TRAFFIC_AI.look);
