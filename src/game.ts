@@ -1,11 +1,11 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, TRAFFIC_SIZE } from './config';
+import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
 import { buildPath, curvatureAt, heading, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
 import { buildBranchPath, mainEquivalent, type BranchDef } from './roads';
 import { layoutBlocks, type Block, type Layout } from './blocks';
-import { collides, hit, moveTraffic, obb, spawnTraffic, type Obb, type TrafficCar, type Vehicle } from './traffic';
+import { collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, type Obb, type TrafficCar, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { hudHtml, render, type Cam, type Mark, type RoadScene } from './render';
 import type { LevelData } from './levels';
@@ -137,6 +137,27 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     return nr;
   }
 
+  // Трафик на развилках (M4 + M5): с главной уходит на ветку, если впереди полное перекрытие или выпала монетка;
+  // в конце ветки возвращается на главную. Переезд между дорогами — перенос машины из одного списка в другой
+  function flowTraffic(): void {
+    const main = roads[0];
+    for (let i = 1; i < roads.length; i++) {
+      const br = roads[i], b = br.def!;
+      main.traffic = main.traffic.filter(c => {
+        if (c.s < b.from || c.s >= b.from + 40) return true;
+        const detour = fullBlockAhead(main.blocks, c.s, TRAFFIC_AI.detourLook) || Math.abs(c.pick) < TRAFFIC_AI.detourShare;
+        if (!detour) return true;
+        br.traffic.push({ ...c, s: BRANCH.lead + (c.s - b.from), shift: 0 });
+        return false;
+      });
+      br.traffic = br.traffic.filter(c => {
+        if (c.s < br.path.L - BRANCH.lead) return true;
+        main.traffic.push({ ...c, s: b.to + (c.s - (br.path.L - BRANCH.lead)), shift: 0 });
+        return false;
+      });
+    }
+  }
+
   function chaserPose() {
     const p = pathAtExt(roads[chaser!.road].path, chaser!.s);
     return { x: p.x + p.nx * chaser!.off, y: p.y + p.ny * chaser!.off, h: heading(p.tx, p.ty) };
@@ -173,6 +194,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (car.road === 0 && car.s >= rd.path.L - 60) return finish();
 
     for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: P.width.v });
+    if (roads.length > 1) flowTraffic();
     const me = obb(car.x, car.y, car.h, car.W, car.L);
     if (collides(rd.traffic, rd.path, P.width.v, me, car.s)) return busted('столкновение');
     for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);

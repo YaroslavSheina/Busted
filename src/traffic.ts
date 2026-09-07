@@ -12,6 +12,13 @@ export interface Vehicle {
   W: number;
   L: number;
   col: string;
+  pick: number;   // детерминированная «монетка» машины (0..1) — например, сворачивать ли на ветку
+}
+
+// Все полосы закрыты впереди — полное перекрытие
+export function fullBlockAhead(layout: Layout, s: number, look: number): boolean {
+  for (let l = 0; l < LANES; l++) if (blockAhead(layout, l, s, look) === null) return false;
+  return true;
 }
 
 // Ближайшее заграждение в полосе на отрезке [s, s + look] по своей дороге; null — проезд свободен
@@ -51,12 +58,13 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
       if (traffic.some(c => c.lane === lane && Math.abs(c.s - s) < 130)) continue;
       if (layout && blockAhead(layout, lane, s - 120, 240) !== null) continue; // не рождаться на посту
       const spd = playerSpeed * (0.4 + r() * 0.3);
-      traffic.push({ s, lane, shift: 0, spd, v: spd, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[Math.floor(r() * 5)] });
+      // pick — из координаты спавна, а не из rng: последовательность rng должна остаться прежней
+      traffic.push({ s, lane, shift: 0, spd, v: spd, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[Math.floor(r() * 5)], pick: (Math.sin(s * 12.9898) * 43758.5453) % 1 });
       break;
     }
   }
   // Явные машины уровня добавляются к seeded-трафику; при density 0 остаются только они
-  cars.forEach((c, i) => traffic.push({ s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[i % COLORS.length] }));
+  cars.forEach((c, i) => traffic.push({ s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[i % COLORS.length], pick: (i + 0.5) / (cars.length + 1) }));
   return traffic;
 }
 
