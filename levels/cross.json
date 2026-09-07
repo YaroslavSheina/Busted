@@ -18,11 +18,8 @@
     { "s": 3080, "lane": 1, "speed": 0, "type": "ramp" }
   ],
   "crossings": [
-    { "s": 1000, "period": 8, "offset": 4.5 },
-    { "s": 2100, "period": 7, "offset": 6.2, "cars": 6 },
-    { "s": 3300, "period": 9, "offset": 9.5, "cars": 5, "speed": 220 }
-  ],
-  "branches": [
-    { "from": 1650, "to": 2550, "points": [[250, -1950], [300, -2100], [250, -2250]] }
+    { "s": 1000, "period": 12, "offset": 4.5 },
+    { "s": 2100, "period": 11, "offset": 5.5 },
+    { "s": 3300, "period": 13, "offset": 9.5, "speed": 220 }
   ]
 }
