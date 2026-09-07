@@ -76,6 +76,11 @@ export const PANIC = {
   zoom: 1.15,      // зум камеры в слоу-мо
 };
 
+// Сужение дороги (docs/mechanics.md, M6)
+export const NARROW = {
+  ramp: 120, // длина перехода ширины с каждой стороны сужения, px
+};
+
 // Ветки дорог (docs/mechanics.md, M5)
 export const BRANCH = {
   lead: 60,   // заход ветки на главную дорогу с обоих концов, px — на этом отрезке дороги совпадают

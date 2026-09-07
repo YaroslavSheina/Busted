@@ -2,6 +2,7 @@
 import { LANES, PANIC, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { heading, laneOff, pathAt, type Path } from './road';
 import type { Layout } from './blocks';
+import { widthAt, type WidthFn } from './narrow';
 
 export interface Vehicle {
   s: number;
@@ -21,8 +22,8 @@ export interface Vehicle {
 
 // Проезд впритирку (M2 Near Miss, M3 провокация): борта ближе margin при продольном перекрытии.
 // Возвращает сторону машины относительно игрока (+1 — машина правее) или 0
-export function brushSide(carOff: number, carW: number, carS: number, carL: number, c: Vehicle, width: number, margin: number): 0 | 1 | -1 {
-  const off = laneOff(width, c.lane) + c.shift;
+export function brushSide(carOff: number, carW: number, carS: number, carL: number, c: Vehicle, width: number | WidthFn, margin: number): 0 | 1 | -1 {
+  const off = laneOff(widthAt(width, c.s), c.lane) + c.shift;
   if (Math.abs(c.s - carS) > (carL + c.L) / 2) return 0;
   const gap = Math.abs(off - carOff) - (carW + c.W) / 2;
   if (gap < 0 || gap > margin) return 0;
@@ -90,7 +91,7 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
 
 // Сортирует по s, подстраивает под машину впереди в той же полосе, убирает доехавших до финиша.
 // С ai (docs/mechanics.md, M4): перед заграждением уходит в свободную полосу, а если её нет — встаёт в пробку
-export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number; playerS?: number; playerL?: number }): Vehicle[] {
+export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number | WidthFn; playerS?: number; playerL?: number }): Vehicle[] {
   traffic.sort((a, b) => a.s - b.s);
   for (let i = 0; i < traffic.length; i++) {
     const c = traffic[i];
@@ -98,11 +99,12 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
     if (c.panic && ai) {
       // испуг: рывок от игрока почти до края, потом перекоррекция через всю дорогу к другому краю — там встаёт.
       // Обратный проход метёт дорогу как раз когда подъезжает коп; ход при этом сбрасывается
-      const target = c.panic.back ? -c.panic.side * (ai.width / 2 + 4) : c.panic.side * (ai.width / 2 - 20);
-      const off = laneOff(ai.width, c.lane) + c.shift;
+      const w = widthAt(ai.width, c.s);
+      const target = c.panic.back ? -c.panic.side * (w / 2 + 4) : c.panic.side * (w / 2 - 20);
+      const off = laneOff(w, c.lane) + c.shift;
       const st = PANIC.swerve * dt;
       const next = Math.abs(target - off) <= st ? target : off + Math.sign(target - off) * st;
-      c.shift = next - laneOff(ai.width, c.lane);
+      c.shift = next - laneOff(w, c.lane);
       // обратно через дорогу — только когда игрок ушёл вперёд с запасом: иначе перекоррекция задевает его в повороте
       const clear = ai.playerS === undefined || ai.playerS - c.s > (ai.playerL ?? 52) / 2 + c.L / 2 + 40;
       if (next === target) { if (c.panic.back) { c.crashed = true; c.v = 0; continue; } if (clear) c.panic.back = true; }
@@ -128,7 +130,7 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
           const d = Math.abs(l - c.lane);
           if (d < bestD) { bestD = d; best = l; }
         }
-        if (best >= 0) { c.shift += laneOff(ai.width, c.lane) - laneOff(ai.width, best); c.lane = best; }
+        if (best >= 0) { const w = widthAt(ai.width, c.s); c.shift += laneOff(w, c.lane) - laneOff(w, best); c.lane = best; }
         else { const dist = ahead - TRAFFIC_AI.stopGap - c.s; sp = dist < 2 ? 0 : Math.min(sp, dist * 3); }
       }
       if (c.shift !== 0) { const st = TRAFFIC_AI.laneChange * dt; c.shift = Math.abs(c.shift) <= st ? 0 : c.shift - Math.sign(c.shift) * st; }
@@ -139,9 +141,9 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
   return traffic.filter(c => c.s < path.L - 140);
 }
 
-export function vehiclePose(path: Path, c: Vehicle, width: number): { x: number; y: number; h: number } {
+export function vehiclePose(path: Path, c: Vehicle, width: number | WidthFn): { x: number; y: number; h: number } {
   const p = pathAt(path, c.s);
-  const o = laneOff(width, c.lane) + c.shift;
+  const o = laneOff(widthAt(width, c.s), c.lane) + c.shift;
   return { x: p.x + p.nx * o, y: p.y + p.ny * o, h: heading(p.tx, p.ty) };
 }
 
@@ -170,7 +172,7 @@ export function hit(a: Obb, b: Obb): boolean {
 }
 
 // Проверяем только машины в окне |s − car.s| < 120
-export function collides(traffic: Vehicle[], path: Path, width: number, me: Obb, carS: number): boolean {
+export function collides(traffic: Vehicle[], path: Path, width: number | WidthFn, me: Obb, carS: number): boolean {
   for (const c of traffic) {
     if (Math.abs(c.s - carS) > 120) continue;
     const v = vehiclePose(path, c, width);

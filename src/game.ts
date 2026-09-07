@@ -5,6 +5,7 @@ import { step, type CarState } from './physics';
 import { buildPath, curvatureAt, heading, laneOff, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
 import { buildBranchPath, mainEquivalent, type BranchDef } from './roads';
 import { layoutBlocks, type Block, type Layout } from './blocks';
+import { makeWidthFn, widthAt, type Narrow, type WidthFn } from './narrow';
 import { brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, vehiclePose, type Obb, type TrafficCar, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { fmtScore, hudHtml, render, type Cam, type Fx, type Mark, type RoadScene } from './render';
@@ -34,6 +35,9 @@ type Car = CarState & { s: number; off: number; W: number; L: number; road: numb
 interface Road {
   path: Path;
   def: BranchDef | null;   // null — главная
+  width: number | WidthFn; // ширина по s: базовая из P (слайдер) с сужениями уровня
+  narrows?: Narrow[];
+  blockDefs?: Block[];
   blocks: Layout;
   solids: { obb: Obb; s: number; why: string }[];
   cars: TrafficCar[];
@@ -71,15 +75,19 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let fx: Fx[] = [];
   let buzzedPosts: Set<string>; // «дорога:индекс» полицейских машин постов, к которым уже прижимались
 
-  function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined): Road {
-    const layout = layoutBlocks(path, P.width.v, blocks);
-    return {
-      path, def, blocks: layout, cars: cars ?? [], traffic: [],
-      solids: [
-        ...layout.police.map(b => ({ obb: obb(b.x, b.y, b.h, b.w, b.l), s: b.s, why: 'врезался в пост' })),
-        ...layout.works.map(b => ({ obb: obb(b.x, b.y, b.h, b.w, b.l), s: b.s, why: 'заграждение' })),
-      ],
-    };
+  function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
+    const r: Road = { path, def, width: P.width.v, narrows, blockDefs: blocks, blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
+    refreshRoad(r);
+    return r;
+  }
+  // Ширина (слайдер панели + сужения) и разметка постов пересчитываются при каждом reset — слайдер ширины ведёт сюда
+  function refreshRoad(r: Road): void {
+    r.width = makeWidthFn(() => P.width.v, r.narrows);
+    r.blocks = layoutBlocks(r.path, r.width, r.blockDefs);
+    r.solids = [
+      ...r.blocks.police.map(b => ({ obb: obb(b.x, b.y, b.h, b.w, b.l), s: b.s, why: 'врезался в пост' })),
+      ...r.blocks.works.map(b => ({ obb: obb(b.x, b.y, b.h, b.w, b.l), s: b.s, why: 'заграждение' })),
+    ];
   }
 
   function load(l: LevelData): void {
@@ -89,8 +97,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     P.width.v = l.width; P.traffic.v = l.traffic;
     P.speed.v = spec.speed; P.steer.v = spec.steer; P.damp.v = spec.damp; P.grip.v = spec.grip; P.spin.v = spec.spin; P.skidGrip.v = spec.skidGrip;
     const main = buildPath(l.points);
-    roads = [makeRoad(main, null, l.blocks, l.cars)];
-    for (const b of l.branches ?? []) roads.push(makeRoad(buildBranchPath(main, b), b, b.blocks, b.cars));
+    roads = [makeRoad(main, null, l.blocks, l.cars, l.narrows)];
+    for (const b of l.branches ?? []) roads.push(makeRoad(buildBranchPath(main, b), b, b.blocks, b.cars, b.narrows));
     reset();
   }
 
@@ -100,7 +108,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     marks = [];
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
-    roads.forEach((r, i) => { r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars, r.blocks); });
+    roads.forEach((r, i) => { refreshRoad(r); r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars, r.blocks); });
     chaser = level.chaser ? { road: 0, s: -level.chaser.gap, off: 0 } : null;
     taken = new Set();
     flat = false;
@@ -208,26 +216,27 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     fx = fx.filter(f => f.t > 0);
 
     // Обочина-объезд у полного перекрытия расширяет дорогу с одной стороны
-    let limit = P.width.v / 2 + P.tol.v;
+    const wHere = widthAt(rd.width, car.s);
+    let limit = wHere / 2 + P.tol.v;
     for (const b of rd.blocks.bypasses) if (car.s >= b.s0 && car.s <= b.s1 && Math.sign(car.off) === b.side) limit += BLOCK.bypassW;
     if (Math.abs(car.off) > limit) {
       if (flat) return busted('ежи');
       // Дорога под колёсами есть, но это другой участок маршрута (срезал кольцо, выехал на встречный рукав)
-      const onOther = roads.some(r => Math.abs(nearestGlobal(r.path, car.x, car.y).off) <= P.width.v / 2 + P.tol.v);
+      const onOther = roads.some(r => { const n = nearestGlobal(r.path, car.x, car.y); return Math.abs(n.off) <= widthAt(r.width, n.s) / 2 + P.tol.v; });
       return busted(onOther ? 'съехал с маршрута' : 'вылет с дороги');
     }
     if (car.road === 0 && car.s >= rd.path.L - 60) return finish();
 
-    for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: P.width.v, playerS: r === rd ? car.s : undefined, playerL: car.L });
+    for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: r.width, playerS: r === rd ? car.s : undefined, playerL: car.L });
     if (roads.length > 1) flowTraffic();
     const me = obb(car.x, car.y, car.h, car.W, car.L);
     // Паникёр, пока мечется, не убивает игрока — провокация награда, а не ловушка; вставший у края — обычное препятствие
-    if (collides(rd.traffic.filter(c => !(c.panic && !c.crashed)), rd.path, P.width.v, me, car.s)) return busted('столкновение');
+    if (collides(rd.traffic.filter(c => !(c.panic && !c.crashed)), rd.path, rd.width, me, car.s)) return busted('столкновение');
     for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
     // Проезд впритирку (M2): Near Miss, один на машину; с шансом level.panic водитель ещё и пугается (M3)
     for (const c of rd.traffic) {
       if (c.buzzed || c.crashed || Math.abs(c.s - car.s) > 120) continue;
-      const side = brushSide(car.off, car.W, car.s, car.L, c, P.width.v, PANIC.margin);
+      const side = brushSide(car.off, car.W, car.s, car.L, c, rd.width, PANIC.margin);
       if (!side) continue;
       c.buzzed = true;
       addScore(SCORE.nearMiss, 'NEAR MISS', side);
@@ -239,7 +248,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     rd.blocks.police.forEach((p, i) => {
       const key = `${car.road}:${i}`;
       if (buzzedPosts.has(key) || Math.abs(p.s - car.s) > (car.L + p.w) / 2) return;
-      const off = laneOff(P.width.v, p.lane), gap = Math.abs(off - car.off) - (car.W + p.l) / 2;
+      const off = laneOff(widthAt(rd.width, p.s), p.lane), gap = Math.abs(off - car.off) - (car.W + p.l) / 2;
       if (gap < 0 || gap > PANIC.margin) return;
       buzzedPosts.add(key);
       addScore(SCORE.nearPolice, 'КОП', off > car.off ? 1 : -1);
@@ -269,7 +278,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
         chaser.s = cr.def!.to + (chaser.s - (cr.path.L - BRANCH.lead)); chaser.road = 0;
       }
       chaser.off += (car.off - chaser.off) * Math.min(1, CHASER_FOLLOW * dt);
-      const lim = P.width.v / 2 - TRAFFIC_SIZE.W / 2;
+      const lim = widthAt(cr.width, Math.max(0, chaser.s)) / 2 - TRAFFIC_SIZE.W / 2;
       chaser.off = Math.max(-lim, Math.min(lim, chaser.off));
       const c = chaserPose();
       const cop = obb(c.x, c.y, c.h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L);
@@ -277,7 +286,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       // Паникёр снёс копа — полиция выбывает из погони
       for (const v of cr.traffic) {
         if (!v.panic || Math.abs(v.s - chaser.s) > 120) continue;
-        const p = vehiclePose(cr.path, v, P.width.v);
+        const p = vehiclePose(cr.path, v, cr.width);
         if (hit(cop, obb(p.x, p.y, p.h, v.W, v.L))) { chaser = null; v.crashed = true; v.v = 0; v.scored = true; flash = { text: 'коп выбыл', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', v.panic.side); break; }
       }
     }
@@ -305,9 +314,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (!paused) update(slow > 0 ? dt * PANIC.slowScale : dt);
     // Хвост считаем по главной дороге, чтобы сравнивать положение на разных ветках
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
-    const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks }));
+    const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width }));
     render(ctx, view, {
-      roads: scene, width: P.width.v, car, spec, marks, cam, t: timeAlive, zoom, fx,
+      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
     });
     hudT += dt;

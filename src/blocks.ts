@@ -1,6 +1,7 @@
 // Заграждения (docs/mechanics.md, M1): данные уровня → геометрия на дороге. Общее для игры и редактора.
 import { BLOCK, TRAFFIC_SIZE } from './config';
 import { heading, laneOff, pathAt, type Path } from './road';
+import { widthAt, type WidthFn } from './narrow';
 
 export interface Block {
   s: number;
@@ -21,10 +22,10 @@ export interface Layout {
   bypasses: Bypass[];
 }
 
-export function layoutBlocks(path: Path, width: number, blocks: Block[] = []): Layout {
+export function layoutBlocks(path: Path, widthIn: number | WidthFn, blocks: Block[] = []): Layout {
   const out: Layout = { police: [], spikes: [], works: [], bypasses: [] };
-  const laneW = width / 3;
   for (const b of blocks) {
+    const width = widthAt(widthIn, b.s), laneW = width / 3;
     const p = pathAt(path, b.s), hRoad = heading(p.tx, p.ty);
     const at = (lane: number, ds = 0) => {
       const q = ds ? pathAt(path, b.s + ds) : p;

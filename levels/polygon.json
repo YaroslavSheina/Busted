@@ -124,6 +124,9 @@
   "width": 160,
   "traffic": 0.3,
   "panic": 0.35,
+  "narrows": [
+    { "from": 5150, "to": 5650, "width": 110 }
+  ],
   "seed": 777,
   "chaser": { "gap": 160, "speed": 1 }
 }

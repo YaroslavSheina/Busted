@@ -4,6 +4,7 @@ import { BRANCH } from './config';
 import { buildPath, pathAt, type Path, type Pt } from './road';
 import type { Block } from './blocks';
 import type { TrafficCar } from './traffic';
+import type { Narrow } from './narrow';
 
 export interface BranchDef {
   from: number;    // s на главной, где ветка отходит
@@ -11,6 +12,7 @@ export interface BranchDef {
   points: Pt[];    // промежуточные точки ветки (без концов — они на главной)
   blocks?: Block[];
   cars?: TrafficCar[];
+  narrows?: Narrow[]; // сужения по s ветки
 }
 
 export function buildBranchPath(main: Path, b: BranchDef): Path {

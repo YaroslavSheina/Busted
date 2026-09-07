@@ -45,6 +45,7 @@ function changed(): void {
   syncSel();
   syncBlocks();
   syncBranches();
+  syncNarrows();
 }
 
 // Блок выбранной машины: положение и скорость
@@ -120,6 +121,25 @@ function syncBranches(): void {
     row.appendChild(span); row.appendChild(del); list.appendChild(row);
   });
 }
+// Сужения (docs/mechanics.md, M6)
+function syncNarrows(): void {
+  const list = $('narrowList'); list.innerHTML = '';
+  (level.narrows ?? []).forEach((n, i) => {
+    const row = document.createElement('div');
+    const span = document.createElement('span'); span.textContent = `сужение ${i}: s ${n.from} → ${n.to}, ширина ${n.width}`;
+    const del = document.createElement('button'); del.textContent = '×';
+    del.onclick = () => { level.narrows!.splice(i, 1); if (!level.narrows!.length) delete level.narrows; changed(); canvas.draw(); };
+    row.appendChild(span); row.appendChild(del); list.appendChild(row);
+  });
+}
+$('narrowAdd').onclick = () => {
+  const from = Math.round(parseFloat(inp('narrowFrom').value)), to = Math.round(parseFloat(inp('narrowTo').value)), width = Math.round(parseFloat(inp('narrowW').value));
+  if (!Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(width) || to <= from || width < 60) { status('Сужение: нужны from < to и ширина ≥ 60'); return; }
+  (level.narrows ??= []).push({ from, to, width });
+  level.narrows.sort((a, b) => a.from - b.from);
+  changed(); canvas.draw();
+};
+
 $('branchAdd').onclick = () => {
   const from = Math.round(parseFloat(inp('branchFrom').value)), to = Math.round(parseFloat(inp('branchTo').value));
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from + 200 || level.points.length < 2) { status('Ветка: нужны from и to (to − from ≥ 200) на готовой дороге'); return; }
@@ -150,7 +170,7 @@ function syncPanel(): void {
 }
 
 function load(l: LevelData): void {
-  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic;
+  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.narrows;
   Object.assign(level, structuredClone(l));
   level.car ??= DEFAULT_CAR;
   select(null);

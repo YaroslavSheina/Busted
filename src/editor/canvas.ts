@@ -5,6 +5,7 @@ import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road
 import { drawBlocks, drawCar, drawGrid, drawPolice, drawRoad } from '../render';
 import { layoutBlocks } from '../blocks';
 import { buildBranchPath } from '../roads';
+import { makeWidthFn, widthAt } from '../narrow';
 import { spawnTraffic, vehiclePose, type TrafficCar, type Vehicle } from '../traffic';
 import type { LevelData } from '../levels';
 import { carByKey } from '../cars';
@@ -71,11 +72,12 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     explicit = [];
     if (path) {
       // ветки: под главной, без финиша; их промежуточные точки — синие
+      const wMain = makeWidthFn(() => l.width, l.narrows);
       (l.branches ?? []).forEach((b, bi) => {
         try {
-          const bp = buildBranchPath(path!, b);
-          drawRoad(ctx, bp, l.width, false);
-          if (b.blocks?.length) drawBlocks(ctx, bp, l.width, layoutBlocks(bp, l.width, b.blocks), 0);
+          const bp = buildBranchPath(path!, b), wb = makeWidthFn(() => l.width, b.narrows);
+          drawRoad(ctx, bp, wb, false);
+          if (b.blocks?.length) drawBlocks(ctx, bp, wb, layoutBlocks(bp, wb, b.blocks), 0);
         } catch { /* ветка с from/to вне дороги — не рисуем */ }
         b.points.forEach((p, i) => {
           const on = sel?.kind === 'point' && sel.b === bi && sel.i === i;
@@ -84,18 +86,18 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
           if (on) { ctx.lineWidth = 2 / zoom; ctx.strokeStyle = '#fff'; ctx.stroke(); }
         });
       });
-      drawRoad(ctx, path, l.width);
-      const mainLayout = layoutBlocks(path, l.width, l.blocks);
-      if (l.blocks?.length) drawBlocks(ctx, path, l.width, mainLayout, 0);
+      drawRoad(ctx, path, wMain);
+      const mainLayout = layoutBlocks(path, wMain, l.blocks);
+      if (l.blocks?.length) drawBlocks(ctx, path, wMain, mainLayout, 0);
       if (l.chaser) { const p = pathAtExt(path, -l.chaser.gap); ctx.globalAlpha = 0.6; drawPolice(ctx, p.x, p.y, Math.atan2(p.tx, -p.ty), 0); ctx.globalAlpha = 1; }
       // seeded-трафик — полупрозрачно, как ориентир для расстановки явных машин
       ctx.globalAlpha = 0.3;
       const spec = carByKey(l.car);
-      for (const c of spawnTraffic(path, l.traffic, spec.speed, l.seed, [], mainLayout)) { const v = vehiclePose(path, c, l.width); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
+      for (const c of spawnTraffic(path, l.traffic, spec.speed, l.seed, [], mainLayout)) { const v = vehiclePose(path, c, wMain); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
       ctx.globalAlpha = 1;
       explicit = spawnTraffic(path, 0, spec.speed, l.seed, l.cars ?? []);
       explicit.forEach((c, i) => {
-        const v = vehiclePose(path!, c, l.width);
+        const v = vehiclePose(path!, c, wMain);
         drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false);
         if (sel?.kind === 'car' && sel.i === i) {
           ctx.save(); ctx.translate(v.x, v.y); ctx.rotate(v.h);
@@ -142,7 +144,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
   // Ближайшая полоса под курсором
   function onRoad(wx: number, wy: number): { s: number; lane: number } | null {
     if (!path) return null;
-    const { s, off } = nearestGlobal(path, wx, wy), w = h.level().width;
+    const { s, off } = nearestGlobal(path, wx, wy), l = h.level(), w = widthAt(makeWidthFn(() => l.width, l.narrows), s);
     if (Math.abs(off) > w / 2 + 40) return null;
     const lane = Math.max(0, Math.min(LANES - 1, Math.round(off / (w / LANES) + (LANES - 1) / 2)));
     return { s: Math.round(s), lane };
@@ -169,7 +171,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
   function hitCar(sx: number, sy: number): number {
     if (!path) return -1;
     let best = -1, bd = Math.max(14, 26 * zoom) ** 2;
-    explicit.forEach((c, i) => { const v = vehiclePose(path!, c, h.level().width); const [x, y] = toScreen([v.x, v.y]); const d = (x - sx) ** 2 + (y - sy) ** 2; if (d < bd) { bd = d; best = i; } });
+    explicit.forEach((c, i) => { const l = h.level(); const v = vehiclePose(path!, c, makeWidthFn(() => l.width, l.narrows)); const [x, y] = toScreen([v.x, v.y]); const d = (x - sx) ** 2 + (y - sy) ** 2; if (d < bd) { bd = d; best = i; } });
     return best;
   }
   function armLongPress(remove: () => void): void {
