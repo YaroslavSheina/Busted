@@ -21,6 +21,12 @@ export function fullBlockAhead(layout: Layout, s: number, look: number): boolean
   return true;
 }
 
+// Есть ли заграждение впереди хоть в одной полосе — рядом с постом трафик держит большую дистанцию
+export function anyBlockAhead(layout: Layout, s: number, look: number): boolean {
+  for (let l = 0; l < LANES; l++) if (blockAhead(layout, l, s, look) !== null) return true;
+  return false;
+}
+
 // Ближайшее заграждение в полосе на отрезке [s, s + look] по своей дороге; null — проезд свободен
 export function blockAhead(layout: Layout, lane: number, s: number, look: number): number | null {
   let best: number | null = null;
@@ -75,9 +81,12 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
   for (let i = 0; i < traffic.length; i++) {
     const c = traffic[i];
     let sp = c.spd;
+    // у поста колонна растягивается до gateGap — иначе в единственную проходную полосу не втиснуться
+    const follow = ai && anyBlockAhead(ai.layout, c.s, TRAFFIC_AI.look) ? TRAFFIC_AI.gateGap : 110;
     for (let j = i + 1; j < traffic.length; j++) {
       const o = traffic[j];
-      if (o.lane === c.lane) { if (o.s - c.s < 110) sp = Math.min(sp, o.v); break; }
+      // у поста задняя едет медленнее передней, пока окно не раскроется до gateGap; вне поста — просто не ближе 110
+      if (o.lane === c.lane) { if (o.s - c.s < follow) sp = Math.min(sp, follow > 110 ? Math.max(0, o.v - 60) : o.v); break; }
     }
     if (ai) {
       const ahead = blockAhead(ai.layout, c.lane, c.s, TRAFFIC_AI.look);
@@ -86,7 +95,8 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
         let best = -1, bestD = LANES;
         for (let l = 0; l < LANES; l++) {
           if (l === c.lane || blockAhead(ai.layout, l, c.s, TRAFFIC_AI.look) !== null) continue;
-          if (traffic.some(o => o !== c && o.lane === l && Math.abs(o.s - c.s) < TRAFFIC_AI.safeGap)) continue;
+          // сосед рядом или впереди ближе gateGap — в эту полосу пока нельзя
+          if (traffic.some(o => o !== c && o.lane === l && (Math.abs(o.s - c.s) < TRAFFIC_AI.safeGap || (o.s > c.s && o.s - c.s < TRAFFIC_AI.gateGap)))) continue;
           const d = Math.abs(l - c.lane);
           if (d < bestD) { bestD = d; best = l; }
         }
