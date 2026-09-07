@@ -81,7 +81,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       (l.branches ?? []).forEach((b, bi) => {
         try {
           const bp = buildBranchPath(path!, b), wb = makeWidthFn(() => l.width, b.narrows);
-          drawRoad(ctx, bp, wb, false);
+          drawRoad(ctx, bp, wb, false, b.oncoming ?? 0);
           if (b.blocks?.length) drawBlocks(ctx, bp, wb, layoutBlocks(bp, wb, b.blocks), 0);
         } catch { /* ветка с from/to вне дороги — не рисуем */ }
         b.points.forEach((p, i) => {
@@ -91,7 +91,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
           if (on) { ctx.lineWidth = 2 / zoom; ctx.strokeStyle = '#fff'; ctx.stroke(); }
         });
       });
-      drawRoad(ctx, path, wMain);
+      drawRoad(ctx, path, wMain, true, l.oncoming ?? 0);
       const mainLayout = layoutBlocks(path, wMain, l.blocks);
       if (l.blocks?.length) drawBlocks(ctx, path, wMain, mainLayout, 0);
       if (l.rails?.length) drawRails(ctx, layoutRails(path, l.rails), wMain, 0);
@@ -100,7 +100,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       // seeded-трафик — полупрозрачно, как ориентир для расстановки явных машин
       ctx.globalAlpha = 0.3;
       const spec = carByKey(l.car);
-      for (const c of spawnTraffic(path, l.traffic, spec.speed, l.seed, [], mainLayout, wMain)) { const v = vehiclePose(path, c, wMain); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
+      for (const c of spawnTraffic(path, l.traffic, spec.speed, l.seed, [], mainLayout, wMain, l.oncoming ?? 0)) { const v = vehiclePose(path, c, wMain); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
       ctx.globalAlpha = 1;
       explicit = spawnTraffic(path, 0, spec.speed, l.seed, l.cars ?? []);
       explicit.forEach((c, i) => {

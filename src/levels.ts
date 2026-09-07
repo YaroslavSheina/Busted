@@ -29,6 +29,7 @@ export interface LevelData {
   rails?: RailDef[];   // необязательно: переезды на главной дороге (docs/mechanics.md, M7)
   crossings?: CrossingDef[]; // необязательно: перекрёстки со светофором (docs/mechanics.md, M9)
   props?: Prop[];      // необязательно: здания и прочее окружение
+  oncoming?: number;   // необязательно: сколько левых полос едут навстречу (docs/mechanics.md, M10)
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

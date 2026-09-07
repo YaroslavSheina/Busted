@@ -17,7 +17,7 @@ export interface View { W: number; H: number; DPR: number }
 export interface Mark { x: number; y: number; a: number }
 export interface Cam { x: number; y: number }
 
-export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout; width: number | WidthFn; rails?: Rail[]; crossings?: Crossing[] }
+export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout; width: number | WidthFn; rails?: Rail[]; crossings?: Crossing[]; oncoming?: number }
 
 // Эффекты очков: всплывающий текст или искра; t — остаток жизни, с
 export interface Fx { x: number; y: number; t: number; text?: string; vx?: number; vy?: number }
@@ -268,7 +268,7 @@ function ribbon(ctx: CanvasRenderingContext2D, path: Path, half: (s: number) => 
   for (const p of [pt[0], pt[pt.length - 1]]) { ctx.beginPath(); ctx.arc(p.x, p.y, half(p.s), 0, 7); ctx.fill(); }
 }
 
-export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | WidthFn, finish = true): void {
+export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | WidthFn, finish = true, oncoming = 0): void {
   // у веток торцы плоские: концы лежат на главной дороге и должны прятаться под ней
   const cap: CanvasLineCap = finish ? 'round' : 'butt';
   if (typeof w === 'number') {
@@ -278,7 +278,11 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
     ribbon(ctx, path, s => w(s) / 2 + 4, '#3a3d46', finish); ribbon(ctx, path, s => w(s) / 2, '#262930', finish);
   }
   const wa = (s: number) => widthAt(w, s);
-  for (let k = 1; k < LANES; k++) poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES), [26, 22], 'rgba(236,233,224,.28)', 2);
+  for (let k = 1; k < LANES; k++) {
+    // граница встречки — сплошная двойная жёлтая; остальные — пунктир
+    if (k === oncoming) { poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) - 2.5, [], 'rgba(244,185,66,.75)', 2); poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) + 2.5, [], 'rgba(244,185,66,.75)', 2); }
+    else poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES), [26, 22], 'rgba(236,233,224,.28)', 2);
+  }
   poly(ctx, path, s => -wa(s) / 2 + 3, [], 'rgba(244,185,66,.5)', 2); poly(ctx, path, s => wa(s) / 2 - 3, [], 'rgba(244,185,66,.5)', 2);
   if (!finish) return;
   drawStart(ctx, path, wa(0));
@@ -327,7 +331,7 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   // здания под всем, потом поперечные улицы, ветки под главной: её разметка и финиш сверху на стыках
   if (sc.props?.length) drawProps(ctx, sc.props);
   for (const r of roads) for (const c of r.crossings ?? []) drawCrossingRoad(ctx, c);
-  for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0);
+  for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0, roads[i].oncoming ?? 0);
   for (const r of roads) drawBlocks(ctx, r.path, r.width, r.blocks, sc.t ?? 0);
   for (const r of roads) if (r.rails?.length) drawRails(ctx, r.rails, r.width, sc.t ?? 0);
   for (const r of roads) for (const c of r.crossings ?? []) drawCrossingTop(ctx, c, widthAt(r.width, c.s), sc.t ?? 0);

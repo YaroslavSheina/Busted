@@ -17,16 +17,17 @@ export function formatLevel(l: LevelData): string {
     : '';
   const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed} }` : '';
   const panic = l.panic ? `,\n  "panic": ${l.panic}` : '';
+  const oncoming = l.oncoming ? `,\n  "oncoming": ${l.oncoming}` : '';
   const rails = l.rails?.length ? `,\n  "rails": [\n${l.rails.map(r => '    ' + JSON.stringify(r)).join(',\n')}\n  ]` : '';
   const crossings = l.crossings?.length ? `,\n  "crossings": [\n${l.crossings.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ]` : '';
   const props = l.props?.length ? `,\n  "props": [\n${l.props.map(p => '    ' + JSON.stringify(p)).join(',\n')}\n  ]` : '';
   const narrows = l.narrows?.length ? `,\n  "narrows": [\n${l.narrows.map(n => '    ' + JSON.stringify(n)).join(',\n')}\n  ]` : '';
   const blocks = l.blocks?.length ? `,\n  "blocks": [\n${l.blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ]` : '';
   const branches = l.branches?.length
-    ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''} }`).join(',\n')}\n  ]`
+    ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.oncoming ? `, "oncoming": ${b.oncoming}` : ''}${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -45,6 +46,7 @@ function parseCars(v: unknown, what: string): TrafficCar[] {
     if (typeof c !== 'object' || c === null || !isNum(c.s) || !isNum(c.lane) || !isNum(c.speed)) throw new Error(`${what}: машина ${i} не { s, lane, speed }`);
     const out: TrafficCar = { s: c.s, lane: c.lane, speed: c.speed };
     if (c.type !== undefined) { if (c.type !== 'ramp') throw new Error(`${what}: машина ${i}: type только ramp`); out.type = 'ramp'; }
+    if (c.oncoming === true) out.oncoming = true;
     return out;
   });
 }
@@ -90,6 +92,7 @@ export function parseLevel(raw: unknown): LevelData {
     level.chaser = { gap: c.gap, speed: c.speed };
   }
   if (o.panic !== undefined) { if (!isNum(o.panic) || o.panic < 0 || o.panic > 1) throw new Error('«panic» — число 0..1'); level.panic = o.panic; }
+  if (o.oncoming !== undefined) { if (!isNum(o.oncoming) || o.oncoming < 0 || o.oncoming > 2) throw new Error('«oncoming» — 0..2'); level.oncoming = o.oncoming; }
   if (o.narrows !== undefined) level.narrows = parseNarrows(o.narrows, 'сужение');
   if (o.props !== undefined) {
     if (!Array.isArray(o.props)) throw new Error('«props» должно быть массивом');
@@ -127,6 +130,7 @@ export function parseLevel(raw: unknown): LevelData {
       if (b.blocks !== undefined) out.blocks = parseBlocks(b.blocks, `ветка ${i}, заграждение`);
       if (b.cars !== undefined) out.cars = parseCars(b.cars, `ветка ${i}, cars`);
       if (b.narrows !== undefined) out.narrows = parseNarrows(b.narrows, `ветка ${i}, сужение`);
+      if (b.oncoming !== undefined) { if (!isNum(b.oncoming)) throw new Error(`ветка ${i}: oncoming число`); out.oncoming = b.oncoming; }
       return out;
     });
   }

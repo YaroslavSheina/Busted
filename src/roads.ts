@@ -13,6 +13,7 @@ export interface BranchDef {
   blocks?: Block[];
   cars?: TrafficCar[];
   narrows?: Narrow[]; // сужения по s ветки
+  oncoming?: number;  // встречных полос на ветке
 }
 
 export function buildBranchPath(main: Path, b: BranchDef): Path {

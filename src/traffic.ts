@@ -21,6 +21,7 @@ export interface Vehicle {
   n?: number;              // число полос в прошлом кадре — чтобы смена числа полос не дёргала машину
   wPrev?: number;
   kind?: 'ramp';           // грузовик-рампа: заезд сзади запускает прыжок
+  dir?: -1;                // −1 — встречная: едет к старту, курс развёрнут (M10)
 }
 
 // Проезд впритирку (M2 Near Miss, M3 провокация): борта ближе margin при продольном перекрытии.
@@ -71,7 +72,7 @@ export function blockAhead(layout: Layout, lane: number, s: number, look: number
 }
 
 // Явно расставленная машина уровня: speed в px/с, 0 — стоит
-export interface TrafficCar { s: number; lane: number; speed: number; type?: 'ramp' } // ramp — грузовик-рампа (M8)
+export interface TrafficCar { s: number; lane: number; speed: number; type?: 'ramp'; oncoming?: boolean } // ramp — грузовик-рампа (M8); oncoming — едет навстречу (M10)
 
 export interface Obb { c: [number, number][]; ax: [number, number][] }
 
@@ -87,7 +88,7 @@ export function rng(seed: number): () => number {
   };
 }
 
-export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number, cars: TrafficCar[] = [], layout?: Layout, width?: number | WidthFn): Vehicle[] {
+export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number, cars: TrafficCar[] = [], layout?: Layout, width?: number | WidthFn, oncoming = 0): Vehicle[] {
   const r = rng(seed);
   const traffic: Vehicle[] = [];
   const n = Math.round(path.L / 380 * density);
@@ -99,20 +100,22 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
       if (width !== undefined && lane >= lanesAhead(width, s - 120, 240)) continue; // и в исчезнувшей полосе сужения
       const spd = playerSpeed * (0.4 + r() * 0.3);
       // pick — из координаты спавна, а не из rng: последовательность rng должна остаться прежней
-      traffic.push({ s, lane, shift: 0, spd, v: spd, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[Math.floor(r() * 5)], pick: (Math.sin(s * 12.9898) * 43758.5453) % 1 });
+      const v: Vehicle = { s, lane, shift: 0, spd, v: spd, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[Math.floor(r() * 5)], pick: (Math.sin(s * 12.9898) * 43758.5453) % 1 };
+      if (lane < oncoming) v.dir = -1; // левые полосы — встречка
+      traffic.push(v);
       break;
     }
   }
   // Явные машины уровня добавляются к seeded-трафику; при density 0 остаются только они
   cars.forEach((c, i) => traffic.push(c.type === 'ramp'
     ? { s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: RAMP.W, L: RAMP.L, col: '#5d6470', pick: (i + 0.5) / (cars.length + 1), kind: 'ramp' }
-    : { s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[i % COLORS.length], pick: (i + 0.5) / (cars.length + 1) }));
+    : { s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[i % COLORS.length], pick: (i + 0.5) / (cars.length + 1), ...(c.oncoming ? { dir: -1 as const } : {}) }));
   return traffic;
 }
 
 // Сортирует по s, подстраивает под машину впереди в той же полосе, убирает доехавших до финиша.
 // С ai (docs/mechanics.md, M4): перед заграждением уходит в свободную полосу, а если её нет — встаёт в пробку
-export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number | WidthFn; playerS?: number; playerL?: number; stops?: number[] }): Vehicle[] {
+export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number | WidthFn; playerS?: number; playerL?: number; stops?: number[]; stopsBack?: number[] }): Vehicle[] {
   traffic.sort((a, b) => a.s - b.s);
   for (let i = 0; i < traffic.length; i++) {
     const c = traffic[i];
@@ -131,6 +134,17 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
       if (next === target) { if (c.panic.back) { c.crashed = true; c.v = 0; continue; } if (clear) c.panic.back = true; }
       c.v = c.spd * PANIC.brake; c.s += c.v * dt; continue;
     }
+    if (c.dir === -1) {
+      // встречная: едет к старту; впереди для неё — меньший s; держит дистанцию и встаёт на красный, полос не меняет
+      let sp = c.spd;
+      for (let j = i - 1; j >= 0; j--) {
+        const o = traffic[j];
+        if (o.lane === c.lane && o.dir === -1) { if (c.s - o.s < 110) sp = Math.min(sp, o.v); break; }
+      }
+      // стоп-линия встречной — с дальней стороны поперечной улицы (stopsBack)
+      if (ai?.stopsBack) { let stopAt: number | null = null; for (const st of ai.stopsBack) if (st < c.s - 10 && st >= c.s - TRAFFIC_AI.look && (stopAt === null || st > stopAt)) stopAt = st; if (stopAt !== null) { const dist = c.s - (stopAt + TRAFFIC_AI.stopGap); sp = dist < 2 ? 0 : Math.min(sp, dist * 3); } }
+      c.v = sp; c.s -= sp * dt; continue;
+    }
     let sp = c.spd;
     // у поста колонна растягивается до gateGap — иначе в единственную проходную полосу не втиснуться
     // число полос по местной ширине: при его смене центр полосы прыгает — компенсируем сдвигом, он сам рассосётся
@@ -144,7 +158,7 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
     for (let j = i + 1; j < traffic.length; j++) {
       const o = traffic[j];
       // у поста задняя едет медленнее передней, пока окно не раскроется до gateGap; вне поста — просто не ближе 110
-      if (o.lane === c.lane) {
+      if (o.lane === c.lane && o.dir !== -1) {
         // рядом с грузовиком-рампой дистанция RAMP.follow: рампа едет за машиной, а не впритык к ней
         const need = c.kind === 'ramp' || o.kind === 'ramp' ? Math.max(follow, RAMP.follow) : follow;
         if (o.s - c.s < need) sp = Math.min(sp, need > 110 ? Math.max(0, o.v - 60) : o.v);
@@ -177,13 +191,13 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
     c.v = sp;
     c.s += sp * dt;
   }
-  return traffic.filter(c => c.s < path.L - 140);
+  return traffic.filter(c => c.dir === -1 ? c.s > 140 : c.s < path.L - 140);
 }
 
 export function vehiclePose(path: Path, c: Vehicle, width: number | WidthFn): { x: number; y: number; h: number } {
   const p = pathAt(path, c.s);
   const o = laneOff(widthAt(width, c.s), c.lane) + c.shift;
-  return { x: p.x + p.nx * o, y: p.y + p.ny * o, h: heading(p.tx, p.ty) };
+  return { x: p.x + p.nx * o, y: p.y + p.ny * o, h: heading(p.tx, p.ty) + (c.dir === -1 ? Math.PI : 0) };
 }
 
 export function obb(x: number, y: number, h: number, w: number, l: number): Obb {
