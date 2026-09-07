@@ -6,7 +6,7 @@ import { drawBlocks, drawCar, drawCrossingRoad, drawCrossingTop, drawGrid, drawP
 import { layoutRails } from '../rails';
 import { layoutCrossings } from '../crossings';
 import { layoutBlocks } from '../blocks';
-import { buildBranchPath } from '../roads';
+import { buildRoadPaths } from '../roads';
 import { makeWidthFn, widthAt } from '../narrow';
 import { spawnTraffic, vehiclePose, type TrafficCar, type Vehicle } from '../traffic';
 import type { LevelData } from '../levels';
@@ -27,6 +27,7 @@ export interface CanvasHooks {
   addCar(c: TrafficCar): void;
   moveCar(i: number, c: TrafficCar): void;
   removeCar(i: number): void;
+  hint(text: string): void;   // подсказка под курсором: дорога и s по ней
 }
 
 export interface EditorCanvas {
@@ -78,12 +79,14 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       if (l.props?.length) drawProps(ctx, l.props);
       const crossings = layoutCrossings(path, l.crossings, l.width);
       for (const c of crossings) drawCrossingRoad(ctx, c);
+      const roadPaths = buildRoadPaths(path, l.branches);
       (l.branches ?? []).forEach((b, bi) => {
-        try {
-          const bp = buildBranchPath(path!, b), wb = makeWidthFn(() => l.width, b.narrows);
+        const bp = roadPaths[bi + 1]; // null — родитель не построен
+        if (bp) {
+          const wb = makeWidthFn(() => l.width, b.narrows);
           drawRoad(ctx, bp, wb, false, b.oncoming ?? 0);
           if (b.blocks?.length) drawBlocks(ctx, bp, wb, layoutBlocks(bp, wb, b.blocks), 0);
-        } catch { /* ветка с from/to вне дороги — не рисуем */ }
+        }
         b.points.forEach((p, i) => {
           const on = sel?.kind === 'point' && sel.b === bi && sel.i === i;
           ctx.beginPath(); ctx.arc(p[0], p[1], (on ? HANDLE + 3 : HANDLE) / zoom, 0, 7);
@@ -148,7 +151,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     draw();
   }
 
-  // Ближайшая полоса под курсором
+  // Ближайшая полоса под курсором (на главной дороге)
   function onRoad(wx: number, wy: number): { s: number; lane: number } | null {
     if (!path) return null;
     const { s, off } = nearestGlobal(path, wx, wy), l = h.level(), w = widthAt(makeWidthFn(() => l.width, l.narrows), s);
@@ -156,6 +159,18 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     const n = lanesFor(w);
     const lane = Math.max(0, Math.min(n - 1, Math.round(off / (w / n) + (n - 1) / 2)));
     return { s: Math.round(s), lane };
+  }
+  // Ближайшая дорога под курсором: [ветка (−1 — главная), s по ней] — чтобы ставить объекты на ветки по их s
+  function onAnyRoad(wx: number, wy: number): [number, number] | null {
+    if (!path) return null;
+    const l = h.level(), w = l.width / 2 + 40;
+    let best: [number, number] | null = null, bd = Infinity;
+    buildRoadPaths(path, l.branches).forEach((p, i) => {
+      if (!p) return;
+      const n = nearestGlobal(p, wx, wy);
+      if (Math.abs(n.off) < Math.min(bd, w)) { bd = Math.abs(n.off); best = [i - 1, Math.round(n.s)]; }
+    });
+    return best;
   }
 
   // ---------- указатели ----------
@@ -212,7 +227,8 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
   });
 
   cv.addEventListener('pointermove', e => {
-    const prev = ptrs.get(e.pointerId); if (!prev) return;
+    const prev = ptrs.get(e.pointerId);
+    if (!prev) { const at = onAnyRoad(...toWorld(e.clientX, e.clientY)); h.hint(at ? `${at[0] < 0 ? 'главная' : `ветка ${at[0]}`} · s ${at[1]}` : ''); return; }
     const p = pos(e); ptrs.set(e.pointerId, p);
     if (mode === 'pinch') {
       if (ptrs.size < 2) return;

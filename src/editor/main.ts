@@ -5,6 +5,7 @@ import { LEVEL_KEYS, LEVELS, type LevelData } from '../levels';
 import { CARS, DEFAULT_CAR, type CarKey } from '../cars';
 import type { Block } from '../blocks';
 import { pathAt } from '../road';
+import { buildRoadPaths } from '../roads';
 import { createGame, type Game } from '../game';
 import { buildPath } from '../road';
 import { initCanvas, type Sel } from './canvas';
@@ -33,6 +34,7 @@ const canvas = initCanvas($<HTMLCanvasElement>('ec'), {
   addCar: c => { (level.cars ??= []).push(c); select({ kind: 'car', i: level.cars.length - 1 }); changed(); },
   moveCar: (i, c) => { level.cars![i] = { ...c, ...(level.cars![i].type ? { type: level.cars![i].type } : {}) }; changed(); },
   removeCar: i => { level.cars!.splice(i, 1); select(null); changed(); },
+  hint: t => { $('cursor').textContent = t; },
 });
 
 function select(s: Sel): void { sel = s; syncSel(); }
@@ -120,16 +122,30 @@ function syncBlocks(): void {
     row.appendChild(span); row.appendChild(del); list.appendChild(row);
   });
 }
-// Ветки (docs/mechanics.md, M5): создаётся с тремя точками справа от главной, дальше их тянут мышью
+// Ветки (docs/mechanics.md, M5): создаётся с тремя точками справа от родителя (главной или другой ветки), дальше их тянут мышью
 function syncBranches(): void {
   const list = $('branchList'); list.innerHTML = '';
+  const on = $<HTMLSelectElement>('branchOn'), was = on.value; on.innerHTML = '<option value="-1">от главной</option>';
   (level.branches ?? []).forEach((b, i) => {
     const row = document.createElement('div');
-    const span = document.createElement('span'); span.textContent = `ветка ${i}: s ${b.from} → ${b.to}, точек ${b.points.length}`;
+    const span = document.createElement('span'); span.textContent = `ветка ${i}${b.parent !== undefined ? ` (от ветки ${b.parent})` : ''}: s ${b.from} → ${b.to}, точек ${b.points.length}`;
     const del = document.createElement('button'); del.textContent = '×';
-    del.onclick = () => { level.branches!.splice(i, 1); if (!level.branches!.length) delete level.branches; select(null); changed(); canvas.draw(); };
+    del.onclick = () => { removeBranch(i); select(null); changed(); canvas.draw(); };
     row.appendChild(span); row.appendChild(del); list.appendChild(row);
+    const opt = document.createElement('option'); opt.value = String(i); opt.textContent = `от ветки ${i}`; on.appendChild(opt);
   });
+  on.value = [...on.options].some(o => o.value === was) ? was : '-1';
+}
+// Удалить ветку вместе с ветками, что отходят от неё; ссылки остальных на родителей сдвигаются
+function removeBranch(i: number): void {
+  const bs = level.branches!;
+  bs.splice(i, 1);
+  for (let k = bs.length - 1; k >= 0; k--) {
+    const p = bs[k].parent;
+    if (p === undefined || p < i) continue;
+    if (p === i) removeBranch(k); else bs[k].parent = p - 1;
+  }
+  if (!bs.length) delete level.branches;
 }
 // Сужения (docs/mechanics.md, M6)
 function syncNarrows(): void {
@@ -191,11 +207,13 @@ $('narrowAdd').onclick = () => {
 $('branchAdd').onclick = () => {
   const from = Math.round(parseFloat(inp('branchFrom').value)), to = Math.round(parseFloat(inp('branchTo').value));
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from + 200 || level.points.length < 2) { status('Ветка: нужны from и to (to − from ≥ 200) на готовой дороге'); return; }
-  const main = buildPath(level.points);
-  if (to > main.L - 100) { status(`Ветка: to не больше ${Math.round(main.L - 100)}`); return; }
+  const parent = parseInt($<HTMLSelectElement>('branchOn').value, 10);
+  const parentPath = buildRoadPaths(buildPath(level.points), level.branches)[parent + 1];
+  if (!parentPath) { status('Ветка: родительская ветка не построена'); return; }
+  if (to > parentPath.L - 100) { status(`Ветка: to не больше ${Math.round(parentPath.L - 100)} по этой дороге`); return; }
   const side = 250;
-  const points = [0.25, 0.5, 0.75].map(t => { const p = pathAt(main, from + (to - from) * t); return [Math.round(p.x + p.nx * side), Math.round(p.y + p.ny * side)] as [number, number]; });
-  (level.branches ??= []).push({ from, to, points });
+  const points = [0.25, 0.5, 0.75].map(t => { const p = pathAt(parentPath, from + (to - from) * t); return [Math.round(p.x + p.nx * side), Math.round(p.y + p.ny * side)] as [number, number]; });
+  (level.branches ??= []).push({ from, to, points, ...(parent >= 0 ? { parent } : {}) });
   changed(); canvas.draw();
 };
 

@@ -5,7 +5,7 @@ import { crossCars, layoutCrossings, lightAt, type Crossing } from './crossings'
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
 import { buildPath, curvatureAt, heading, laneOff, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
-import { buildBranchPath, mainEquivalent, type BranchDef } from './roads';
+import { buildRoadPaths, parentEquivalent, parentRoad, type BranchDef } from './roads';
 import { layoutBlocks, type Block, type Layout } from './blocks';
 import { makeWidthFn, widthAt, type Narrow, type WidthFn } from './narrow';
 import { brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, vehiclePose, type Obb, type TrafficCar, type Vehicle } from './traffic';
@@ -37,6 +37,7 @@ type Car = CarState & { s: number; off: number; W: number; L: number; road: numb
 interface Road {
   path: Path;
   def: BranchDef | null;   // null — главная
+  parent: number;          // индекс родительской дороги (−1 у главной)
   width: number | WidthFn; // ширина по s: базовая из P (слайдер) с сужениями уровня
   narrows?: Narrow[];
   blockDefs?: Block[];
@@ -83,7 +84,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let jump: { t: number; over: Set<object> } | null = null;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
-    const r: Road = { path, def, width: P.width.v, narrows, blockDefs: blocks, rails: [], crossings: [], oncoming: 0, blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
+    const r: Road = { path, def, parent: -1, width: P.width.v, narrows, blockDefs: blocks, rails: [], crossings: [], oncoming: 0, blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
     refreshRoad(r);
     return r;
   }
@@ -108,7 +109,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     roads[0].oncoming = l.oncoming ?? 0;
     roads[0].rails = layoutRails(main, l.rails);
     roads[0].crossings = layoutCrossings(main, l.crossings, l.width);
-    for (const b of l.branches ?? []) { const r = makeRoad(buildBranchPath(main, b), b, b.blocks, b.cars, b.narrows); r.oncoming = b.oncoming ?? 0; roads.push(r); }
+    const paths = buildRoadPaths(main, l.branches);
+    (l.branches ?? []).forEach((b, i) => {
+      const path = paths[i + 1];
+      if (!path) throw new Error(`Уровень «${l.name}»: ветка ${i} ссылается на родителя ${b.parent}, которого нет раньше неё`);
+      const r = makeRoad(path, b, b.blocks, b.cars, b.narrows);
+      r.parent = parentRoad(b); r.oncoming = b.oncoming ?? 0;
+      roads.push(r);
+    });
     reset();
   }
 
@@ -149,44 +157,41 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     }
   }
 
-  // Прогресс по главной дороге, даже если машина на ветке
+  // Прогресс по главной дороге, даже если машина на ветке (или на ветке ветки — вверх по родителям)
   function mainS(road: number, s: number): number {
     const r = roads[road];
-    return r.def ? mainEquivalent(r.def, r.path, s) : s;
+    return r.def ? mainS(r.parent, parentEquivalent(r.def, r.path, s)) : s;
   }
 
-  // Развилка: в зоне после from сравниваем близость к главной и к ветке, ближняя побеждает.
-  // Слияние: в зоне перед концом ветки возвращаемся на главную у to.
+  // Развилка: в зоне после from сравниваем близость к текущей дороге и к её ветке, ближняя побеждает.
+  // Слияние: в зоне перед концом ветки возвращаемся на родительскую дорогу у to.
   function switchRoad(who: { road: number; s: number }, x: number, y: number) {
     let nr = nearest(roads[who.road].path, x, y, who.s);
-    if (who.road === 0) {
-      for (let i = 1; i < roads.length; i++) {
-        const b = roads[i].def!;
-        if (who.s < b.from - BRANCH.lead || who.s > b.from + BRANCH.zone) continue;
-        const nb = nearest(roads[i].path, x, y, who.s - (b.from - BRANCH.lead));
-        // на ветку — только если её ось заметно ближе (BRANCH.hyst): на общем заходе оси совпадают, а у начала дуги расходятся постепенно
-        if (nb.s > BRANCH.lead && Math.abs(nb.off) < Math.abs(nr.off) - BRANCH.hyst) { who.road = i; nr = nb; }
-      }
-    } else {
-      const r = roads[who.road], b = r.def!;
-      if (who.s > r.path.L - BRANCH.zone) {
-        const nm = nearest(roads[0].path, x, y, b.to - (r.path.L - who.s));
-        if (Math.abs(nm.off) < Math.abs(nr.off) - BRANCH.hyst || who.s >= r.path.L - BRANCH.lead) { who.road = 0; nr = nm; }
-      }
+    const from = who.road;
+    for (let i = 1; i < roads.length; i++) {
+      const b = roads[i].def!;
+      if (roads[i].parent !== from || who.s < b.from - BRANCH.lead || who.s > b.from + BRANCH.zone) continue;
+      const nb = nearest(roads[i].path, x, y, who.s - (b.from - BRANCH.lead));
+      // на ветку — только если её ось заметно ближе (BRANCH.hyst): на общем заходе оси совпадают, а у начала дуги расходятся постепенно
+      if (nb.s > BRANCH.lead && Math.abs(nb.off) < Math.abs(nr.off) - BRANCH.hyst) { who.road = i; nr = nb; }
+    }
+    const r = roads[who.road];
+    if (who.road === from && r.def && who.s > r.path.L - BRANCH.zone) {
+      const np = nearest(roads[r.parent].path, x, y, r.def.to - (r.path.L - who.s));
+      if (Math.abs(np.off) < Math.abs(nr.off) - BRANCH.hyst || who.s >= r.path.L - BRANCH.lead) { who.road = r.parent; nr = np; }
     }
     who.s = nr.s;
     return nr;
   }
 
-  // Трафик на развилках (M4 + M5): с главной уходит на ветку, если впереди полное перекрытие или выпала монетка;
-  // в конце ветки возвращается на главную. Переезд между дорогами — перенос машины из одного списка в другой
+  // Трафик на развилках (M4 + M5): с родительской дороги уходит на ветку, если впереди полное перекрытие или
+  // выпала монетка; в конце ветки возвращается на родителя. Переезд между дорогами — перенос машины из списка в список
   function flowTraffic(): void {
-    const main = roads[0];
     for (let i = 1; i < roads.length; i++) {
-      const br = roads[i], b = br.def!;
-      main.traffic = main.traffic.filter(c => {
+      const br = roads[i], b = br.def!, pr = roads[br.parent];
+      pr.traffic = pr.traffic.filter(c => {
         if (c.dir === -1 || c.s < b.from || c.s >= b.from + 40) return true; // встречка на ветки не сворачивает
-        const detour = fullBlockAhead(main.blocks, c.s, TRAFFIC_AI.detourLook) || Math.abs(c.pick) < TRAFFIC_AI.detourShare;
+        const detour = fullBlockAhead(pr.blocks, c.s, TRAFFIC_AI.detourLook) || Math.abs(c.pick) < TRAFFIC_AI.detourShare;
         if (!detour) return true;
         br.traffic.push({ ...c, s: BRANCH.lead + (c.s - b.from), shift: 0 });
         return false;
@@ -194,7 +199,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       br.traffic = br.traffic.filter(c => {
         if (c.dir === -1) return c.s > BRANCH.lead; // встречная на ветке доезжает до её начала и исчезает
         if (c.s < br.path.L - BRANCH.lead) return true;
-        main.traffic.push({ ...c, s: b.to + (c.s - (br.path.L - BRANCH.lead)), shift: 0 });
+        pr.traffic.push({ ...c, s: b.to + (c.s - (br.path.L - BRANCH.lead)), shift: 0 });
         return false;
       });
     }
@@ -326,14 +331,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       // В повороте коп идёт по линии шириной CHASER_LINE и теряет ход, как приличный водитель; на прямой — нет
       const line = Math.max(0.5, 1 - CHASER_LINE * curvatureAt(cr.path, Math.max(0, chaser.s)));
       chaser.s += P.speed.v * level.chaser!.speed * line * dt;
-      // Коп повторяет выбор игрока на развилках и возвращается на главную в конце ветки
-      if (chaser.road === 0) {
-        for (let i = 1; i < roads.length; i++) {
-          const b = roads[i].def!;
-          if (taken.has(i) && chaser.s >= b.from && chaser.s < b.from + BRANCH.zone) { chaser.road = i; chaser.s = BRANCH.lead + (chaser.s - b.from); break; }
-        }
-      } else if (chaser.s >= cr.path.L - BRANCH.lead) {
-        chaser.s = cr.def!.to + (chaser.s - (cr.path.L - BRANCH.lead)); chaser.road = 0;
+      // Коп повторяет выбор игрока на развилках и возвращается на родительскую дорогу в конце ветки
+      let turned = false;
+      for (let i = 1; i < roads.length; i++) {
+        const b = roads[i].def!;
+        if (roads[i].parent === chaser.road && taken.has(i) && chaser.s >= b.from && chaser.s < b.from + BRANCH.zone) { chaser.road = i; chaser.s = BRANCH.lead + (chaser.s - b.from); turned = true; break; }
+      }
+      if (!turned && cr.def && chaser.s >= cr.path.L - BRANCH.lead) {
+        chaser.s = cr.def.to + (chaser.s - (cr.path.L - BRANCH.lead)); chaser.road = cr.parent;
       }
       chaser.off += (car.off - chaser.off) * Math.min(1, CHASER_FOLLOW * dt);
       const lim = widthAt(cr.width, Math.max(0, chaser.s)) / 2 - TRAFFIC_SIZE.W / 2;

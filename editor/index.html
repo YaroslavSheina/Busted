@@ -34,7 +34,7 @@
       <div class="row"><label>Заграждение<br><small>на s, px от старта</small></label><select id="blockType"><option value="gap">пост с просветом</option><option value="full">перекрытие + обочина</option><option value="spikes">машина + ежи</option><option value="works">ремонт дороги</option></select></div>
       <div class="row"><label></label><input id="blockS" type="number" step="10" placeholder="s"><button id="blockAdd" class="mini">+</button></div>
       <div id="blockList"></div>
-      <div class="row"><label>Ветка<br><small>от s до s по главной</small></label><input id="branchFrom" type="number" step="10" placeholder="от"><input id="branchTo" type="number" step="10" placeholder="до"><button id="branchAdd" class="mini">+</button></div>
+      <div class="row"><label>Ветка<br><small>от s до s по дороге-родителю</small></label><select id="branchOn"><option value="-1">от главной</option></select><input id="branchFrom" type="number" step="10" placeholder="от"><input id="branchTo" type="number" step="10" placeholder="до"><button id="branchAdd" class="mini">+</button></div>
       <div id="branchList"></div>
       <div class="row"><label>Сужение<br><small>от s, до s, ширина</small></label><input id="narrowFrom" type="number" step="10" placeholder="от"><input id="narrowTo" type="number" step="10" placeholder="до"><input id="narrowW" type="number" step="10" placeholder="px"><button id="narrowAdd" class="mini">+</button></div>
       <div id="narrowList"></div>
@@ -46,6 +46,7 @@
       <div class="buttons"><button id="export">Экспорт</button><button id="import">Импорт</button><button id="play" class="primary">Играть</button></div>
       <input id="file" type="file" accept=".json,application/json" hidden>
       <div id="status" class="hint"></div>
+      <div id="cursor" class="hint"></div>
       <div class="hint">Клик по пустому месту — точка в конец. Перетаскивание — сдвиг. Delete или долгое нажатие — удалить. Shift+клик по дороге — машина в ближайшую полосу. Колесо или пинч — зум, тянуть пустое место — панорама.</div>
     </div>
   </div>
