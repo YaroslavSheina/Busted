@@ -147,13 +147,14 @@ src/
   crossings.ts     — перекрёсток: поперечная улица, группа машин по циклу, светофор (crossCars, lightAt)
   rails.ts         — переезд: рельсы через дорогу, детерминированный поезд (trainObb, untilTrain)
   narrow.ts        — сужения: ширина как функция от s (makeWidthFn/widthAt), переходы NARROW.ramp
-  roads.ts         — граф дорог: ветка { from, to, points } пристыковывается к главной, mainEquivalent для прогресса
+  roads.ts         — граф дорог: ветка { from, to, points, parent? } пристыковывается к родителю (главная или другая ветка), buildRoadPaths, parentEquivalent для прогресса
   debug.ts         — панель «уровень»: список уровней + кнопка «тюнинг» со слайдерами (в проде слайдеры выключены)
   editor/
     main.ts        — панель, экспорт/импорт, «Играть» через createGame на той же странице
     canvas.ts      — холст: панорама, зум, точки; дорога рисуется drawRoad
     io.ts          — формат файла уровня, валидация импорта
 levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings?, props?, oncoming? } — см. docs/mechanics.md
+tools/district.cjs — генератор районов: сетка кварталов, дороги по узлам (главная + ветки с родителем), перекрёстки, здания → levels/district*.json
 docs/concept.md
 docs/design.md     — диздок BUSTED
 docs/mechanics.md  — лаборатория механик: карточки идей со статусами, формат данных каждой
