@@ -1,6 +1,6 @@
 // Холст редактора: панорама, зум (колесо/пинч), точки сплайна и явные машины трафика.
 // Дорога и машины рисуются теми же drawRoad/drawCar, что и в игре.
-import { LANES } from '../config';
+import { lanesFor } from '../road';
 import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road';
 import { drawBlocks, drawCar, drawGrid, drawPolice, drawRoad } from '../render';
 import { layoutBlocks } from '../blocks';
@@ -93,7 +93,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       // seeded-трафик — полупрозрачно, как ориентир для расстановки явных машин
       ctx.globalAlpha = 0.3;
       const spec = carByKey(l.car);
-      for (const c of spawnTraffic(path, l.traffic, spec.speed, l.seed, [], mainLayout)) { const v = vehiclePose(path, c, wMain); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
+      for (const c of spawnTraffic(path, l.traffic, spec.speed, l.seed, [], mainLayout, wMain)) { const v = vehiclePose(path, c, wMain); drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false); }
       ctx.globalAlpha = 1;
       explicit = spawnTraffic(path, 0, spec.speed, l.seed, l.cars ?? []);
       explicit.forEach((c, i) => {
@@ -146,7 +146,8 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     if (!path) return null;
     const { s, off } = nearestGlobal(path, wx, wy), l = h.level(), w = widthAt(makeWidthFn(() => l.width, l.narrows), s);
     if (Math.abs(off) > w / 2 + 40) return null;
-    const lane = Math.max(0, Math.min(LANES - 1, Math.round(off / (w / LANES) + (LANES - 1) / 2)));
+    const n = lanesFor(w);
+    const lane = Math.max(0, Math.min(n - 1, Math.round(off / (w / n) + (n - 1) / 2)));
     return { s: Math.round(s), lane };
   }
 

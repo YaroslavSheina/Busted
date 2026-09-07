@@ -1,5 +1,5 @@
 // Дорога: Catmull-Rom сплайн, отсэмплированный в точки с длиной s, касательной и правой нормалью.
-import { LANES } from './config';
+import { LANE_MIN, LANES } from './config';
 
 export type Pt = [number, number];
 
@@ -110,4 +110,9 @@ export function nearestGlobal(path: Path, x: number, y: number): { s: number; of
 // Курс машины из касательной дороги (h = 0 — вверх по экрану)
 export const heading = (tx: number, ty: number) => Math.atan2(tx, -ty);
 
-export const laneOff = (width: number, lane: number) => (lane - (LANES - 1) / 2) * (width / LANES);
+// Сколько полос помещается в ширину; центры полос считаются от их числа (две полосы — по ±¼ ширины)
+export const lanesFor = (width: number) => Math.max(1, Math.min(LANES, Math.floor(width / LANE_MIN)));
+export const laneOff = (width: number, lane: number) => {
+  const n = lanesFor(width), l = Math.min(lane, n - 1);
+  return (l - (n - 1) / 2) * (width / n);
+};

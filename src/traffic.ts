@@ -1,6 +1,6 @@
 // Трафик: детерминированный спавн, движение вдоль сплайна, перестроение перед заграждениями, OBB и SAT.
 import { LANES, PANIC, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
-import { heading, laneOff, pathAt, type Path } from './road';
+import { heading, laneOff, lanesFor, pathAt, type Path } from './road';
 import type { Layout } from './blocks';
 import { widthAt, type WidthFn } from './narrow';
 
@@ -18,6 +18,8 @@ export interface Vehicle {
   panic?: { side: 1 | -1; back?: boolean }; // паника: рывок от игрока, затем перекоррекция через всю дорогу к другому краю
   crashed?: boolean;       // встала в отбойник — стоит и не двигается
   scored?: boolean;        // очки за провокацию уже начислены
+  n?: number;              // число полос в прошлом кадре — чтобы смена числа полос не дёргала машину
+  wPrev?: number;
 }
 
 // Проезд впритирку (M2 Near Miss, M3 провокация): борта ближе margin при продольном перекрытии.
@@ -28,6 +30,21 @@ export function brushSide(carOff: number, carW: number, carS: number, carL: numb
   const gap = Math.abs(off - carOff) - (carW + c.W) / 2;
   if (gap < 0 || gap > margin) return 0;
   return off > carOff ? 1 : -1;
+}
+
+// Где впереди в [s, s + look] исчезает полоса lane (дорога сужается); null — не исчезает
+export function laneVanish(width: number | WidthFn, lane: number, s: number, look: number): number | null {
+  if (typeof width === 'number') return lanesFor(width) <= lane ? s : null;
+  for (let x = s; x <= s + look; x += 30) if (lanesFor(width(x)) <= lane) return x;
+  return null;
+}
+
+// Наименьшее число полос впереди в [s, s + look]
+export function lanesAhead(width: number | WidthFn, s: number, look: number): number {
+  if (typeof width === 'number') return lanesFor(width);
+  let n = LANES;
+  for (let x = s; x <= s + look; x += 30) n = Math.min(n, lanesFor(width(x)));
+  return n;
 }
 
 // Все полосы закрыты впереди — полное перекрытие
@@ -69,7 +86,7 @@ export function rng(seed: number): () => number {
   };
 }
 
-export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number, cars: TrafficCar[] = [], layout?: Layout): Vehicle[] {
+export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number, cars: TrafficCar[] = [], layout?: Layout, width?: number | WidthFn): Vehicle[] {
   const r = rng(seed);
   const traffic: Vehicle[] = [];
   const n = Math.round(path.L / 380 * density);
@@ -78,6 +95,7 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
       const s = 250 + r() * (path.L - 500), lane = Math.floor(r() * LANES);
       if (traffic.some(c => c.lane === lane && Math.abs(c.s - s) < 130)) continue;
       if (layout && blockAhead(layout, lane, s - 120, 240) !== null) continue; // не рождаться на посту
+      if (width !== undefined && lane >= lanesAhead(width, s - 120, 240)) continue; // и в исчезнувшей полосе сужения
       const spd = playerSpeed * (0.4 + r() * 0.3);
       // pick — из координаты спавна, а не из rng: последовательность rng должна остаться прежней
       traffic.push({ s, lane, shift: 0, spd, v: spd, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[Math.floor(r() * 5)], pick: (Math.sin(s * 12.9898) * 43758.5453) % 1 });
@@ -112,18 +130,27 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
     }
     let sp = c.spd;
     // у поста колонна растягивается до gateGap — иначе в единственную проходную полосу не втиснуться
-    const follow = ai && anyBlockAhead(ai.layout, c.s, TRAFFIC_AI.look) ? TRAFFIC_AI.gateGap : 110;
+    // число полос по местной ширине: при его смене центр полосы прыгает — компенсируем сдвигом, он сам рассосётся
+    if (ai) {
+      const w = widthAt(ai.width, c.s), n = lanesFor(w);
+      if (c.n !== undefined && c.n !== n && c.wPrev !== undefined) c.shift += laneOff(c.wPrev, c.lane) - laneOff(w, c.lane);
+      c.n = n; c.wPrev = w;
+    }
+    const narrowing = ai ? lanesAhead(ai.width, c.s, TRAFFIC_AI.look) < lanesFor(widthAt(ai.width, c.s)) : false;
+    const follow = ai && (narrowing || anyBlockAhead(ai.layout, c.s, TRAFFIC_AI.look)) ? TRAFFIC_AI.gateGap : 110;
     for (let j = i + 1; j < traffic.length; j++) {
       const o = traffic[j];
       // у поста задняя едет медленнее передней, пока окно не раскроется до gateGap; вне поста — просто не ближе 110
       if (o.lane === c.lane) { if (o.s - c.s < follow) sp = Math.min(sp, follow > 110 ? Math.max(0, o.v - 60) : o.v); break; }
     }
     if (ai) {
-      const ahead = blockAhead(ai.layout, c.lane, c.s, TRAFFIC_AI.look);
+      const van = laneVanish(ai.width, c.lane, c.s, TRAFFIC_AI.look), blk = blockAhead(ai.layout, c.lane, c.s, TRAFFIC_AI.look);
+      const ahead = van === null ? blk : blk === null ? van : Math.min(van, blk);
+      const nAhead = lanesAhead(ai.width, c.s, TRAFFIC_AI.look);
       if (ahead !== null) {
         // свободная полоса — ближайшая по номеру, без заграждения впереди и без соседа рядом
         let best = -1, bestD = LANES;
-        for (let l = 0; l < LANES; l++) {
+        for (let l = 0; l < nAhead; l++) {
           if (l === c.lane || blockAhead(ai.layout, l, c.s, TRAFFIC_AI.look) !== null) continue;
           // сосед рядом или впереди ближе gateGap — в эту полосу пока нельзя
           if (traffic.some(o => o !== c && o.lane === l && (Math.abs(o.s - c.s) < TRAFFIC_AI.safeGap || (o.s > c.s && o.s - c.s < TRAFFIC_AI.gateGap)))) continue;

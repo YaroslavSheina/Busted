@@ -19,6 +19,8 @@ export const P = {
 export type ParamKey = keyof typeof P;
 
 export const LANES = 3;
+// Полоса уже этого исчезает: полос = clamp(floor(width / LANE_MIN), 1, LANES). Ширина ≥ 135 — три полосы, ≥ 90 — две
+export const LANE_MIN = 45;
 
 // Габариты машин трафика, px (игрок — см. cars.ts)
 export const TRAFFIC_SIZE = { W: 26, L: 48 };
