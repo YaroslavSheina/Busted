@@ -7,6 +7,9 @@ import type { Narrow } from './narrow';
 import type { RailDef } from './rails';
 import type { CrossingDef } from './crossings';
 
+// Окружение — только для отрисовки, физика его не знает (docs/mechanics.md, «город»)
+export interface Prop { type: 'building'; x: number; y: number; w: number; h: number; tone?: number }
+
 // Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же)
 export interface Chaser { gap: number; speed: number }
 
@@ -25,6 +28,7 @@ export interface LevelData {
   narrows?: Narrow[];  // необязательно: сужения дороги (docs/mechanics.md, M6)
   rails?: RailDef[];   // необязательно: переезды на главной дороге (docs/mechanics.md, M7)
   crossings?: CrossingDef[]; // необязательно: перекрёстки со светофором (docs/mechanics.md, M9)
+  props?: Prop[];      // необязательно: здания и прочее окружение
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

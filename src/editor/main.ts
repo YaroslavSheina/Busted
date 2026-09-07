@@ -41,7 +41,8 @@ function changed(): void {
   const n = level.points.length, cars = level.cars?.length ?? 0;
   $('stats').textContent = (n < 2 ? `${n} ${n === 1 ? 'точка' : 'точек'} — нужно минимум 2` : `${n} точек · длина ${Math.round(buildPath(level.points).L)} px`)
     + (cars ? ` · машин: ${cars}` : '')
-    + (level.branches?.length ? ` · веток: ${level.branches.length}` : '');
+    + (level.branches?.length ? ` · веток: ${level.branches.length}` : '')
+    + (level.props?.length ? ` · зданий: ${level.props.length}` : '');
   syncSel();
   syncBlocks();
   syncBranches();
@@ -216,7 +217,7 @@ function syncPanel(): void {
 }
 
 function load(l: LevelData): void {
-  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.narrows; delete level.rails; delete level.crossings;
+  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.narrows; delete level.rails; delete level.crossings; delete level.props;
   Object.assign(level, structuredClone(l));
   level.car ??= DEFAULT_CAR;
   select(null);

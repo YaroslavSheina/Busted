@@ -153,7 +153,7 @@ src/
     main.ts        — панель, экспорт/импорт, «Играть» через createGame на той же странице
     canvas.ts      — холст: панорама, зум, точки; дорога рисуется drawRoad
     io.ts          — формат файла уровня, валидация импорта
-levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings? } — см. docs/mechanics.md
+levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings?, props? } — см. docs/mechanics.md
 docs/concept.md
 docs/design.md     — диздок BUSTED
 docs/mechanics.md  — лаборатория механик: карточки идей со статусами, формат данных каждой

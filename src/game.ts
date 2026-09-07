@@ -162,13 +162,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
         const b = roads[i].def!;
         if (who.s < b.from - BRANCH.lead || who.s > b.from + BRANCH.zone) continue;
         const nb = nearest(roads[i].path, x, y, who.s - (b.from - BRANCH.lead));
-        if (nb.s > BRANCH.lead && Math.abs(nb.off) < Math.abs(nr.off)) { who.road = i; nr = nb; }
+        // на ветку — только если её ось заметно ближе (BRANCH.hyst): на общем заходе оси совпадают, а у начала дуги расходятся постепенно
+        if (nb.s > BRANCH.lead && Math.abs(nb.off) < Math.abs(nr.off) - BRANCH.hyst) { who.road = i; nr = nb; }
       }
     } else {
       const r = roads[who.road], b = r.def!;
       if (who.s > r.path.L - BRANCH.zone) {
         const nm = nearest(roads[0].path, x, y, b.to - (r.path.L - who.s));
-        if (Math.abs(nm.off) <= Math.abs(nr.off) || who.s >= r.path.L - BRANCH.lead) { who.road = 0; nr = nm; }
+        if (Math.abs(nm.off) < Math.abs(nr.off) - BRANCH.hyst || who.s >= r.path.L - BRANCH.lead) { who.road = 0; nr = nm; }
       }
     }
     who.s = nr.s;
@@ -373,7 +374,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
     const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings }));
     render(ctx, view, {
-      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined,
+      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
     });
     hudT += dt;

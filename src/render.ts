@@ -4,6 +4,7 @@ import { heading, pathAt, type Path } from './road';
 import { vehiclePose, type Vehicle } from './traffic';
 import type { CarState } from './physics';
 import type { CarSpec } from './cars';
+import type { Prop } from './levels';
 import type { Layout } from './blocks';
 import { widthAt, type WidthFn } from './narrow';
 import { RAIL } from './config';
@@ -31,6 +32,7 @@ export interface Scene {
   zoom?: number;                                                 // зум камеры (слоу-мо провокации)
   fx?: Fx[];                                                     // всплывающие очки и искры
   air?: number;                                                  // прыжок: 0..1 — фаза полёта, undefined — на земле
+  props?: Prop[];                                                // здания и окружение
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
 
@@ -191,6 +193,20 @@ export function drawRails(ctx: CanvasRenderingContext2D, rails: Rail[], width: n
   }
 }
 
+// Окружение: здания сверху — корпус, крыша с отступом, сетка окон. Рисуется под дорогами
+export function drawProps(ctx: CanvasRenderingContext2D, props: Prop[]): void {
+  for (const p of props) {
+    if (p.type !== 'building') continue;
+    const t = p.tone ?? 0.5;
+    ctx.fillStyle = `rgb(${Math.round(30 + t * 14)},${Math.round(33 + t * 14)},${Math.round(40 + t * 16)})`;
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 3; ctx.strokeRect(p.x, p.y, p.w, p.h);
+    ctx.fillStyle = `rgba(255,255,255,${0.03 + t * 0.03})`; ctx.fillRect(p.x + 10, p.y + 10, p.w - 20, p.h - 20);
+    ctx.fillStyle = 'rgba(255,230,160,.08)';
+    for (let x = p.x + 18; x < p.x + p.w - 10; x += 16) for (let y = p.y + 18; y < p.y + p.h - 10; y += 16) ctx.fillRect(x, y, 4, 4);
+  }
+}
+
 // Перекрёсток: поперечная улица под маршрутом, светофоры по правым углам, машины группы
 export function drawCrossingRoad(ctx: CanvasRenderingContext2D, c: Crossing): void {
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.hCross); // ось y — вдоль поперечной улицы
@@ -202,6 +218,11 @@ export function drawCrossingRoad(ctx: CanvasRenderingContext2D, c: Crossing): vo
 }
 export function drawCrossingTop(ctx: CanvasRenderingContext2D, c: Crossing, roadWidth: number, time: number): void {
   const light = lightAt(c, time);
+  // зебры через маршрут по обе стороны поперечной улицы
+  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(Math.atan2(c.tx, -c.ty)); // ось y — вдоль маршрута
+  ctx.fillStyle = 'rgba(236,233,224,.55)';
+  for (const side of [-1, 1]) { const y0 = side * (c.w / 2 + 6) - (side > 0 ? 0 : 20); for (let x = -roadWidth / 2 + 6; x < roadWidth / 2 - 6; x += 12) ctx.fillRect(x, y0, 6, 20); }
+  ctx.restore();
   // светофоры на правом углу перед перекрёстком и на левом за ним — оба видны игроку по ходу
   for (const [side, ahead] of [[1, -1], [-1, 1]] as const) {
     const px = c.x + c.nx * side * (roadWidth / 2 + 14) + c.tx * ahead * (c.w / 2 + 14);
@@ -303,7 +324,8 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = '#15171c'; ctx.fillRect(0, 0, W, H);
   ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-cam.x, -cam.y);
   drawGrid(ctx, cam.x - W / 2 / z, cam.y - H / 2 / z, cam.x + W / 2 / z, cam.y + H / 2 / z);
-  // поперечные улицы под всем, ветки под главной: её разметка и финиш сверху на стыках
+  // здания под всем, потом поперечные улицы, ветки под главной: её разметка и финиш сверху на стыках
+  if (sc.props?.length) drawProps(ctx, sc.props);
   for (const r of roads) for (const c of r.crossings ?? []) drawCrossingRoad(ctx, c);
   for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0);
   for (const r of roads) drawBlocks(ctx, r.path, r.width, r.blocks, sc.t ?? 0);

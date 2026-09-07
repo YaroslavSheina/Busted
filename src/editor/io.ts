@@ -7,6 +7,7 @@ import type { BranchDef } from '../roads';
 import type { Narrow } from '../narrow';
 import type { RailDef } from '../rails';
 import type { CrossingDef } from '../crossings';
+import type { Prop } from '../levels';
 
 // Точки и машины по одной в строке — так JSON читается и правится руками
 export function formatLevel(l: LevelData): string {
@@ -18,13 +19,14 @@ export function formatLevel(l: LevelData): string {
   const panic = l.panic ? `,\n  "panic": ${l.panic}` : '';
   const rails = l.rails?.length ? `,\n  "rails": [\n${l.rails.map(r => '    ' + JSON.stringify(r)).join(',\n')}\n  ]` : '';
   const crossings = l.crossings?.length ? `,\n  "crossings": [\n${l.crossings.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ]` : '';
+  const props = l.props?.length ? `,\n  "props": [\n${l.props.map(p => '    ' + JSON.stringify(p)).join(',\n')}\n  ]` : '';
   const narrows = l.narrows?.length ? `,\n  "narrows": [\n${l.narrows.map(n => '    ' + JSON.stringify(n)).join(',\n')}\n  ]` : '';
   const blocks = l.blocks?.length ? `,\n  "blocks": [\n${l.blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ]` : '';
   const branches = l.branches?.length
     ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${narrows}${rails}${crossings}${blocks}${branches}\n}\n`;
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -89,6 +91,15 @@ export function parseLevel(raw: unknown): LevelData {
   }
   if (o.panic !== undefined) { if (!isNum(o.panic) || o.panic < 0 || o.panic > 1) throw new Error('«panic» — число 0..1'); level.panic = o.panic; }
   if (o.narrows !== undefined) level.narrows = parseNarrows(o.narrows, 'сужение');
+  if (o.props !== undefined) {
+    if (!Array.isArray(o.props)) throw new Error('«props» должно быть массивом');
+    level.props = o.props.map((p, i): Prop => {
+      if (typeof p !== 'object' || p === null || p.type !== 'building' || !isNum(p.x) || !isNum(p.y) || !isNum(p.w) || !isNum(p.h)) throw new Error(`prop ${i}: building с x, y, w, h`);
+      const out: Prop = { type: 'building', x: p.x, y: p.y, w: p.w, h: p.h };
+      if (p.tone !== undefined) { if (!isNum(p.tone)) throw new Error(`prop ${i}: tone число`); out.tone = p.tone; }
+      return out;
+    });
+  }
   if (o.crossings !== undefined) {
     if (!Array.isArray(o.crossings)) throw new Error('«crossings» должно быть массивом');
     level.crossings = o.crossings.map((c, i): CrossingDef => {

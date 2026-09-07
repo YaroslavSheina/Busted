@@ -2,7 +2,7 @@
 // Дорога и машины рисуются теми же drawRoad/drawCar, что и в игре.
 import { lanesFor } from '../road';
 import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road';
-import { drawBlocks, drawCar, drawCrossingRoad, drawCrossingTop, drawGrid, drawPolice, drawRails, drawRamp, drawRoad } from '../render';
+import { drawBlocks, drawCar, drawCrossingRoad, drawCrossingTop, drawGrid, drawPolice, drawProps, drawRails, drawRamp, drawRoad } from '../render';
 import { layoutRails } from '../rails';
 import { layoutCrossings } from '../crossings';
 import { layoutBlocks } from '../blocks';
@@ -75,6 +75,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     if (path) {
       // ветки: под главной, без финиша; их промежуточные точки — синие
       const wMain = makeWidthFn(() => l.width, l.narrows);
+      if (l.props?.length) drawProps(ctx, l.props);
       const crossings = layoutCrossings(path, l.crossings, l.width);
       for (const c of crossings) drawCrossingRoad(ctx, c);
       (l.branches ?? []).forEach((b, bi) => {
