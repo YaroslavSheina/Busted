@@ -25,7 +25,7 @@
   ],
   "rails": [
     { "s": 900, "period": 20, "speed": 400, "length": 300, "offset": -0.9 },
-    { "s": 2000, "period": 12, "speed": 200, "length": 800, "offset": -0.7 }
+    { "s": 2000, "period": 12, "speed": 200, "length": 800, "offset": 1.8 }
   ],
   "blocks": [
     { "s": 4300, "police": [0, 1, 2] },
