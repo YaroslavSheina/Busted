@@ -1,5 +1,5 @@
 // Трафик: детерминированный спавн, движение вдоль сплайна, перестроение перед заграждениями, OBB и SAT.
-import { LANES, PANIC, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
+import { LANES, PANIC, RAMP, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { heading, laneOff, lanesFor, pathAt, type Path } from './road';
 import type { Layout } from './blocks';
 import { widthAt, type WidthFn } from './narrow';
@@ -20,6 +20,7 @@ export interface Vehicle {
   scored?: boolean;        // очки за провокацию уже начислены
   n?: number;              // число полос в прошлом кадре — чтобы смена числа полос не дёргала машину
   wPrev?: number;
+  kind?: 'ramp';           // грузовик-рампа: заезд сзади запускает прыжок
 }
 
 // Проезд впритирку (M2 Near Miss, M3 провокация): борта ближе margin при продольном перекрытии.
@@ -70,7 +71,7 @@ export function blockAhead(layout: Layout, lane: number, s: number, look: number
 }
 
 // Явно расставленная машина уровня: speed в px/с, 0 — стоит
-export interface TrafficCar { s: number; lane: number; speed: number }
+export interface TrafficCar { s: number; lane: number; speed: number; type?: 'ramp' } // ramp — грузовик-рампа (M8)
 
 export interface Obb { c: [number, number][]; ax: [number, number][] }
 
@@ -103,7 +104,9 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
     }
   }
   // Явные машины уровня добавляются к seeded-трафику; при density 0 остаются только они
-  cars.forEach((c, i) => traffic.push({ s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[i % COLORS.length], pick: (i + 0.5) / (cars.length + 1) }));
+  cars.forEach((c, i) => traffic.push(c.type === 'ramp'
+    ? { s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: RAMP.W, L: RAMP.L, col: '#5d6470', pick: (i + 0.5) / (cars.length + 1), kind: 'ramp' }
+    : { s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: TRAFFIC_SIZE.W, L: TRAFFIC_SIZE.L, col: COLORS[i % COLORS.length], pick: (i + 0.5) / (cars.length + 1) }));
   return traffic;
 }
 

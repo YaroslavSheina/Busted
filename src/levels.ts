@@ -4,6 +4,7 @@ import type { TrafficCar } from './traffic';
 import type { Block } from './blocks';
 import type { BranchDef } from './roads';
 import type { Narrow } from './narrow';
+import type { RailDef } from './rails';
 
 // Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же)
 export interface Chaser { gap: number; speed: number }
@@ -21,6 +22,7 @@ export interface LevelData {
   branches?: BranchDef[]; // необязательно: ветки дороги (docs/mechanics.md, M5)
   panic?: number;      // необязательно: шанс паники трафика при проезде впритирку, 0..1 (docs/mechanics.md, M3)
   narrows?: Narrow[];  // необязательно: сужения дороги (docs/mechanics.md, M6)
+  rails?: RailDef[];   // необязательно: переезды на главной дороге (docs/mechanics.md, M7)
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

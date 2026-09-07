@@ -31,7 +31,7 @@ const canvas = initCanvas($<HTMLCanvasElement>('ec'), {
     select(null); changed();
   },
   addCar: c => { (level.cars ??= []).push(c); select({ kind: 'car', i: level.cars.length - 1 }); changed(); },
-  moveCar: (i, c) => { level.cars![i] = c; changed(); },
+  moveCar: (i, c) => { level.cars![i] = { ...c, ...(level.cars![i].type ? { type: level.cars![i].type } : {}) }; changed(); },
   removeCar: i => { level.cars!.splice(i, 1); select(null); changed(); },
 });
 
@@ -46,6 +46,7 @@ function changed(): void {
   syncBlocks();
   syncBranches();
   syncNarrows();
+  syncRails();
 }
 
 // Блок выбранной машины: положение и скорость
@@ -54,9 +55,15 @@ function syncSel(): void {
   if (sel?.kind !== 'car' || !level.cars?.[sel.i]) { box.hidden = true; return; }
   const c = level.cars[sel.i];
   box.hidden = false;
-  $('carInfo').textContent = `Машина ${sel.i} · s ${c.s} · полоса ${c.lane}`;
+  $('carInfo').textContent = `${c.type === 'ramp' ? 'Рампа' : 'Машина'} ${sel.i} · s ${c.s} · полоса ${c.lane}`;
   if (document.activeElement !== inp('carSpeed')) inp('carSpeed').value = String(c.speed);
+  inp('carRamp').checked = c.type === 'ramp';
 }
+inp('carRamp').onchange = () => {
+  if (sel?.kind !== 'car' || !level.cars) return;
+  if (inp('carRamp').checked) level.cars[sel.i].type = 'ramp'; else delete level.cars[sel.i].type;
+  syncSel(); canvas.draw();
+};
 inp('carSpeed').oninput = () => {
   if (sel?.kind !== 'car' || !level.cars) return;
   level.cars[sel.i].speed = Math.max(0, parseFloat(inp('carSpeed').value) || 0);
@@ -132,6 +139,25 @@ function syncNarrows(): void {
     row.appendChild(span); row.appendChild(del); list.appendChild(row);
   });
 }
+// Переезды (docs/mechanics.md, M7)
+function syncRails(): void {
+  const list = $('railList'); list.innerHTML = '';
+  (level.rails ?? []).forEach((r, i) => {
+    const row = document.createElement('div');
+    const span = document.createElement('span'); span.textContent = `переезд ${i}: s ${r.s}, поезд раз в ${r.period} с, ${r.speed} px/с, состав ${r.length}`;
+    const del = document.createElement('button'); del.textContent = '×';
+    del.onclick = () => { level.rails!.splice(i, 1); if (!level.rails!.length) delete level.rails; changed(); canvas.draw(); };
+    row.appendChild(span); row.appendChild(del); list.appendChild(row);
+  });
+}
+$('railAdd').onclick = () => {
+  const s = Math.round(parseFloat(inp('railS').value)), period = parseFloat(inp('railPeriod').value) || 6, speed = Math.round(parseFloat(inp('railSpeed').value)) || 400;
+  if (!Number.isFinite(s) || period < 2 || speed < 100) { status('Переезд: нужен s, период ≥ 2 с, скорость ≥ 100'); return; }
+  (level.rails ??= []).push({ s, period, speed, length: 300 });
+  level.rails.sort((a, b) => a.s - b.s);
+  changed(); canvas.draw();
+};
+
 $('narrowAdd').onclick = () => {
   const from = Math.round(parseFloat(inp('narrowFrom').value)), to = Math.round(parseFloat(inp('narrowTo').value)), width = Math.round(parseFloat(inp('narrowW').value));
   if (!Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(width) || to <= from || width < 60) { status('Сужение: нужны from < to и ширина ≥ 60'); return; }
@@ -170,7 +196,7 @@ function syncPanel(): void {
 }
 
 function load(l: LevelData): void {
-  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.narrows;
+  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.narrows; delete level.rails;
   Object.assign(level, structuredClone(l));
   level.car ??= DEFAULT_CAR;
   select(null);

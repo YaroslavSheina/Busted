@@ -1,5 +1,6 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, SCORE, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
+import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, RAMP, SCORE, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
+import { layoutRails, trainObb, type Rail } from './rails';
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
 import { buildPath, curvatureAt, heading, laneOff, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
@@ -38,6 +39,7 @@ interface Road {
   width: number | WidthFn; // ширина по s: базовая из P (слайдер) с сужениями уровня
   narrows?: Narrow[];
   blockDefs?: Block[];
+  rails: Rail[];
   blocks: Layout;
   solids: { obb: Obb; s: number; why: string }[];
   cars: TrafficCar[];
@@ -74,9 +76,11 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let score = 0;
   let fx: Fx[] = [];
   let buzzedPosts: Set<string>; // «дорога:индекс» полицейских машин постов, к которым уже прижимались
+  // Прыжок с рампы (M8): t — прошло, over — что пролетели (объекты считаем один раз)
+  let jump: { t: number; over: Set<object> } | null = null;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
-    const r: Road = { path, def, width: P.width.v, narrows, blockDefs: blocks, blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
+    const r: Road = { path, def, width: P.width.v, narrows, blockDefs: blocks, rails: [], blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
     refreshRoad(r);
     return r;
   }
@@ -98,6 +102,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     P.speed.v = spec.speed; P.steer.v = spec.steer; P.damp.v = spec.damp; P.grip.v = spec.grip; P.spin.v = spec.spin; P.skidGrip.v = spec.skidGrip;
     const main = buildPath(l.points);
     roads = [makeRoad(main, null, l.blocks, l.cars, l.narrows)];
+    roads[0].rails = layoutRails(main, l.rails);
     for (const b of l.branches ?? []) roads.push(makeRoad(buildBranchPath(main, b), b, b.blocks, b.cars, b.narrows));
     reset();
   }
@@ -113,7 +118,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     taken = new Set();
     flat = false;
     slow = 0; zoom = 1; flash = null;
-    score = 0; fx = []; buzzedPosts = new Set();
+    score = 0; fx = []; buzzedPosts = new Set(); jump = null;
     ui.overlay.className = '';
   }
 
@@ -198,10 +203,12 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     timeAlive += dt;
     const dir = currentDir();
     trackHold(dir, dt);
+    if (jump) { jump.t += dt; if (jump.t >= RAMP.air) { const n = jump.over.size; jump = null; if (n) addScore(SCORE.flyOver * n, `ПЕРЕЛЁТ×${n}`, 1); } }
 
     // После ежей сцепление — BLOCK.flatGrip: формула та же, меняются только числа
     const grip = flat ? BLOCK.flatGrip : P.grip.v, skidGrip = flat ? BLOCK.flatGrip : P.skidGrip.v;
-    step(car, dir, { speed: P.speed.v, steer: P.steer.v, damp: P.damp.v, grip, spin: P.spin.v, skidGrip, sens: P.sens.v }, dt);
+    // в полёте руль не работает: та же формула, ввод 0
+    step(car, jump ? 0 : dir, { speed: P.speed.v, steer: P.steer.v, damp: P.damp.v, grip, spin: P.spin.v, skidGrip, sens: P.sens.v }, dt);
     if (car.skid) marks.push({ x: car.x, y: car.y, a: 1 });
     for (const m of marks) m.a -= dt * 0.4;
     marks = marks.filter(m => m.a > 0).slice(-200);
@@ -219,7 +226,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const wHere = widthAt(rd.width, car.s);
     let limit = wHere / 2 + P.tol.v;
     for (const b of rd.blocks.bypasses) if (car.s >= b.s0 && car.s <= b.s1 && Math.sign(car.off) === b.side) limit += BLOCK.bypassW;
-    if (Math.abs(car.off) > limit) {
+    if (!jump && Math.abs(car.off) > limit) {
       if (flat) return busted('ежи');
       // Дорога под колёсами есть, но это другой участок маршрута (срезал кольцо, выехал на встречный рукав)
       const onOther = roads.some(r => { const n = nearestGlobal(r.path, car.x, car.y); return Math.abs(n.off) <= widthAt(r.width, n.s) / 2 + P.tol.v; });
@@ -230,12 +237,37 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: r.width, playerS: r === rd ? car.s : undefined, playerL: car.L });
     if (roads.length > 1) flowTraffic();
     const me = obb(car.x, car.y, car.h, car.W, car.L);
-    // Паникёр, пока мечется, не убивает игрока — провокация награда, а не ловушка; вставший у края — обычное препятствие
-    if (collides(rd.traffic.filter(c => !(c.panic && !c.crashed)), rd.path, rd.width, me, car.s)) return busted('столкновение');
-    for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
+    // Заезд на рампу сзади, ровно и быстрее грузовика — прыжок (M8); с борта или под углом — обычное столкновение
+    if (!jump) for (const c of rd.traffic) {
+      if (c.kind !== 'ramp' || Math.abs(c.s - car.s) > 120) continue;
+      const p = vehiclePose(rd.path, c, rd.width);
+      let dh = car.h - p.h; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI;
+      const rearOk = car.s < c.s && car.s + car.L / 2 >= c.s - c.L / 2;
+      const off = laneOff(widthAt(rd.width, c.s), c.lane) + c.shift;
+      const fits = Math.abs(car.off - off) <= (c.W - car.W) / 2 + 6;
+      if (rearOk && fits && Math.abs(dh) < RAMP.alignDeg * Math.PI / 180 && P.speed.v - c.v >= RAMP.minRel) {
+        jump = { t: 0, over: new Set() }; addScore(SCORE.jump, 'ТРЮК', 1); break;
+      }
+    }
+    if (jump) {
+      // в полёте ничего не задевает, но всё, над чем пролетели, — в копилку
+      for (const c of rd.traffic) if (c.kind !== 'ramp' && Math.abs(c.s - car.s) < 120) { const p = vehiclePose(rd.path, c, rd.width); if (hit(me, obb(p.x, p.y, p.h, c.W, c.L))) jump.over.add(c); }
+      for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) jump.over.add(o);
+      for (const r of rd.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - car.s) < 200 && hit(me, t)) jump.over.add(r); }
+    } else {
+      // Паникёр, пока мечется, не убивает игрока — провокация награда, а не ловушка; вставший у края — обычное препятствие
+      if (collides(rd.traffic.filter(c => !(c.panic && !c.crashed) && !(c.kind === 'ramp' && car.s < c.s)), rd.path, rd.width, me, car.s)) return busted('столкновение');
+      for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
+      for (const r of rd.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - car.s) < 200 && hit(me, t)) return busted('поезд'); }
+    }
+    // Поезд сносит трафик на переезде
+    for (const r of rd.rails) {
+      const t = trainObb(r, timeAlive); if (!t) continue;
+      for (const c of rd.traffic) if (!c.crashed && Math.abs(c.s - r.s) < 80) { const p = vehiclePose(rd.path, c, rd.width); if (hit(t, obb(p.x, p.y, p.h, c.W, c.L))) { c.crashed = true; c.v = 0; } }
+    }
     // Проезд впритирку (M2): Near Miss, один на машину; с шансом level.panic водитель ещё и пугается (M3)
     for (const c of rd.traffic) {
-      if (c.buzzed || c.crashed || Math.abs(c.s - car.s) > 120) continue;
+      if (c.buzzed || c.crashed || c.kind === 'ramp' || jump || Math.abs(c.s - car.s) > 120) continue;
       const side = brushSide(car.off, car.W, car.s, car.L, c, rd.width, PANIC.margin);
       if (!side) continue;
       c.buzzed = true;
@@ -255,7 +287,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     });
     // Спровоцированный паникёр встал в отбойник — очки за тактику
     for (const c of rd.traffic) if (c.panic && c.crashed && !c.scored) { c.scored = true; addScore(SCORE.panic, 'ПРОВОКАЦИЯ', c.panic.side); }
-    if (!flat) for (const sp of rd.blocks.spikes) {
+    if (!jump && !flat) for (const sp of rd.blocks.spikes) {
       if (Math.abs(sp.s - car.s) > 120 || !hit(me, obb(sp.x, sp.y, sp.h, sp.w, sp.l))) continue;
       // Ежи: сцепления больше нет, машину сносит к ближайшему кювету
       flat = true; car.skid = true;
@@ -282,7 +314,10 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       chaser.off = Math.max(-lim, Math.min(lim, chaser.off));
       const c = chaserPose();
       const cop = obb(c.x, c.y, c.h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L);
-      if (chaser.road === car.road && hit(me, cop)) return busted('догнали');
+      if (!jump && chaser.road === car.road && hit(me, cop)) return busted('догнали');
+      // Коп под поездом
+      for (const r of cr.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - chaser.s) < 120 && hit(cop, t)) { chaser = null; flash = { text: 'коп под поездом', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', 1); break; } }
+      if (!chaser) { const vl0 = Math.hypot(car.vx, car.vy) || 1; const cl0 = Math.min(1, CAM_LERP * dt); cam.x += (car.x + car.vx / vl0 * CAM_AHEAD - cam.x) * cl0; cam.y += (car.y + car.vy / vl0 * CAM_AHEAD - cam.y) * cl0; return; }
       // Паникёр снёс копа — полиция выбывает из погони
       for (const v of cr.traffic) {
         if (!v.panic || Math.abs(v.s - chaser.s) > 120) continue;
@@ -314,9 +349,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (!paused) update(slow > 0 ? dt * PANIC.slowScale : dt);
     // Хвост считаем по главной дороге, чтобы сравнивать положение на разных ветках
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
-    const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width }));
+    const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails }));
     render(ctx, view, {
-      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx,
+      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
     });
     hudT += dt;

@@ -6,13 +6,15 @@ import type { CarState } from './physics';
 import type { CarSpec } from './cars';
 import type { Layout } from './blocks';
 import { widthAt, type WidthFn } from './narrow';
+import { RAIL } from './config';
+import { trainHead, untilTrain, type Rail } from './rails';
 import { BLOCK } from './config';
 
 export interface View { W: number; H: number; DPR: number }
 export interface Mark { x: number; y: number; a: number }
 export interface Cam { x: number; y: number }
 
-export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout; width: number | WidthFn }
+export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout; width: number | WidthFn; rails?: Rail[] }
 
 // Эффекты очков: всплывающий текст или искра; t — остаток жизни, с
 export interface Fx { x: number; y: number; t: number; text?: string; vx?: number; vy?: number }
@@ -26,6 +28,7 @@ export interface Scene {
   t?: number;                                                    // время попытки — для мигалки
   zoom?: number;                                                 // зум камеры (слоу-мо провокации)
   fx?: Fx[];                                                     // всплывающие очки и искры
+  air?: number;                                                  // прыжок: 0..1 — фаза полёта, undefined — на земле
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
 
@@ -134,6 +137,58 @@ export function drawBlocks(ctx: CanvasRenderingContext2D, path: Path, width: num
   for (const p of b.police) drawPolice(ctx, p.x, p.y, p.h, t);
 }
 
+// Грузовик-рампа: длинный тягач, сзади наклонная рампа с полосами
+export function drawRamp(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, w: number, l: number): void {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(h);
+  ctx.fillStyle = '#5d6470'; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(20,22,28,.6)'; ctx.fillRect(-w / 2 + 4, -l / 2 + 6, w - 8, 10); // кабина
+  // рампа: от середины к корме светлеет — «поднимается»
+  const g = ctx.createLinearGradient(0, -l / 2 + 22, 0, l / 2);
+  g.addColorStop(0, '#3a3f4a'); g.addColorStop(1, '#8b93a3');
+  ctx.fillStyle = g; ctx.fillRect(-w / 2 + 3, -l / 2 + 22, w - 6, l - 25);
+  ctx.fillStyle = '#f4b942';
+  for (let yy = -l / 2 + 30; yy < l / 2 - 6; yy += 14) { ctx.fillRect(-w / 2 + 3, yy, 5, 6); ctx.fillRect(w / 2 - 8, yy, 5, 6); }
+  ctx.fillStyle = '#e04a3a'; ctx.fillRect(-w / 2 + 3, l / 2 - 3, 6, 2); ctx.fillRect(w / 2 - 9, l / 2 - 3, 6, 2);
+  ctx.restore();
+}
+
+// Переезд: рельсы со шпалами через дорогу, знаки с огнями по краям, состав
+export function drawRails(ctx: CanvasRenderingContext2D, rails: Rail[], width: number | WidthFn, time: number): void {
+  for (const r of rails) {
+    const w = widthAt(width, r.s);
+    ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(r.h); // теперь ось y — вдоль рельсов
+    ctx.fillStyle = '#2a2d34'; ctx.fillRect(-20, -RAIL.reach, 40, RAIL.reach * 2); // насыпь
+    ctx.fillStyle = '#4a4438';
+    for (let t = -RAIL.reach; t < RAIL.reach; t += 18) ctx.fillRect(-16, t, 32, 6); // шпалы
+    ctx.fillStyle = '#9aa0ab'; ctx.fillRect(-9, -RAIL.reach, 3, RAIL.reach * 2); ctx.fillRect(6, -RAIL.reach, 3, RAIL.reach * 2); // рельсы
+    // знаки с огнями по обе стороны дороги: мигают, когда поезд близко
+    const soon = untilTrain(r, time) < RAIL.warn, red = Math.floor(time / 0.25) % 2 === 0;
+    for (const side of [-1, 1]) {
+      const ty = side * (w / 2 + 16);
+      ctx.fillStyle = '#ece9e0'; ctx.fillRect(-3, ty - 10, 6, 20);
+      ctx.fillStyle = '#e04a3a'; ctx.fillRect(-3, ty - 10, 6, 5); ctx.fillRect(-3, ty + 2, 6, 5);
+      for (const k of [-1, 1]) {
+        ctx.fillStyle = soon && (red === (k === -1)) ? '#ff4a4a' : '#3a1c1c';
+        ctx.beginPath(); ctx.arc(k * 7, ty, 4, 0, 7); ctx.fill();
+      }
+    }
+    // состав: вагоны с окнами, головной с прожектором
+    const head = trainHead(r, time), tail = head - r.def.length;
+    if (head > -RAIL.reach && tail < RAIL.reach) {
+      const n = Math.max(1, Math.round(r.def.length / 90)), seg = r.def.length / n;
+      for (let i = 0; i < n; i++) {
+        const y0 = tail + i * seg;
+        ctx.fillStyle = i === n - 1 ? '#b8412f' : '#7a5a3a'; ctx.beginPath(); ctx.roundRect(-RAIL.trainW / 2, y0 + 2, RAIL.trainW, seg - 4, 5); ctx.fill();
+        ctx.fillStyle = 'rgba(236,233,224,.35)';
+        for (let yy = y0 + 12; yy < y0 + seg - 12; yy += 16) ctx.fillRect(-RAIL.trainW / 2 + 5, yy, 6, 8), ctx.fillRect(RAIL.trainW / 2 - 11, yy, 6, 8);
+      }
+      ctx.fillStyle = 'rgba(255,240,180,.25)'; ctx.beginPath(); ctx.moveTo(-8, head); ctx.lineTo(8, head); ctx.lineTo(30, head + 120); ctx.lineTo(-30, head + 120); ctx.fill();
+      ctx.fillStyle = '#fff3c4'; ctx.fillRect(-6, head - 4, 12, 4);
+    }
+    ctx.restore();
+  }
+}
+
 // Полицейская машина с мигалкой; t — время для чередования цветов
 export function drawPolice(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, t: number): void {
   const red = Math.floor(t / 0.12) % 2 === 0;
@@ -197,19 +252,28 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   // ветки под главной: её разметка и финиш сверху на стыках
   for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0);
   for (const r of roads) drawBlocks(ctx, r.path, r.width, r.blocks, sc.t ?? 0);
+  for (const r of roads) if (r.rails?.length) drawRails(ctx, r.rails, r.width, sc.t ?? 0);
   // следы заноса
   for (const m of marks) { ctx.fillStyle = `rgba(0,0,0,${m.a * 0.35})`; ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, 7); ctx.fill(); }
   // трафик
   for (const r of roads) for (const c of r.traffic) {
     const v = vehiclePose(r.path, c, r.width);
-    drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.crashed ? '#4a4d55' : c.col, false);
+    if (c.kind === 'ramp') drawRamp(ctx, v.x, v.y, v.h, c.W, c.L);
+    else drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.crashed ? '#4a4d55' : c.col, false);
     if (c.panic && !c.crashed) { // «!» над испуганным водителем
       ctx.fillStyle = '#f4b942'; ctx.beginPath(); ctx.arc(v.x, v.y - 34, 11, 0, 7); ctx.fill();
       ctx.fillStyle = '#1a1408'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', v.x, v.y - 33);
     }
   }
   if (sc.chaser) drawPolice(ctx, sc.chaser.x, sc.chaser.y, sc.chaser.h, sc.t ?? 0);
-  drawPlayer(ctx, car.x, car.y, car.h, sc.spec);
+  if (sc.air !== undefined) {
+    // в полёте: тень на земле, машина крупнее по дуге
+    const k = Math.sin(Math.PI * sc.air), sc2 = 1 + 0.45 * k;
+    ctx.fillStyle = `rgba(0,0,0,${0.35 - 0.2 * k})`; ctx.beginPath(); ctx.ellipse(car.x, car.y, car.W * 0.7, car.L * 0.55, car.h, 0, 7); ctx.fill();
+    ctx.save(); ctx.translate(car.x, car.y - 30 * k); ctx.scale(sc2, sc2); ctx.translate(-car.x, -car.y);
+    drawPlayer(ctx, car.x, car.y, car.h, sc.spec);
+    ctx.restore();
+  } else drawPlayer(ctx, car.x, car.y, car.h, sc.spec);
   // искры и всплывающие очки — в мире, но текст не вращается с камерой (камера и так не вращается)
   for (const f of sc.fx ?? []) {
     const a = Math.min(1, f.t * 2);

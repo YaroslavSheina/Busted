@@ -2,7 +2,8 @@
 // Дорога и машины рисуются теми же drawRoad/drawCar, что и в игре.
 import { lanesFor } from '../road';
 import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road';
-import { drawBlocks, drawCar, drawGrid, drawPolice, drawRoad } from '../render';
+import { drawBlocks, drawCar, drawGrid, drawPolice, drawRails, drawRamp, drawRoad } from '../render';
+import { layoutRails } from '../rails';
 import { layoutBlocks } from '../blocks';
 import { buildBranchPath } from '../roads';
 import { makeWidthFn, widthAt } from '../narrow';
@@ -89,6 +90,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       drawRoad(ctx, path, wMain);
       const mainLayout = layoutBlocks(path, wMain, l.blocks);
       if (l.blocks?.length) drawBlocks(ctx, path, wMain, mainLayout, 0);
+      if (l.rails?.length) drawRails(ctx, layoutRails(path, l.rails), wMain, 0);
       if (l.chaser) { const p = pathAtExt(path, -l.chaser.gap); ctx.globalAlpha = 0.6; drawPolice(ctx, p.x, p.y, Math.atan2(p.tx, -p.ty), 0); ctx.globalAlpha = 1; }
       // seeded-трафик — полупрозрачно, как ориентир для расстановки явных машин
       ctx.globalAlpha = 0.3;
@@ -98,7 +100,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       explicit = spawnTraffic(path, 0, spec.speed, l.seed, l.cars ?? []);
       explicit.forEach((c, i) => {
         const v = vehiclePose(path!, c, wMain);
-        drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false);
+        if (c.kind === 'ramp') drawRamp(ctx, v.x, v.y, v.h, c.W, c.L); else drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.col, false);
         if (sel?.kind === 'car' && sel.i === i) {
           ctx.save(); ctx.translate(v.x, v.y); ctx.rotate(v.h);
           ctx.lineWidth = 2 / zoom; ctx.strokeStyle = '#fff'; ctx.strokeRect(-c.W / 2 - 4, -c.L / 2 - 4, c.W + 8, c.L + 8);

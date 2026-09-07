@@ -5,22 +5,24 @@ import type { TrafficCar } from '../traffic';
 import type { Block } from '../blocks';
 import type { BranchDef } from '../roads';
 import type { Narrow } from '../narrow';
+import type { RailDef } from '../rails';
 
 // Точки и машины по одной в строке — так JSON читается и правится руками
 export function formatLevel(l: LevelData): string {
   const pts = l.points.map(p => `    [${p[0]}, ${p[1]}]`).join(',\n');
   const cars = l.cars?.length
-    ? `,\n  "cars": [\n${l.cars.map(c => `    { "s": ${c.s}, "lane": ${c.lane}, "speed": ${c.speed} }`).join(',\n')}\n  ]`
+    ? `,\n  "cars": [\n${l.cars.map(c => `    { "s": ${c.s}, "lane": ${c.lane}, "speed": ${c.speed}${c.type ? `, "type": "${c.type}"` : ''} }`).join(',\n')}\n  ]`
     : '';
   const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed} }` : '';
   const panic = l.panic ? `,\n  "panic": ${l.panic}` : '';
+  const rails = l.rails?.length ? `,\n  "rails": [\n${l.rails.map(r => '    ' + JSON.stringify(r)).join(',\n')}\n  ]` : '';
   const narrows = l.narrows?.length ? `,\n  "narrows": [\n${l.narrows.map(n => '    ' + JSON.stringify(n)).join(',\n')}\n  ]` : '';
   const blocks = l.blocks?.length ? `,\n  "blocks": [\n${l.blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ]` : '';
   const branches = l.branches?.length
     ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${narrows}${blocks}${branches}\n}\n`;
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${narrows}${rails}${blocks}${branches}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -37,7 +39,9 @@ function parseCars(v: unknown, what: string): TrafficCar[] {
   if (!Array.isArray(v)) throw new Error(`«${what}» должно быть массивом`);
   return v.map((c, i): TrafficCar => {
     if (typeof c !== 'object' || c === null || !isNum(c.s) || !isNum(c.lane) || !isNum(c.speed)) throw new Error(`${what}: машина ${i} не { s, lane, speed }`);
-    return { s: c.s, lane: c.lane, speed: c.speed };
+    const out: TrafficCar = { s: c.s, lane: c.lane, speed: c.speed };
+    if (c.type !== undefined) { if (c.type !== 'ramp') throw new Error(`${what}: машина ${i}: type только ramp`); out.type = 'ramp'; }
+    return out;
   });
 }
 
@@ -83,6 +87,15 @@ export function parseLevel(raw: unknown): LevelData {
   }
   if (o.panic !== undefined) { if (!isNum(o.panic) || o.panic < 0 || o.panic > 1) throw new Error('«panic» — число 0..1'); level.panic = o.panic; }
   if (o.narrows !== undefined) level.narrows = parseNarrows(o.narrows, 'сужение');
+  if (o.rails !== undefined) {
+    if (!Array.isArray(o.rails)) throw new Error('«rails» должно быть массивом');
+    level.rails = o.rails.map((r, i): RailDef => {
+      if (typeof r !== 'object' || r === null || !isNum(r.s) || !isNum(r.period) || !isNum(r.speed) || !isNum(r.length)) throw new Error(`переезд ${i}: нужны s, period, speed, length`);
+      const out: RailDef = { s: r.s, period: r.period, speed: r.speed, length: r.length };
+      if (r.offset !== undefined) { if (!isNum(r.offset)) throw new Error(`переезд ${i}: offset число`); out.offset = r.offset; }
+      return out;
+    });
+  }
   if (o.blocks !== undefined) level.blocks = parseBlocks(o.blocks, 'заграждение');
   if (o.branches !== undefined) {
     if (!Array.isArray(o.branches)) throw new Error('«branches» должно быть массивом');
