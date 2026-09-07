@@ -140,7 +140,7 @@ src/
   road.ts          — сплайн, сэмплирование, pathAt(s), nearest(pos, sGuess)
   traffic.ts       — спавн (seeded), движение, OBB, SAT
   input.ts         — зоны LEFT/RIGHT, клавиатура, трекинг длительности удержания
-  render.ts        — камера, drawGrid/drawRoad (общие с редактором), машины, следы заноса, HUD
+  render.ts        — камера, drawGrid/drawRoad (общие с редактором), точка А и гараж Б, машины, следы заноса, HUD
   levels.ts        — загрузка levels/*.json через import.meta.glob, ключ = имя файла
   cars.ts          — таблица машин: name, body (рисунок), W/L, speed, steer, damp, grip, spin, skidGrip
   blocks.ts        — заграждения: данные уровня → геометрия (посты, ежи, ремонт, обочины)

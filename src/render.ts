@@ -260,10 +260,40 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
   for (let k = 1; k < LANES; k++) poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES), [26, 22], 'rgba(236,233,224,.28)', 2);
   poly(ctx, path, s => -wa(s) / 2 + 3, [], 'rgba(244,185,66,.5)', 2); poly(ctx, path, s => wa(s) / 2 - 3, [], 'rgba(244,185,66,.5)', 2);
   if (!finish) return;
+  drawStart(ctx, path, wa(0));
   const e = pathAt(path, path.L - 60), we = wa(path.L - 60);
   ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(heading(e.tx, e.ty));
+  drawGarage(ctx, we);
   for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#ece9e0' : '#15171c'; ctx.fillRect(-we / 2 + i * we / 8, -6, we / 8, 12); }
   ctx.restore();
+}
+
+// Точка А: парковочное место у старта и метка «A» слева от дороги. Угнал — поехал
+function drawStart(ctx: CanvasRenderingContext2D, path: Path, w: number): void {
+  const p = pathAt(path, 0);
+  ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(heading(p.tx, p.ty));
+  ctx.setLineDash([8, 6]); ctx.strokeStyle = 'rgba(244,185,66,.55)'; ctx.lineWidth = 2;
+  ctx.strokeRect(-w / 6, -42, w / 3, 84); ctx.setLineDash([]);
+  ctx.fillStyle = '#f4b942'; ctx.beginPath(); ctx.arc(-w / 2 - 24, 0, 13, 0, 7); ctx.fill();
+  ctx.fillStyle = '#1a1408'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('A', -w / 2 - 24, 1);
+  ctx.restore();
+}
+
+// Точка Б: гараж в конце дороги — корпус, открытые ворота шириной в дорогу, свет внутри, метка «B».
+// Рисуется в системе финишной линии: вперёд по ходу — это −y
+function drawGarage(ctx: CanvasRenderingContext2D, w: number): void {
+  const bw = w + 64, bl = 230;
+  ctx.fillStyle = '#2b2e36'; ctx.fillRect(-bw / 2, -bl, bw, bl + 8);
+  ctx.strokeStyle = '#4a4e5a'; ctx.lineWidth = 3; ctx.strokeRect(-bw / 2, -bl, bw, bl + 8);
+  ctx.fillStyle = '#1c1e24'; ctx.fillRect(-w / 2, -bl + 14, w, bl - 14);            // пол
+  ctx.fillStyle = 'rgba(244,185,66,.12)'; ctx.fillRect(-w / 2, -bl + 14, w, bl - 14); // свет
+  ctx.strokeStyle = 'rgba(236,233,224,.15)'; ctx.lineWidth = 1;
+  for (let y = -bl + 40; y < -20; y += 26) { ctx.beginPath(); ctx.moveTo(-w / 2 + 8, y); ctx.lineTo(w / 2 - 8, y); ctx.stroke(); }
+  ctx.fillStyle = '#f4b942'; ctx.fillRect(-w / 2 - 10, -4, 10, 16); ctx.fillRect(w / 2, -4, 10, 16); // открытые створки
+  ctx.fillStyle = '#ece9e0'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('ГАРАЖ', 0, -bl - 14);
+  ctx.fillStyle = '#f4b942'; ctx.beginPath(); ctx.arc(bw / 2 + 24, 0, 13, 0, 7); ctx.fill();
+  ctx.fillStyle = '#1a1408'; ctx.fillText('B', bw / 2 + 24, 1);
 }
 
 export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): void {
