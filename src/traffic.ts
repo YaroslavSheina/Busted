@@ -89,7 +89,7 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
 
 // Сортирует по s, подстраивает под машину впереди в той же полосе, убирает доехавших до финиша.
 // С ai (docs/mechanics.md, M4): перед заграждением уходит в свободную полосу, а если её нет — встаёт в пробку
-export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number }): Vehicle[] {
+export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number; playerS?: number; playerL?: number }): Vehicle[] {
   traffic.sort((a, b) => a.s - b.s);
   for (let i = 0; i < traffic.length; i++) {
     const c = traffic[i];
@@ -102,7 +102,9 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
       const st = PANIC.swerve * dt;
       const next = Math.abs(target - off) <= st ? target : off + Math.sign(target - off) * st;
       c.shift = next - laneOff(ai.width, c.lane);
-      if (next === target) { if (c.panic.back) { c.crashed = true; c.v = 0; continue; } c.panic.back = true; }
+      // обратно через дорогу — только когда игрок ушёл вперёд с запасом: иначе перекоррекция задевает его в повороте
+      const clear = ai.playerS === undefined || ai.playerS - c.s > (ai.playerL ?? 52) / 2 + c.L / 2 + 40;
+      if (next === target) { if (c.panic.back) { c.crashed = true; c.v = 0; continue; } if (clear) c.panic.back = true; }
       c.v = c.spd * PANIC.brake; c.s += c.v * dt; continue;
     }
     let sp = c.spd;

@@ -197,10 +197,11 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     }
     if (car.road === 0 && car.s >= rd.path.L - 60) return finish();
 
-    for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: P.width.v });
+    for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: P.width.v, playerS: r === rd ? car.s : undefined, playerL: car.L });
     if (roads.length > 1) flowTraffic();
     const me = obb(car.x, car.y, car.h, car.W, car.L);
-    if (collides(rd.traffic, rd.path, P.width.v, me, car.s)) return busted('столкновение');
+    // Паникёр, пока мечется, не убивает игрока — провокация награда, а не ловушка; вставший у края — обычное препятствие
+    if (collides(rd.traffic.filter(c => !(c.panic && !c.crashed)), rd.path, P.width.v, me, car.s)) return busted('столкновение');
     for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
     // Проезд впритирку: одна провокация на машину; с шансом level.panic водитель пугается (M3)
     if (level.panic) for (const c of rd.traffic) {
