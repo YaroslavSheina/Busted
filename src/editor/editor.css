@@ -19,7 +19,11 @@
 .mini{width:34px;margin-left:6px;background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:8px;padding:6px 0;font-size:14px;cursor:pointer}
 .row input#blockS{width:110px}
 .row input#branchFrom,.row input#branchTo{width:52px;margin-left:4px}
-.row input#narrowFrom,.row input#narrowTo,.row input#narrowW,.row input#railS,.row input#railPeriod,.row input#railSpeed{width:40px;margin-left:3px}
+.row input#narrowFrom,.row input#narrowTo,.row input#narrowW,.row input#railS,.row input#railPeriod,.row input#railSpeed,.row input#crossS,.row input#crossPeriod,.row input#crossOffset{width:40px;margin-left:3px}
+#crossList{margin:4px 0}
+#crossList div{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums;opacity:.85;margin:3px 0}
+#crossList div span{flex:1}
+#crossList div button{background:none;border:0;color:#e04a3a;font-size:14px;cursor:pointer}
 #railList{margin:4px 0}
 #railList div{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums;opacity:.85;margin:3px 0}
 #railList div span{flex:1}

@@ -6,6 +6,7 @@ import type { Block } from '../blocks';
 import type { BranchDef } from '../roads';
 import type { Narrow } from '../narrow';
 import type { RailDef } from '../rails';
+import type { CrossingDef } from '../crossings';
 
 // Точки и машины по одной в строке — так JSON читается и правится руками
 export function formatLevel(l: LevelData): string {
@@ -16,13 +17,14 @@ export function formatLevel(l: LevelData): string {
   const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed} }` : '';
   const panic = l.panic ? `,\n  "panic": ${l.panic}` : '';
   const rails = l.rails?.length ? `,\n  "rails": [\n${l.rails.map(r => '    ' + JSON.stringify(r)).join(',\n')}\n  ]` : '';
+  const crossings = l.crossings?.length ? `,\n  "crossings": [\n${l.crossings.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ]` : '';
   const narrows = l.narrows?.length ? `,\n  "narrows": [\n${l.narrows.map(n => '    ' + JSON.stringify(n)).join(',\n')}\n  ]` : '';
   const blocks = l.blocks?.length ? `,\n  "blocks": [\n${l.blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ]` : '';
   const branches = l.branches?.length
     ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${narrows}${rails}${blocks}${branches}\n}\n`;
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${narrows}${rails}${crossings}${blocks}${branches}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -87,6 +89,15 @@ export function parseLevel(raw: unknown): LevelData {
   }
   if (o.panic !== undefined) { if (!isNum(o.panic) || o.panic < 0 || o.panic > 1) throw new Error('«panic» — число 0..1'); level.panic = o.panic; }
   if (o.narrows !== undefined) level.narrows = parseNarrows(o.narrows, 'сужение');
+  if (o.crossings !== undefined) {
+    if (!Array.isArray(o.crossings)) throw new Error('«crossings» должно быть массивом');
+    level.crossings = o.crossings.map((c, i): CrossingDef => {
+      if (typeof c !== 'object' || c === null || !isNum(c.s) || !isNum(c.period)) throw new Error(`перекрёсток ${i}: нужны s и period`);
+      const out: CrossingDef = { s: c.s, period: c.period };
+      for (const k of ['offset', 'cars', 'speed', 'width'] as const) if (c[k] !== undefined) { if (!isNum(c[k])) throw new Error(`перекрёсток ${i}: «${k}» число`); out[k] = c[k]; }
+      return out;
+    });
+  }
   if (o.rails !== undefined) {
     if (!Array.isArray(o.rails)) throw new Error('«rails» должно быть массивом');
     level.rails = o.rails.map((r, i): RailDef => {

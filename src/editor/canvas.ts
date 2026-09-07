@@ -2,8 +2,9 @@
 // Дорога и машины рисуются теми же drawRoad/drawCar, что и в игре.
 import { lanesFor } from '../road';
 import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road';
-import { drawBlocks, drawCar, drawGrid, drawPolice, drawRails, drawRamp, drawRoad } from '../render';
+import { drawBlocks, drawCar, drawCrossingRoad, drawCrossingTop, drawGrid, drawPolice, drawRails, drawRamp, drawRoad } from '../render';
 import { layoutRails } from '../rails';
+import { layoutCrossings } from '../crossings';
 import { layoutBlocks } from '../blocks';
 import { buildBranchPath } from '../roads';
 import { makeWidthFn, widthAt } from '../narrow';
@@ -74,6 +75,8 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     if (path) {
       // ветки: под главной, без финиша; их промежуточные точки — синие
       const wMain = makeWidthFn(() => l.width, l.narrows);
+      const crossings = layoutCrossings(path, l.crossings, l.width);
+      for (const c of crossings) drawCrossingRoad(ctx, c);
       (l.branches ?? []).forEach((b, bi) => {
         try {
           const bp = buildBranchPath(path!, b), wb = makeWidthFn(() => l.width, b.narrows);
@@ -91,6 +94,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       const mainLayout = layoutBlocks(path, wMain, l.blocks);
       if (l.blocks?.length) drawBlocks(ctx, path, wMain, mainLayout, 0);
       if (l.rails?.length) drawRails(ctx, layoutRails(path, l.rails), wMain, 0);
+      for (const c of crossings) drawCrossingTop(ctx, c, widthAt(wMain, c.s), 0);
       if (l.chaser) { const p = pathAtExt(path, -l.chaser.gap); ctx.globalAlpha = 0.6; drawPolice(ctx, p.x, p.y, Math.atan2(p.tx, -p.ty), 0); ctx.globalAlpha = 1; }
       // seeded-трафик — полупрозрачно, как ориентир для расстановки явных машин
       ctx.globalAlpha = 0.3;

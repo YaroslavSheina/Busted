@@ -144,6 +144,7 @@ src/
   levels.ts        — загрузка levels/*.json через import.meta.glob, ключ = имя файла
   cars.ts          — таблица машин: name, body (рисунок), W/L, speed, steer, damp, grip, spin, skidGrip
   blocks.ts        — заграждения: данные уровня → геометрия (посты, ежи, ремонт, обочины)
+  crossings.ts     — перекрёсток: поперечная улица, группа машин по циклу, светофор (crossCars, lightAt)
   rails.ts         — переезд: рельсы через дорогу, детерминированный поезд (trainObb, untilTrain)
   narrow.ts        — сужения: ширина как функция от s (makeWidthFn/widthAt), переходы NARROW.ramp
   roads.ts         — граф дорог: ветка { from, to, points } пристыковывается к главной, mainEquivalent для прогресса
@@ -152,7 +153,7 @@ src/
     main.ts        — панель, экспорт/импорт, «Играть» через createGame на той же странице
     canvas.ts      — холст: панорама, зум, точки; дорога рисуется drawRoad
     io.ts          — формат файла уровня, валидация импорта
-levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails? } — см. docs/mechanics.md
+levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings? } — см. docs/mechanics.md
 docs/concept.md
 docs/design.md     — диздок BUSTED
 docs/mechanics.md  — лаборатория механик: карточки идей со статусами, формат данных каждой

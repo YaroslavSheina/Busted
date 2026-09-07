@@ -8,13 +8,15 @@ import type { Layout } from './blocks';
 import { widthAt, type WidthFn } from './narrow';
 import { RAIL } from './config';
 import { trainHead, untilTrain, type Rail } from './rails';
+import { CROSS } from './config';
+import { crossCars, lightAt, type Crossing } from './crossings';
 import { BLOCK } from './config';
 
 export interface View { W: number; H: number; DPR: number }
 export interface Mark { x: number; y: number; a: number }
 export interface Cam { x: number; y: number }
 
-export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout; width: number | WidthFn; rails?: Rail[] }
+export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout; width: number | WidthFn; rails?: Rail[]; crossings?: Crossing[] }
 
 // Эффекты очков: всплывающий текст или искра; t — остаток жизни, с
 export interface Fx { x: number; y: number; t: number; text?: string; vx?: number; vy?: number }
@@ -189,6 +191,28 @@ export function drawRails(ctx: CanvasRenderingContext2D, rails: Rail[], width: n
   }
 }
 
+// Перекрёсток: поперечная улица под маршрутом, светофоры по правым углам, машины группы
+export function drawCrossingRoad(ctx: CanvasRenderingContext2D, c: Crossing): void {
+  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.hCross); // ось y — вдоль поперечной улицы
+  ctx.fillStyle = '#3a3d46'; ctx.fillRect(-c.w / 2 - 4, -CROSS.reach, c.w + 8, CROSS.reach * 2);
+  ctx.fillStyle = '#262930'; ctx.fillRect(-c.w / 2, -CROSS.reach, c.w, CROSS.reach * 2);
+  ctx.setLineDash([26, 22]); ctx.strokeStyle = 'rgba(236,233,224,.28)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, -CROSS.reach); ctx.lineTo(0, CROSS.reach); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+}
+export function drawCrossingTop(ctx: CanvasRenderingContext2D, c: Crossing, roadWidth: number, time: number): void {
+  const light = lightAt(c, time);
+  // светофоры на правом углу перед перекрёстком и на левом за ним — оба видны игроку по ходу
+  for (const [side, ahead] of [[1, -1], [-1, 1]] as const) {
+    const px = c.x + c.nx * side * (roadWidth / 2 + 14) + c.tx * ahead * (c.w / 2 + 14);
+    const py = c.y + c.ny * side * (roadWidth / 2 + 14) + c.ty * ahead * (c.w / 2 + 14);
+    ctx.fillStyle = '#1e2026'; ctx.beginPath(); ctx.roundRect(px - 7, py - 16, 14, 32, 4); ctx.fill();
+    const cols = [['#5a1c1c', '#ff4a4a'], ['#5a4a10', '#ffcf3d'], ['#1c4a2a', '#4ade80']];
+    ['red', 'yellow', 'green'].forEach((l, i) => { ctx.fillStyle = cols[i][light === l ? 1 : 0]; ctx.beginPath(); ctx.arc(px, py - 10 + i * 10, 3.5, 0, 7); ctx.fill(); });
+  }
+  for (const cc of crossCars(c, time)) drawCar(ctx, cc.x, cc.y, cc.h, cc.W, cc.L, '#8a94a6', false);
+}
+
 // Полицейская машина с мигалкой; t — время для чередования цветов
 export function drawPolice(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, t: number): void {
   const red = Math.floor(t / 0.12) % 2 === 0;
@@ -249,10 +273,12 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = '#15171c'; ctx.fillRect(0, 0, W, H);
   ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-cam.x, -cam.y);
   drawGrid(ctx, cam.x - W / 2 / z, cam.y - H / 2 / z, cam.x + W / 2 / z, cam.y + H / 2 / z);
-  // ветки под главной: её разметка и финиш сверху на стыках
+  // поперечные улицы под всем, ветки под главной: её разметка и финиш сверху на стыках
+  for (const r of roads) for (const c of r.crossings ?? []) drawCrossingRoad(ctx, c);
   for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0);
   for (const r of roads) drawBlocks(ctx, r.path, r.width, r.blocks, sc.t ?? 0);
   for (const r of roads) if (r.rails?.length) drawRails(ctx, r.rails, r.width, sc.t ?? 0);
+  for (const r of roads) for (const c of r.crossings ?? []) drawCrossingTop(ctx, c, widthAt(r.width, c.s), sc.t ?? 0);
   // следы заноса
   for (const m of marks) { ctx.fillStyle = `rgba(0,0,0,${m.a * 0.35})`; ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, 7); ctx.fill(); }
   // трафик

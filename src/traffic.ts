@@ -112,7 +112,7 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
 
 // Сортирует по s, подстраивает под машину впереди в той же полосе, убирает доехавших до финиша.
 // С ai (docs/mechanics.md, M4): перед заграждением уходит в свободную полосу, а если её нет — встаёт в пробку
-export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number | WidthFn; playerS?: number; playerL?: number }): Vehicle[] {
+export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number | WidthFn; playerS?: number; playerL?: number; stops?: number[] }): Vehicle[] {
   traffic.sort((a, b) => a.s - b.s);
   for (let i = 0; i < traffic.length; i++) {
     const c = traffic[i];
@@ -153,7 +153,11 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
     }
     if (ai) {
       const van = laneVanish(ai.width, c.lane, c.s, TRAFFIC_AI.look), blk = blockAhead(ai.layout, c.lane, c.s, TRAFFIC_AI.look);
-      const ahead = van === null ? blk : blk === null ? van : Math.min(van, blk);
+      let ahead = van === null ? blk : blk === null ? van : Math.min(van, blk);
+      // красный светофор — стоп-линия на всю ширину; кто уже на перекрёстке, едет дальше
+      let stopAt: number | null = null;
+      for (const st of ai.stops ?? []) if (st > c.s + 10 && st <= c.s + TRAFFIC_AI.look && (stopAt === null || st < stopAt)) stopAt = st;
+      if (stopAt !== null) { const dist = stopAt - TRAFFIC_AI.stopGap - c.s; sp = dist < 2 ? 0 : Math.min(sp, dist * 3); }
       const nAhead = lanesAhead(ai.width, c.s, TRAFFIC_AI.look);
       if (ahead !== null) {
         // свободная полоса — ближайшая по номеру, без заграждения впереди и без соседа рядом

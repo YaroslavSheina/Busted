@@ -1,6 +1,7 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
 import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, RAMP, SCORE, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { layoutRails, trainObb, type Rail } from './rails';
+import { crossCars, layoutCrossings, lightAt, type Crossing } from './crossings';
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
 import { buildPath, curvatureAt, heading, laneOff, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
@@ -40,6 +41,7 @@ interface Road {
   narrows?: Narrow[];
   blockDefs?: Block[];
   rails: Rail[];
+  crossings: Crossing[];
   blocks: Layout;
   solids: { obb: Obb; s: number; why: string }[];
   cars: TrafficCar[];
@@ -80,7 +82,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let jump: { t: number; over: Set<object> } | null = null;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
-    const r: Road = { path, def, width: P.width.v, narrows, blockDefs: blocks, rails: [], blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
+    const r: Road = { path, def, width: P.width.v, narrows, blockDefs: blocks, rails: [], crossings: [], blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
     refreshRoad(r);
     return r;
   }
@@ -103,6 +105,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const main = buildPath(l.points);
     roads = [makeRoad(main, null, l.blocks, l.cars, l.narrows)];
     roads[0].rails = layoutRails(main, l.rails);
+    roads[0].crossings = layoutCrossings(main, l.crossings, l.width);
     for (const b of l.branches ?? []) roads.push(makeRoad(buildBranchPath(main, b), b, b.blocks, b.cars, b.narrows));
     reset();
   }
@@ -246,7 +249,11 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     }
     if (car.road === 0 && car.s >= rd.path.L - 60) return finish();
 
-    for (const r of roads) r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: r.width, playerS: r === rd ? car.s : undefined, playerL: car.L });
+    for (const r of roads) {
+      // на красный и жёлтый трафик встаёт перед перекрёстком
+      const stops = r.crossings.filter(c => lightAt(c, timeAlive) !== 'green').map(c => c.s - c.w / 2);
+      r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: r.width, playerS: r === rd ? car.s : undefined, playerL: car.L, stops });
+    }
     if (roads.length > 1) flowTraffic();
     const me = obb(car.x, car.y, car.h, car.W, car.L);
     // Заезд на рампу сзади, ровно и быстрее грузовика — прыжок (M8); с борта или под углом — обычное столкновение
@@ -266,11 +273,13 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       for (const c of rd.traffic) if (c.kind !== 'ramp' && Math.abs(c.s - car.s) < 120) { const p = vehiclePose(rd.path, c, rd.width); if (hit(me, obb(p.x, p.y, p.h, c.W, c.L))) jump.over.add(c); }
       for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) jump.over.add(o);
       for (const r of rd.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - car.s) < 200 && hit(me, t)) jump.over.add(r); }
+      for (const c of rd.crossings) if (Math.abs(c.s - car.s) < 200) for (const cc of crossCars(c, timeAlive)) if (hit(me, cc.obb)) jump.over.add(c);
     } else {
       // Паникёр, пока мечется, не убивает игрока — провокация награда, а не ловушка; вставший у края — обычное препятствие
       if (collides(rd.traffic.filter(c => !(c.panic && !c.crashed) && !(c.kind === 'ramp' && car.s < c.s)), rd.path, rd.width, me, car.s)) return busted('столкновение');
       for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
       for (const r of rd.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - car.s) < 200 && hit(me, t)) return busted('поезд'); }
+      for (const c of rd.crossings) if (Math.abs(c.s - car.s) < 200) for (const cc of crossCars(c, timeAlive)) if (hit(me, cc.obb)) return busted('перекрёсток');
     }
     // Поезд сносит трафик на переезде
     for (const r of rd.rails) {
@@ -327,8 +336,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       const c = chaserPose();
       const cop = obb(c.x, c.y, c.h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L);
       if (!jump && chaser.road === car.road && hit(me, cop)) return busted('догнали');
-      // Коп под поездом
+      // Коп под поездом или под поперечной машиной
       for (const r of cr.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - chaser.s) < 120 && hit(cop, t)) { chaser = null; flash = { text: 'коп под поездом', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', 1); break; } }
+      if (chaser) for (const c of cr.crossings) { if (Math.abs(c.s - chaser.s) > 120) continue; if (crossCars(c, timeAlive).some(cc => hit(cop, cc.obb))) { chaser = null; flash = { text: 'коп на перекрёстке', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', 1); break; } }
       if (!chaser) { const vl0 = Math.hypot(car.vx, car.vy) || 1; const cl0 = Math.min(1, CAM_LERP * dt); cam.x += (car.x + car.vx / vl0 * CAM_AHEAD - cam.x) * cl0; cam.y += (car.y + car.vy / vl0 * CAM_AHEAD - cam.y) * cl0; return; }
       // Паникёр снёс копа — полиция выбывает из погони
       for (const v of cr.traffic) {
@@ -361,7 +371,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (!paused) update(slow > 0 ? dt * PANIC.slowScale : dt);
     // Хвост считаем по главной дороге, чтобы сравнивать положение на разных ветках
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
-    const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails }));
+    const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings }));
     render(ctx, view, {
       roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,

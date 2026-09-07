@@ -47,6 +47,7 @@ function changed(): void {
   syncBranches();
   syncNarrows();
   syncRails();
+  syncCrossings();
 }
 
 // Блок выбранной машины: положение и скорость
@@ -158,6 +159,25 @@ $('railAdd').onclick = () => {
   changed(); canvas.draw();
 };
 
+// Перекрёстки (docs/mechanics.md, M9)
+function syncCrossings(): void {
+  const list = $('crossList'); list.innerHTML = '';
+  (level.crossings ?? []).forEach((c, i) => {
+    const row = document.createElement('div');
+    const span = document.createElement('span'); span.textContent = `перекрёсток ${i}: s ${c.s}, цикл ${c.period} с, красный с ${c.offset ?? 0} с`;
+    const del = document.createElement('button'); del.textContent = '×';
+    del.onclick = () => { level.crossings!.splice(i, 1); if (!level.crossings!.length) delete level.crossings; changed(); canvas.draw(); };
+    row.appendChild(span); row.appendChild(del); list.appendChild(row);
+  });
+}
+$('crossAdd').onclick = () => {
+  const s = Math.round(parseFloat(inp('crossS').value)), period = parseFloat(inp('crossPeriod').value) || 8, offset = parseFloat(inp('crossOffset').value) || 0;
+  if (!Number.isFinite(s) || period < 4) { status('Перекрёсток: нужен s и период ≥ 4 с'); return; }
+  (level.crossings ??= []).push({ s, period, offset });
+  level.crossings.sort((a, b) => a.s - b.s);
+  changed(); canvas.draw();
+};
+
 $('narrowAdd').onclick = () => {
   const from = Math.round(parseFloat(inp('narrowFrom').value)), to = Math.round(parseFloat(inp('narrowTo').value)), width = Math.round(parseFloat(inp('narrowW').value));
   if (!Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(width) || to <= from || width < 60) { status('Сужение: нужны from < to и ширина ≥ 60'); return; }
@@ -196,7 +216,7 @@ function syncPanel(): void {
 }
 
 function load(l: LevelData): void {
-  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.narrows; delete level.rails;
+  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.narrows; delete level.rails; delete level.crossings;
   Object.assign(level, structuredClone(l));
   level.car ??= DEFAULT_CAR;
   select(null);
