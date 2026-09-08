@@ -7,7 +7,7 @@ const fs = require('fs');
 process.chdir(require('path').join(__dirname, '..')); // корень проекта
 
 const BX = 620, BY = 520;      // размер квартала между осями улиц
-const ROAD = 180, R = 220, MARGIN = 26, LEAD = 60; // R: внутренняя полоса угла = R − 60 ≥ минимального радиуса седана (~180); LEAD = BRANCH.lead
+const ROAD = 180, R = 220, MARGIN = 26, LEAD = 60; // R: внутренняя полоса угла = R − 60 ≥ минимального радиуса седана (~150 после настройки 2026-09-08); LEAD = BRANCH.lead
 const mkRnd = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const node = ([i, j]) => [i * BX, j * BY];
 
