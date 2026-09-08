@@ -6,8 +6,11 @@
 const fs = require('fs');
 process.chdir(require('path').join(__dirname, '..')); // корень проекта
 
-const BX = 620, BY = 520;      // размер квартала между осями улиц
-const ROAD = 180, R = 220, MARGIN = 26, LEAD = 60; // R: внутренняя полоса угла = R − 60 ≥ минимального радиуса седана (~150 после настройки 2026-09-08); LEAD = BRANCH.lead
+// Параметры сетки — по умолчанию как у «Района 1»; район может задать свои (grid: { bx, by, road, r }) — пролог шире и просторнее
+let BX = 620, BY = 520;        // размер квартала между осями улиц
+let ROAD = 180, R = 220;       // R: внутренняя полоса угла = R − 60 ≥ минимального радиуса седана (~150 после настройки 2026-09-08)
+const MARGIN = 26, LEAD = 60;  // LEAD = BRANCH.lead
+let SPEED = 300;               // скорость машины уровня — для прикидок времени прибытия
 const mkRnd = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const node = ([i, j]) => [i * BX, j * BY];
 
@@ -89,6 +92,8 @@ function straightNodes(legs) {
 
 function build(district, route) {
   const spec = { ...district, ...route };
+  ({ bx: BX = 620, by: BY = 520, road: ROAD = 180, r: R = 220 } = spec.grid ?? {});
+  SPEED = spec.speed ?? 300;
   const rnd = mkRnd(spec.seed);
   const roads = [];
   spec.roads.forEach((rd, idx) => {
@@ -117,7 +122,12 @@ function build(district, route) {
   // (боковая улица там — сама ветка; очередь поперечных стояла бы прямо на дуге поворота)
   roads.forEach((r, i) => {
     const junctions = new Set(roads.filter(o => o.parentIdx === i).flatMap(o => o.ends.map(p => p.join(','))));
-    r.crossings = r.straight.filter(p => !junctions.has(p.join(','))).map(([x, y], k) => ({ s: sAt(r.sm, x, y), period: 12, offset: r.offsets[k] ?? 0, arrive: +(sAt(r.sm, x, y) / 300).toFixed(1) }));
+    // offsets — массив фаз или 'green': красный загорается через 2 с после прибытия, очередь поперечных видна, но не мешает
+    r.crossings = r.straight.filter(p => !junctions.has(p.join(','))).map(([x, y], k) => {
+      const s = sAt(r.sm, x, y), arrive = s / SPEED;
+      const offset = r.offsets === 'green' ? +(((arrive + 2) % 12).toFixed(1)) : (r.offsets[k] ?? 0);
+      return { s, period: 12, offset, arrive: +arrive.toFixed(1) };
+    });
   });
 
   // события маршрута на главной: at — координата сетки (дробная — между узлами), s по главной считается сам
@@ -132,7 +142,10 @@ function build(district, route) {
       case 'closure': blocks.push({ s, police: [0, 1, 2] }); break;                             // полное перекрытие — объезд по ветке
       case 'narrow': narrows.push({ from: s, to: atS(e.to), width: e.width ?? 110 }); break;
       case 'rails': {
-        rails.push({ s, period: e.period ?? 14, speed: e.speed ?? 260, length: e.length ?? 400, offset: e.offset ?? 0 });
+        // offset 'behind': голова состава у края дороги через 0.4 с после прибытия — поезд проходит сразу за игроком (и снимает копа)
+        const speed = e.speed ?? 260, length = e.length ?? 400, period = e.period ?? 14;
+        const offset = e.offset === 'behind' ? +((((700 + length - 40) / speed - (s / SPEED + 0.4)) % period + period) % period).toFixed(2) : (e.offset ?? 0);
+        rails.push({ s, period, speed, length, offset });
         const leg = main0.legs.find(L => L.dx ? Math.abs(e.at[1] * BY - L.a[1]) < 1 : Math.abs(e.at[0] * BX - L.a[0]) < 1);
         bands.push(leg && leg.dx ? { axis: 'x', c: e.at[0] * BX } : { axis: 'y', c: e.at[1] * BY }); // рельсы поперёк улицы — коридор через кварталы
         break;
@@ -210,10 +223,38 @@ ${props.map(p => '    ' + JSON.stringify(p)).join(',\n')}
   fs.writeFileSync(`levels/${spec.file}.json`, json);
   const desc = roads.map((r, i) => `${i ? `ветка ${i - 1}${r.def.parent !== undefined ? ` (от ветки ${r.def.parent})` : ''} ${r.def.from}→${r.def.to}` : 'главная'}: длина ${r.L}, перекрёстки ${r.crossings.map(c => `s${c.s}@${c.arrive}с`).join(', ') || '—'}`);
   const ev = (route.events ?? []).map(e => `${e.type}@s${atS(e.at)}`).join(', ');
+  if (route.cards?.length) console.log(`   карточки: ${cards.map(c => `«${c.text}»@s${c.s}`).join(', ')}${trap ? `; ловушка @s${trap.s}` : ''}${checkpoints.length ? `; контрольные ${checkpoints.join(', ')}` : ''}`);
   console.log(`${spec.name}: точек ${main.pts.length}, зданий ${props.length}${ev ? `, события: ${ev}` : ''}\n   ${desc.join('\n   ')}`);
 }
 
 const DISTRICTS = [
+  // «Пролог» (docs/progression.md): широкие улицы, спорткар, линейный длинный маршрут, финал — ловушка перед гаражом
+  { seed: 31337, car: 'prologue', speed: 360, traffic: 0.1, panic: 0.4, mix: 0.1, chaser: { gap: 200, speed: 1 },
+    grid: { bx: 760, by: 640, road: 220, r: 320 }, blocks: { i: [-1, 8], j: [-13, 1] },
+    routes: [
+      { file: 'prologue', name: 'Пролог',
+        intro: 'Ночь. Чужой спорткар. Довези его в гараж — и город твой.',
+        chaserAt: [0, -2.4],
+        cards: [{ at: [0, -2.5], text: 'Погоня!' }, { at: [0, -4.4], text: 'Переезд' }, { at: [2, -5.6], text: 'Автовоз впереди — прыгай!' },
+          { at: [4, -3.5], text: 'Переулок' }, { at: [7, -7.3], text: 'Гараж уже виден' }],
+        checkpoints: [[0, -5.4], [2, -4.3], [4, -1.6], [7, -7.6]],
+        trap: { at: [7, -9.35], text: 'Ловушка. Тебя взяли.\nСлава утеряна — начинаем с нуля.' },
+        events: [
+          { type: 'parked', at: [0, -0.4] }, { type: 'parked', at: [0, -0.8] },
+          { type: 'rails', at: [0, -4.6], period: 14, length: 500, offset: 'behind' },
+          { type: 'works', at: [1.3, -6], lanes: [2], len: 300 },
+          { type: 'ramp', at: [2, -5.2], lane: 1, speed: 120 }, { type: 'closure', at: [2, -4.85] }, // отрезок идёт на юг: −5.2 раньше −4.85
+          { type: 'parked', at: [3.5, -3], lane: 2 },
+          { type: 'narrow', at: [4, -2.3], to: [4, -1.7], width: 130 },
+          { type: 'post', at: [5.0, -6] }, // середина прямой между дугами углов
+          { type: 'closure', at: [7, -9.6] },
+        ],
+        roads: [
+          // север 6, восток 2, юг 2 (переезд был на севере), восток 2, север 2, ... — змейка по сетке, ~25 000 px
+          { nodes: [[0, 0], [0, -6], [2, -6], [2, -3], [4, -3], [4, -1], [6, -1], [6, -6], [4, -6], [4, -8], [7, -8], [7, -10]], oncoming: 0, offsets: 'green',
+            cars: () => [] },
+        ] },
+    ] },
   // «Район 1»: север 2 квартала, восток 2, север 2, восток 1 — гараж; квартальный объезд веткой через (1,−1)
   { seed: 4242, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 3], j: [-5, 0] },
     routes: [

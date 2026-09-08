@@ -7,7 +7,7 @@ setTheme(query.get('theme')); // ?theme=comic|dark|bright|sprites|pixel — эк
 loadArt();
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';
-import { CARS, type CarKey } from './cars';
+import { CARS, type CarKey, type CarSpec } from './cars';
 import { campaign } from './campaign';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -56,7 +56,7 @@ function showCarPanel(): void {
     list.appendChild(b);
   };
   add('По уровню', null);
-  for (const k of Object.keys(CARS) as CarKey[]) add(`${CARS[k].name} · ${CARS[k].speed}`, k);
+  for (const k of Object.keys(CARS) as CarKey[]) if (!(CARS[k] as CarSpec).hidden) add(`${CARS[k].name} · ${CARS[k].speed}`, k);
   carPanel.appendChild(list);
   const hint = document.createElement('div'); hint.className = 'hint';
   hint.textContent = 'Машина применяется к любому уровню поверх той, что задана в файле. Числа в панели тюнинга обновляются под неё.';

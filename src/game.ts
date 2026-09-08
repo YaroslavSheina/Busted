@@ -139,6 +139,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
     roads.forEach((r, i) => { refreshRoad(r); r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars, r.blocks, r.width, r.oncoming, level.mix ?? 0); });
+    // перед ловушкой трафика нет: иначе к перекрытию собирается очередь, и игрок врезается в неё раньше, чем сработает сценарий
+    if (level.trap) roads[0].traffic = roads[0].traffic.filter(c => c.kind === 'ramp' || c.s < level.trap!.s - 1200);
     chaser = null; copSpawned = false;
     taken = new Set();
     flat = false;

@@ -12,9 +12,12 @@ export interface CarSpec {
   grip: number;          // сцепление, 1/с
   spin: number;          // порог заноса, рад/с
   skidGrip: number;      // сцепление в заносе
+  hidden?: boolean;      // не показывать в меню «авто» (машина только для своего уровня)
 }
 
 export const CARS = {
+  // Пролог (docs/progression.md): суперкар, но 360 вместо 420 — ощущение скорости есть, радиус поворота остаётся городским
+  prologue: { name: 'Спорткар', body: 'supercar', W: 30, L: 50, speed: 360, steer: 7, damp: 3.5, grip: 9, spin: 2.2, skidGrip: 0.9, hidden: true },
   // Тяжёлый и не резкий: медленно набирает вращение и медленно его гасит — несёт долго, но занос недостижим
   minivan:  { name: 'Минивэн',  body: 'minivan',  W: 32, L: 60, speed: 240, steer: 3.5, damp: 2.2, grip: 6, spin: 2.6, skidGrip: 1.4 },
   // Золотая середина — числа прототипа
