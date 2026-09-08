@@ -1,6 +1,6 @@
 // Камера, дорога, машины, следы заноса, HUD. drawGrid/drawRoad также использует редактор.
-import { LANES, TRAFFIC_SIZE } from './config';
-import { heading, pathAt, type Path } from './road';
+import { BRANCH, LANES, TRAFFIC_SIZE } from './config';
+import { heading, laneOff, lanesFor, pathAt, type Path } from './road';
 import { vehiclePose, type Vehicle } from './traffic';
 import type { CarState } from './physics';
 import type { CarSpec } from './cars';
@@ -17,7 +17,7 @@ export interface View { W: number; H: number; DPR: number }
 export interface Mark { x: number; y: number; a: number }
 export interface Cam { x: number; y: number }
 
-export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout; width: number | WidthFn; rails?: Rail[]; crossings?: Crossing[]; oncoming?: number }
+export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout; width: number | WidthFn; rails?: Rail[]; crossings?: Crossing[]; oncoming?: number; from?: number; parent?: number }
 
 // Эффекты очков: всплывающий текст или искра; t — остаток жизни, с
 export interface Fx { x: number; y: number; t: number; text?: string; vx?: number; vy?: number }
@@ -33,6 +33,7 @@ export interface Scene {
   fx?: Fx[];                                                     // всплывающие очки и искры
   air?: number;                                                  // прыжок: 0..1 — фаза полёта, undefined — на земле
   props?: Prop[];                                                // здания и окружение
+  nav?: boolean;                                                 // навигатор: линия к гаражу по главной
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
 
@@ -208,13 +209,41 @@ export function drawProps(ctx: CanvasRenderingContext2D, props: Prop[]): void {
 }
 
 // Перекрёсток: поперечная улица под маршрутом, светофоры по правым углам, машины группы
+// Поперечная улица — не маршрут: асфальт светлее, без разметки, у обоих въездов «кирпич» (drawCrossingTop)
 export function drawCrossingRoad(ctx: CanvasRenderingContext2D, c: Crossing): void {
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.hCross); // ось y — вдоль поперечной улицы
   ctx.fillStyle = '#3a3d46'; ctx.fillRect(-c.w / 2 - 4, -CROSS.reach, c.w + 8, CROSS.reach * 2);
-  ctx.fillStyle = '#262930'; ctx.fillRect(-c.w / 2, -CROSS.reach, c.w, CROSS.reach * 2);
-  ctx.setLineDash([26, 22]); ctx.strokeStyle = 'rgba(236,233,224,.28)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(0, -CROSS.reach); ctx.lineTo(0, CROSS.reach); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#2d3038'; ctx.fillRect(-c.w / 2, -CROSS.reach, c.w, CROSS.reach * 2);
   ctx.restore();
+}
+// «Кирпич»: красный круг с белой перекладиной на столбике посреди въезда
+export function drawNoEntry(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = '#1e2026'; ctx.beginPath(); ctx.arc(x, y, 11, 0, 7); ctx.fill();
+  ctx.fillStyle = '#d93b3b'; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill();
+  ctx.fillStyle = '#f2efe8'; ctx.fillRect(x - 6, y - 1.5, 12, 3);
+}
+// Стрелка поворота на асфальте: в крайней полосе со стороны ветки, за s до развилки
+export function drawTurnArrow(ctx: CanvasRenderingContext2D, path: Path, w: number | WidthFn, s: number, side: 1 | -1): void {
+  const p = pathAt(path, s), wa = widthAt(w, s), n = lanesFor(wa);
+  const off = laneOff(wa, side > 0 ? n - 1 : 0);
+  ctx.save(); ctx.translate(p.x + p.nx * off, p.y + p.ny * off); ctx.rotate(heading(p.tx, p.ty)); // вперёд — −y
+  ctx.strokeStyle = 'rgba(236,233,224,.8)'; ctx.fillStyle = 'rgba(236,233,224,.8)'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(0, -4); ctx.quadraticCurveTo(0, -16, side * 10, -16); ctx.lineTo(side * 14, -16); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(side * 27, -16); ctx.lineTo(side * 13, -25); ctx.lineTo(side * 13, -7); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+// Навигатор: пунктир к гаражу по осевой главной дороги; ветки без линии — на свой страх и риск
+export function drawNav(ctx: CanvasRenderingContext2D, path: Path): void {
+  poly(ctx, path, 0, [30, 24], 'rgba(90,200,255,.3)', 6);
+}
+// С какой стороны родителя отходит ветка: знак смещения её точки за заходом от оси родителя
+export function branchSide(parent: Path, branch: Path, from: number): 1 | -1 {
+  const a = pathAt(parent, from), b = pathAt(branch, BRANCH.lead + 220);
+  return ((b.x - a.x) * a.nx + (b.y - a.y) * a.ny) >= 0 ? 1 : -1;
+}
+// Где ставить стрелки перед развилкой: за 120 и 300 px, но не раньше старта и не на входной дуге родителя-ветки
+export function arrowSpots(from: number, parentIsBranch: boolean): number[] {
+  return [120, 300].map(back => from - back).filter(s => s >= (parentIsBranch ? BRANCH.lead + 340 : 40));
 }
 export function drawCrossingTop(ctx: CanvasRenderingContext2D, c: Crossing, roadWidth: number, time: number): void {
   const light = lightAt(c, time);
@@ -224,6 +253,7 @@ export function drawCrossingTop(ctx: CanvasRenderingContext2D, c: Crossing, road
   for (const side of [-1, 1]) { const y0 = side * (c.w / 2 + 6) - (side > 0 ? 0 : 20); for (let x = -roadWidth / 2 + 6; x < roadWidth / 2 - 6; x += 12) ctx.fillRect(x, y0, 6, 20); }
   ctx.restore();
   // светофоры на правом углу перед перекрёстком и на левом за ним — оба видны игроку по ходу
+  for (const side of [-1, 1] as const) drawNoEntry(ctx, c.x + c.nx * side * (roadWidth / 2 + 30), c.y + c.ny * side * (roadWidth / 2 + 30));
   for (const [side, ahead] of [[1, -1], [-1, 1]] as const) {
     const px = c.x + c.nx * side * (roadWidth / 2 + 14) + c.tx * ahead * (c.w / 2 + 14);
     const py = c.y + c.ny * side * (roadWidth / 2 + 14) + c.ty * ahead * (c.w / 2 + 14);
@@ -332,6 +362,8 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   if (sc.props?.length) drawProps(ctx, sc.props);
   for (const r of roads) for (const c of r.crossings ?? []) drawCrossingRoad(ctx, c);
   for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0, roads[i].oncoming ?? 0);
+  if (sc.nav) drawNav(ctx, roads[0].path);
+  for (const r of roads) if (r.from !== undefined && r.parent !== undefined) { const pr = roads[r.parent], side = branchSide(pr.path, r.path, r.from); for (const s of arrowSpots(r.from, pr.from !== undefined)) drawTurnArrow(ctx, pr.path, pr.width, s, side); }
   for (const r of roads) drawBlocks(ctx, r.path, r.width, r.blocks, sc.t ?? 0);
   for (const r of roads) if (r.rails?.length) drawRails(ctx, r.rails, r.width, sc.t ?? 0);
   for (const r of roads) for (const c of r.crossings ?? []) drawCrossingTop(ctx, c, widthAt(r.width, c.s), sc.t ?? 0);

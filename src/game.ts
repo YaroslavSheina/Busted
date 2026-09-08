@@ -397,9 +397,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (!paused) update(slow > 0 ? dt * PANIC.slowScale : dt);
     // Хвост считаем по главной дороге, чтобы сравнивать положение на разных ветках
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
-    const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings, oncoming: r.oncoming }));
+    const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings, oncoming: r.oncoming, from: r.def?.from, parent: r.def ? r.parent : undefined }));
     render(ctx, view, {
-      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props,
+      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props, nav: level.nav,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
     });
     hudT += dt;

@@ -2,11 +2,11 @@
 // Дорога и машины рисуются теми же drawRoad/drawCar, что и в игре.
 import { lanesFor } from '../road';
 import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road';
-import { drawBlocks, drawCar, drawCrossingRoad, drawCrossingTop, drawGrid, drawPolice, drawProps, drawRails, drawRamp, drawRoad } from '../render';
+import { arrowSpots, branchSide, drawBlocks, drawCar, drawCrossingRoad, drawCrossingTop, drawGrid, drawNav, drawPolice, drawProps, drawRails, drawRamp, drawRoad, drawTurnArrow } from '../render';
 import { layoutRails } from '../rails';
 import { layoutCrossings } from '../crossings';
 import { layoutBlocks } from '../blocks';
-import { buildRoadPaths } from '../roads';
+import { buildRoadPaths, parentRoad } from '../roads';
 import { makeWidthFn, widthAt } from '../narrow';
 import { spawnTraffic, vehiclePose, type TrafficCar, type Vehicle } from '../traffic';
 import type { LevelData } from '../levels';
@@ -100,6 +100,13 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
         });
       });
       drawRoad(ctx, path, wMain, true, l.oncoming ?? 0);
+      if (l.nav) drawNav(ctx, path);
+      (l.branches ?? []).forEach((b, bi) => {
+        const bp = roadPaths[bi + 1], pp = roadPaths[parentRoad(b)];
+        if (!bp || !pp) return;
+        const wp = makeWidthFn(() => l.width, parentRoad(b) ? l.branches![parentRoad(b) - 1].narrows : l.narrows), side = branchSide(pp, bp, b.from);
+        for (const s of arrowSpots(b.from, parentRoad(b) > 0)) drawTurnArrow(ctx, pp, wp, s, side);
+      });
       const mainLayout = layoutBlocks(path, wMain, l.blocks);
       if (l.blocks?.length) drawBlocks(ctx, path, wMain, mainLayout, 0);
       if (l.rails?.length) drawRails(ctx, layoutRails(path, l.rails), wMain, 0);

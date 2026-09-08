@@ -17,6 +17,7 @@ export function formatLevel(l: LevelData): string {
     : '';
   const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed} }` : '';
   const panic = l.panic ? `,\n  "panic": ${l.panic}` : '';
+  const nav = l.nav ? ',\n  "nav": true' : '';
   const oncoming = l.oncoming ? `,\n  "oncoming": ${l.oncoming}` : '';
   const rails = l.rails?.length ? `,\n  "rails": [\n${l.rails.map(r => '    ' + JSON.stringify(r)).join(',\n')}\n  ]` : '';
   const crossings = l.crossings?.length ? `,\n  "crossings": [\n${l.crossings.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ]` : '';
@@ -27,7 +28,7 @@ export function formatLevel(l: LevelData): string {
     ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}${b.parent !== undefined ? `, "parent": ${b.parent}` : ''}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.oncoming ? `, "oncoming": ${b.oncoming}` : ''}${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''}${b.narrows?.length ? `, "narrows": ${JSON.stringify(b.narrows)}` : ''}${b.rails?.length ? `, "rails": ${JSON.stringify(b.rails)}` : ''}${b.crossings?.length ? `, "crossings": ${JSON.stringify(b.crossings)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${nav}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -112,6 +113,7 @@ export function parseLevel(raw: unknown): LevelData {
     level.chaser = { gap: c.gap, speed: c.speed };
   }
   if (o.panic !== undefined) { if (!isNum(o.panic) || o.panic < 0 || o.panic > 1) throw new Error('«panic» — число 0..1'); level.panic = o.panic; }
+  if (o.nav !== undefined) { if (o.nav !== true && o.nav !== false) throw new Error('«nav» — true/false'); if (o.nav) level.nav = true; }
   if (o.oncoming !== undefined) { if (!isNum(o.oncoming) || o.oncoming < 0 || o.oncoming > 2) throw new Error('«oncoming» — 0..2'); level.oncoming = o.oncoming; }
   if (o.narrows !== undefined) level.narrows = parseNarrows(o.narrows, 'сужение');
   if (o.props !== undefined) {

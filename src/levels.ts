@@ -30,6 +30,7 @@ export interface LevelData {
   crossings?: CrossingDef[]; // необязательно: перекрёстки со светофором (docs/mechanics.md, M9)
   props?: Prop[];      // необязательно: здания и прочее окружение
   oncoming?: number;   // необязательно: сколько левых полос едут навстречу (docs/mechanics.md, M10)
+  nav?: boolean;       // необязательно: навигатор — линия к гаражу по главной дороге
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

@@ -152,6 +152,7 @@ ${main.pts.map(p => `    [${p[0]}, ${p[1]}]`).join(',\n')}
   "seed": ${spec.seed},
   "car": "${spec.car}",
   "panic": ${spec.panic},
+  "nav": true,
   "oncoming": ${main.oncoming},
   "chaser": ${JSON.stringify(spec.chaser)},
   "cars": [
