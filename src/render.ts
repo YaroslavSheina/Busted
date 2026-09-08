@@ -387,7 +387,11 @@ export function drawCrossingRoad(ctx: CanvasRenderingContext2D, c: Crossing): vo
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.hCross); // ось y — вдоль поперечной улицы
   if (T.sidewalk && city) { ctx.fillStyle = T.outline!; ctx.fillRect(-c.w / 2 - SIDEWALK - 3, -CROSS.reach, c.w + 2 * SIDEWALK + 6, CROSS.reach * 2); ctx.fillStyle = (T.slabs && slabs(ctx)) || T.sidewalk; ctx.fillRect(-c.w / 2 - SIDEWALK, -CROSS.reach, c.w + 2 * SIDEWALK, CROSS.reach * 2); }
   ctx.fillStyle = T.outline ?? T.shoulder; ctx.fillRect(-c.w / 2 - 4, -CROSS.reach, c.w + 8, CROSS.reach * 2);
-  ctx.fillStyle = T.cross; ctx.fillRect(-c.w / 2, -CROSS.reach, c.w, CROSS.reach * 2);
+  ctx.fillStyle = (T.slabs && asphalt(ctx)) || T.cross; ctx.fillRect(-c.w / 2, -CROSS.reach, c.w, CROSS.reach * 2);
+  if (T.dash) { // pixel: осевой пунктир поперечной улицы, как в референсе; «кирпичи» по-прежнему говорят, что туда нельзя
+    ctx.fillStyle = T.lane;
+    for (let y = -CROSS.reach + 10; y < CROSS.reach; y += T.dash[0] + T.dash[1]) { if (Math.abs(y + T.dash[0] / 2) > c.roadHalf + 40) ctx.fillRect(-1.5, y, 3, T.dash[0]); }
+  }
   ctx.restore();
 }
 // «Кирпич»: красный круг с белой перекладиной на столбике посреди въезда
@@ -427,8 +431,24 @@ export function drawCrossingTop(ctx: CanvasRenderingContext2D, c: Crossing, road
   const light = lightAt(c, time);
   // зебры через маршрут по обе стороны поперечной улицы
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(Math.atan2(c.tx, -c.ty)); // ось y — вдоль маршрута
-  ctx.fillStyle = 'rgba(236,233,224,.55)';
-  for (const side of [-1, 1]) { const y0 = side * (c.w / 2 + 6) - (side > 0 ? 0 : 20); for (let x = -roadWidth / 2 + 6; x < roadWidth / 2 - 6; x += 12) ctx.fillRect(x, y0, 6, 20); }
+  if (T.slabs && city) {
+    // pixel: углы кварталов скруглены — асфальт заходит в угол, а тротуар возвращается четвертью круга с бордюром
+    const R = SIDEWALK, rw = roadWidth / 2, cw = c.w / 2;
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+      const cx = sx * (rw + R + 3), cy = sy * (cw + R + 3);
+      const a0 = sx > 0 ? (sy > 0 ? Math.PI : Math.PI / 2) : (sy > 0 ? Math.PI * 1.5 : 0), a1 = a0 + Math.PI / 2; // четверть, обращённая к перекрёстку
+      ctx.fillStyle = asphalt(ctx) ?? T.asphalt; ctx.fillRect(Math.min(sx * rw, cx), Math.min(sy * cw, cy), R + 3, R + 3);
+      ctx.fillStyle = slabs(ctx) ?? T.sidewalk!; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a0, a1); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = T.outline!; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, R + 1.5, a0, a1); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(236,233,224,.9)';
+    // широкие полосы через маршрут и через поперечную улицу, как в референсе
+    for (const side of [-1, 1]) { const y0 = side * (cw + 4) - (side > 0 ? 0 : 30); for (let x = -rw + 4; x < rw - 4; x += 14) ctx.fillRect(x, y0, 8, 30); }
+    for (const side of [-1, 1]) { const x0 = side * (rw + 4) - (side > 0 ? 0 : 30); for (let y = -cw + 4; y < cw - 4; y += 14) ctx.fillRect(x0, y, 30, 8); }
+  } else {
+    ctx.fillStyle = 'rgba(236,233,224,.55)';
+    for (const side of [-1, 1]) { const y0 = side * (c.w / 2 + 6) - (side > 0 ? 0 : 20); for (let x = -roadWidth / 2 + 6; x < roadWidth / 2 - 6; x += 12) ctx.fillRect(x, y0, 6, 20); }
+  }
   ctx.restore();
   // светофоры на правом углу перед перекрёстком и на левом за ним — оба видны игроку по ходу
   for (const side of [-1, 1] as const) drawNoEntry(ctx, c.x + c.nx * side * (roadWidth / 2 + 30), c.y + c.ny * side * (roadWidth / 2 + 30));
@@ -500,7 +520,7 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
   if (T.sidewalk && city) layers.push([SIDEWALK + 3, T.outline!], [SIDEWALK, T.sidewalk]);
   layers.push([T.outline ? 5 : 4, T.outline ?? T.shoulder], [0, T.asphalt]);
   for (const [extra, color] of layers) {
-    const fill = extra === 0 && T.sprites === 'hf' ? (tile(ctx, 'asphalt', 384) ?? color) : extra === SIDEWALK && T.sprites === 'hf' ? (tile(ctx, 'pavement', 256) ?? color) : extra === SIDEWALK && T.slabs ? (slabs(ctx) ?? color) : color;
+    const fill = extra === 0 && T.sprites === 'hf' ? (tile(ctx, 'asphalt', 384) ?? color) : extra === SIDEWALK && T.sprites === 'hf' ? (tile(ctx, 'pavement', 256) ?? color) : extra === SIDEWALK && T.slabs ? (slabs(ctx) ?? color) : extra === 0 && T.slabs ? (asphalt(ctx) ?? color) : color;
     if (typeof w === 'number') poly(ctx, path, 0, fill, w + 2 * extra, cap); // постоянная ширина — штрихом, как в прототипе
     else ribbon(ctx, path, s => w(s) / 2 + extra, fill, finish);
   }
@@ -522,13 +542,27 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
   ctx.restore();
 }
 
-// Плитка тротуара (pixel): светлые плиты со швами
+// Детерминированное зерно: мелкие точки чуть светлее и чуть темнее фона — пиксельная фактура из референса
+function grain(g: CanvasRenderingContext2D, n: number, seed: number, count: number, light: string, dark: string): void {
+  let x = seed | 0;
+  const rnd = () => { x = (x * 1103515245 + 12345) & 0x7fffffff; return x / 0x7fffffff; };
+  for (let i = 0; i < count; i++) { g.fillStyle = rnd() < 0.5 ? light : dark; g.fillRect(Math.floor(rnd() * n), Math.floor(rnd() * n), 2, 2); }
+}
+// Плитка тротуара (pixel): плиты 36 px со швами и зерном
 function slabs(ctx: CanvasRenderingContext2D): CanvasPattern | null {
-  return procTile(ctx, 'slabs', 48, (g, n) => { g.fillStyle = T.sidewalk!; g.fillRect(0, 0, n, n); g.fillStyle = T.slabs!; g.fillRect(0, 0, n, 1); g.fillRect(0, 0, 1, n); g.fillRect(n / 2, 0, 1, n); });
+  return procTile(ctx, 'slabs', 72, (g, n) => {
+    g.fillStyle = T.sidewalk!; g.fillRect(0, 0, n, n);
+    grain(g, n, 7, 90, 'rgba(255,255,255,.06)', 'rgba(0,0,0,.07)');
+    g.fillStyle = T.slabs!; g.fillRect(0, 0, n, 1); g.fillRect(0, 0, 1, n); g.fillRect(n / 2, 0, 1, n); g.fillRect(0, n / 2, n, 1);
+  });
+}
+// Асфальт (pixel): ровный тон с редким зерном
+function asphalt(ctx: CanvasRenderingContext2D): CanvasPattern | null {
+  return procTile(ctx, 'asphalt', 64, (g, n) => { g.fillStyle = T.asphalt; g.fillRect(0, 0, n, n); grain(g, n, 13, 70, 'rgba(255,255,255,.05)', 'rgba(0,0,0,.12)'); });
 }
 // Фонари по краю тротуара с обеих сторон: тёмный столбик каждые 320 px по s, в видимой области
 function drawLights(ctx: CanvasRenderingContext2D, path: Path, wa: (s: number) => number): void {
-  for (let s = 160; s < path.L - 100; s += 320) {
+  for (let s = 120; s < path.L - 100; s += 200) {
     const p = pathAt(path, s);
     if (!visible(p.x, p.y, 200)) continue;
     for (const side of [-1, 1]) {
