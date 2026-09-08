@@ -251,5 +251,18 @@ const DISTRICTS = [
         { nodes: [[1, -1], [2, -1], [2, -2]], oncoming: 1 },
       ] },
     ] },
+  // «Графика»: витрина для теста визуала — за один проезд видно всё, что рисуется.
+  // Север 4 квартала (перекрёстки (0,−1), (0,−3), между ними переезд, рампа с ежами за третьим перекрёстком),
+  // восток 2, север 1 — гараж с сужением перед ним. Ветка: направо у (0,−2), прямо через перекрёсток (1,−3), вливается у (1,−4)
+  { seed: 999, car: 'sedan', traffic: 0.35, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 2], j: [-6, 0] },
+    routes: [
+      { file: 'gfx', name: 'Графика', roads: [
+        { nodes: [[0, 0], [0, -4], [2, -4], [2, -5]], oncoming: 1, offsets: [3.0, 6.5],
+          cars: h => [{ s: 260, lane: 2, speed: 0 }, { s: 420, lane: 2, speed: 0 }] },
+        { nodes: [[0, -2], [1, -2], [1, -4]], oncoming: 1, offsets: [8.0] }, // на ветку сворачивают на 3.5 с, к её перекрёстку подъезжают на 7 с — зелёный
+      ],
+        events: [{ type: 'rails', at: [0, -1.5], period: 14, length: 500, offset: 1.4 }, { type: 'ramp', at: [0, -3.3], lane: 1, speed: 120 },
+          { type: 'spikes', at: [0, -3.6] }, { type: 'narrow', at: [2, -4.45], to: [2, -4.75], width: 110 }] },
+    ] },
 ];
 for (const d of DISTRICTS) for (const r of d.routes) if (!process.argv[2] || r.file === process.argv[2]) build(d, r);
