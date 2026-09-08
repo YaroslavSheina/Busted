@@ -164,22 +164,30 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     return r.def ? mainS(r.parent, parentEquivalent(r.def, r.path, s)) : s;
   }
 
-  // Развилка: в зоне после from сравниваем близость к текущей дороге и к её ветке, ближняя побеждает.
-  // Слияние: в зоне перед концом ветки возвращаемся на родительскую дорогу у to.
+  // Дорога — та, на чьём асфальте машина. Пока она в пределах текущей, остаётся на ней (прямой проезд через
+  // развилку в любой полосе безопасен); вышла за край — в зоне развилки берём дочернюю ветку, на которой стоит,
+  // в начале ветки можно вернуться на родителя, в конце ветки возвращаемся на родителя у to (обязательно, когда ветка кончилась)
   function switchRoad(who: { road: number; s: number }, x: number, y: number) {
-    let nr = nearest(roads[who.road].path, x, y, who.s);
-    const from = who.road;
-    for (let i = 1; i < roads.length; i++) {
-      const b = roads[i].def!;
-      if (roads[i].parent !== from || who.s < b.from - BRANCH.lead || who.s > b.from + BRANCH.zone) continue;
-      const nb = nearest(roads[i].path, x, y, who.s - (b.from - BRANCH.lead));
-      // на ветку — только если её ось заметно ближе (BRANCH.hyst): на общем заходе оси совпадают, а у начала дуги расходятся постепенно
-      if (nb.s > BRANCH.lead && Math.abs(nb.off) < Math.abs(nr.off) - BRANCH.hyst) { who.road = i; nr = nb; }
-    }
-    const r = roads[who.road];
-    if (who.road === from && r.def && who.s > r.path.L - BRANCH.zone) {
-      const np = nearest(roads[r.parent].path, x, y, r.def.to - (r.path.L - who.s));
-      if (Math.abs(np.off) < Math.abs(nr.off) - BRANCH.hyst || who.s >= r.path.L - BRANCH.lead) { who.road = r.parent; nr = np; }
+    const cur = roads[who.road];
+    let nr = nearest(cur.path, x, y, who.s);
+    const inside = (r: Road, n: { s: number; off: number }) => Math.abs(n.off) <= widthAt(r.width, n.s) / 2 + P.tol.v;
+    const ending = !!cur.def && who.s >= cur.path.L - BRANCH.lead;
+    if (ending || !inside(cur, nr)) {
+      let moved = false;
+      for (let i = 1; i < roads.length && !moved; i++) {
+        const b = roads[i].def!;
+        if (roads[i].parent !== who.road || who.s < b.from - BRANCH.lead || who.s > b.from + BRANCH.zone) continue;
+        const nb = nearest(roads[i].path, x, y, who.s - (b.from - BRANCH.lead));
+        if (nb.s > BRANCH.lead && inside(roads[i], nb)) { who.road = i; nr = nb; moved = true; }
+      }
+      if (!moved && cur.def) {
+        const atStart = who.s < BRANCH.zone + BRANCH.lead, atEnd = who.s > cur.path.L - BRANCH.zone;
+        if (atStart || atEnd) {
+          const pr = roads[cur.parent];
+          const np = nearest(pr.path, x, y, atEnd ? cur.def.to - (cur.path.L - who.s) : cur.def.from - BRANCH.lead + who.s);
+          if (ending || inside(pr, np)) { who.road = cur.parent; nr = np; }
+        }
+      }
     }
     who.s = nr.s;
     return nr;
@@ -238,10 +246,11 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     for (const m of marks) m.a -= dt * 0.4;
     marks = marks.filter(m => m.a > 0).slice(-200);
 
-    const before = car.road, beforeMain = mainS(car.road, car.s);
+    const before = car.road, beforeS = car.s, beforeMain = mainS(car.road, car.s);
     const nr = switchRoad(car, car.x, car.y);
     car.off = nr.off;
-    if (car.road !== before && car.road !== 0) taken.add(car.road);
+    // коп повторяет выбор: свернул на ветку — запомнить; передумал в её начале и вернулся — забыть
+    if (car.road !== before) { if (roads[car.road].parent === before) taken.add(car.road); else if (beforeS < BRANCH.zone + BRANCH.lead) taken.delete(before); }
     const rd = roads[car.road];
     score += Math.max(0, mainS(car.road, car.s) - beforeMain) * SCORE.perPx;
     for (const f of fx) { f.t -= dt; if (f.vx !== undefined) { f.x += f.vx * dt; f.y += (f.vy ?? 0) * dt; f.vx *= 0.9; f.vy! *= 0.9; } else f.y -= 40 * dt; }
