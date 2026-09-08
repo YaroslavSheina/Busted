@@ -11,6 +11,7 @@ import { RAIL } from './config';
 import { trainHead, untilTrain, type Rail } from './rails';
 import { CROSS } from './config';
 import { crossCars, lightAt, type Crossing } from './crossings';
+import { sprite, tile } from './art';
 import { BLOCK } from './config';
 
 export interface View { W: number; H: number; DPR: number }
@@ -39,7 +40,7 @@ export interface Scene {
 
 // Тема. comic — рисованный вид сверху в духе ранних GTA (диздок): контуры, плоские цвета, тротуары в городе,
 // тени под машинами и зданиями. night — прежний тёмный вид (?theme=night). Физика и данные о теме не знают
-export type ThemeName = 'comic' | 'night';
+export type ThemeName = 'comic' | 'night' | 'dark' | 'bright' | 'sprites';
 interface Theme {
   ground: string; grid: string; asphalt: string; shoulder: string; cross: string;
   lane: string; edge: string; dyellow: string;
@@ -47,16 +48,27 @@ interface Theme {
   sidewalk: string | null;  // тротуары вдоль дорог в городе; null — без тротуаров
   shadow: string | null;    // тень под машинами и зданиями
   roofs: string[] | null;   // цвета крыш; null — серые коробки с окнами
+  sprites?: boolean;        // растровые спрайты машин и тайлы текстур из public/art (art.ts)
 }
+const COMIC: Theme = { ground: '#474c55', grid: 'rgba(255,255,255,.04)', asphalt: '#2e3138', shoulder: '#3a3d46', cross: '#33363d',
+  lane: 'rgba(240,238,230,.55)', edge: 'rgba(244,185,66,.75)', dyellow: 'rgba(244,185,66,.9)', outline: '#14161a', sidewalk: '#8f949c', shadow: 'rgba(0,0,0,.35)',
+  roofs: ['#8a5a4a', '#6f7d5a', '#5b6b85', '#9a8a62', '#7a6c8a', '#6d7a80'] };
 const THEMES: Record<ThemeName, Theme> = {
   night: { ground: '#15171c', grid: 'rgba(255,255,255,.035)', asphalt: '#262930', shoulder: '#3a3d46', cross: '#2d3038',
     lane: 'rgba(236,233,224,.28)', edge: 'rgba(244,185,66,.5)', dyellow: 'rgba(244,185,66,.75)', outline: null, sidewalk: null, shadow: null, roofs: null },
-  comic: { ground: '#474c55', grid: 'rgba(255,255,255,.04)', asphalt: '#2e3138', shoulder: '#3a3d46', cross: '#33363d',
-    lane: 'rgba(240,238,230,.55)', edge: 'rgba(244,185,66,.75)', dyellow: 'rgba(244,185,66,.9)', outline: '#14161a', sidewalk: '#8f949c', shadow: 'rgba(0,0,0,.35)',
-    roofs: ['#8a5a4a', '#6f7d5a', '#5b6b85', '#9a8a62', '#7a6c8a', '#6d7a80'] },
+  comic: COMIC,
+  // тёмный комикс: ночь с контурами, как GTA 2
+  dark: { ...COMIC, ground: '#1d2026', grid: 'rgba(255,255,255,.03)', asphalt: '#24272d', cross: '#282b31', sidewalk: '#4a4f58', outline: '#0b0c0f', shadow: 'rgba(0,0,0,.5)',
+    lane: 'rgba(240,238,230,.4)', roofs: ['#4a3a38', '#3b4a3a', '#33405a', '#5a5040', '#463c52', '#3a464c'] },
+  // яркий день: насыщенные крыши, тёплая земля, как GTA 1
+  bright: { ...COMIC, ground: '#8a9a7a', grid: 'rgba(0,0,0,.05)', asphalt: '#4a4d55', cross: '#50535b', sidewalk: '#c9c4b4', outline: '#2a2320', shadow: 'rgba(0,0,0,.3)',
+    lane: 'rgba(255,255,255,.7)', edge: 'rgba(255,205,70,.9)', dyellow: 'rgba(255,205,70,1)', roofs: ['#c8654e', '#5f9e6e', '#4f7fb5', '#d1a94f', '#9a6fb8', '#e08a4e'] },
+  // спрайты и текстуры из Higgsfield поверх геометрии comic
+  sprites: { ...COMIC, sprites: true },
 };
 let T: Theme = THEMES.comic;
 export function setTheme(name: string | null | undefined): void { T = THEMES[(name as ThemeName)] ?? THEMES.comic; }
+export const themeName = (): ThemeName => (Object.keys(THEMES) as ThemeName[]).find(k => THEMES[k] === T) ?? 'comic';
 let city = false; // тротуары вдоль дорог — только там, где есть здания
 export function setCity(v: boolean): void { city = v; }
 const SIDEWALK = 26;
@@ -71,7 +83,7 @@ export const visible = (x: number, y: number, m: number): boolean => !clip || (x
 const STEP = 3;
 
 // Сплошная линия со смещением off от осевой (число или функция от s — сужения). Рисуется кусками, которые видны
-function poly(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: number) => number), color: string, lw: number, cap: CanvasLineCap = 'round'): void {
+function poly(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: number) => number), color: string | CanvasPattern, lw: number, cap: CanvasLineCap = 'round'): void {
   const pt = path.pt, last = pt.length - 1, m = lw + 60;
   ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = cap;
   let open = false;
@@ -121,8 +133,18 @@ function carOutline(ctx: CanvasRenderingContext2D, trace: () => void): void {
   if (!T.outline) return;
   ctx.strokeStyle = T.outline; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.beginPath(); trace(); ctx.stroke();
 }
+// Спрайт машины поверх тени: картинка вписывается в длину l с сохранением пропорций
+function carSprite(ctx: CanvasRenderingContext2D, key: 'sedan' | 'car' | 'police', w: number, l: number, col?: string): boolean {
+  if (!T.sprites) return false;
+  const img = sprite(key, col); if (!img) return false;
+  if (T.shadow) { ctx.fillStyle = T.shadow; ctx.beginPath(); ctx.roundRect(-w / 2 + 3, -l / 2 + 5, w, l, 6); ctx.fill(); }
+  const k = (l + 6) / img.height, dw = img.width * k, dh = img.height * k;
+  ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  return true;
+}
 export function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, w: number, l: number, col: string, player: boolean): void {
   ctx.save(); ctx.translate(x, y); ctx.rotate(h);
+  if (carSprite(ctx, col === '#e6e8ee' ? 'police' : 'car', w, l, col === '#e6e8ee' ? undefined : col)) { ctx.restore(); return; }
   carUnder(ctx, w, l, 6);
   ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 6); ctx.fill();
   ctx.fillStyle = 'rgba(20,22,28,.55)'; ctx.fillRect(-w / 2 + 4, -l / 2 + 12, w - 8, 11); ctx.fillRect(-w / 2 + 4, l / 2 - 14, w - 8, 7);
@@ -139,6 +161,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, 
   const wedge = () => { ctx.moveTo(-w / 2 + 6, -l / 2); ctx.lineTo(w / 2 - 6, -l / 2); ctx.lineTo(w / 2, -l / 2 + 16); ctx.lineTo(w / 2, l / 2 - 4); ctx.lineTo(-w / 2, l / 2 - 4); ctx.lineTo(-w / 2, -l / 2 + 16); ctx.closePath(); };
   const round = { sedan: 6, minivan: 9, supercar: 0, bus: 5 }[spec.body];
   ctx.save(); ctx.translate(x, y); ctx.rotate(h);
+  if (spec.body === 'sedan' && carSprite(ctx, 'sedan', w, l)) { ctx.restore(); return; }
   carUnder(ctx, w, l, round);
   switch (spec.body) {
     case 'sedan':
@@ -303,7 +326,9 @@ function drawRoofs(ctx: CanvasRenderingContext2D, props: Prop[]): void {
   if (T.shadow) { ctx.fillStyle = T.shadow; for (const p of seen) ctx.fillRect(p.x + 10, p.y + 12, p.w, p.h); }
   for (const p of seen) {
     const t = p.tone ?? 0.5, k = Math.floor(t * 97) % roofs.length;
-    ctx.fillStyle = roofs[k]; ctx.fillRect(p.x, p.y, p.w, p.h);
+    const roofTile = T.sprites ? tile(ctx, 'roof', 256) : null;
+    if (roofTile) { ctx.fillStyle = roofTile; ctx.fillRect(p.x, p.y, p.w, p.h); ctx.fillStyle = roofs[k]; ctx.globalAlpha = 0.45; ctx.fillRect(p.x, p.y, p.w, p.h); ctx.globalAlpha = 1; }
+    else { ctx.fillStyle = roofs[k]; ctx.fillRect(p.x, p.y, p.w, p.h); }
     ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(p.x, p.y, p.w, 6); ctx.fillRect(p.x, p.y, 6, p.h);        // свет с северо-запада
     ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(p.x, p.y + p.h - 6, p.w, 6); ctx.fillRect(p.x + p.w - 6, p.y, 6, p.h);
     ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 2; ctx.strokeRect(p.x + 12, p.y + 12, p.w - 24, p.h - 24); // парапет
@@ -406,7 +431,7 @@ export function drawGrid(ctx: CanvasRenderingContext2D, x0: number, y0: number, 
 
 // Дорога с обочиной, полосами, краями и финишем — в мировых координатах
 // Полотно переменной ширины: контур по левому краю вперёд и по правому назад, торцы — полукруги
-function ribbon(ctx: CanvasRenderingContext2D, path: Path, half: (s: number) => number, color: string, roundEnds: boolean): void {
+function ribbon(ctx: CanvasRenderingContext2D, path: Path, half: (s: number) => number, color: string | CanvasPattern, roundEnds: boolean): void {
   const pt = path.pt, last = pt.length - 1, m = half(0) + 60;
   ctx.fillStyle = color;
   // видимые куски полотна — отдельными контурами: левый край вперёд, правый назад, точки через STEP
@@ -435,8 +460,9 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
   if (T.sidewalk && city) layers.push([SIDEWALK + 3, T.outline!], [SIDEWALK, T.sidewalk]);
   layers.push([T.outline ? 5 : 4, T.outline ?? T.shoulder], [0, T.asphalt]);
   for (const [extra, color] of layers) {
-    if (typeof w === 'number') poly(ctx, path, 0, color, w + 2 * extra, cap); // постоянная ширина — штрихом, как в прототипе
-    else ribbon(ctx, path, s => w(s) / 2 + extra, color, finish);
+    const fill = extra === 0 && T.sprites ? (tile(ctx, 'asphalt', 384) ?? color) : extra === SIDEWALK && T.sprites ? (tile(ctx, 'pavement', 256) ?? color) : color;
+    if (typeof w === 'number') poly(ctx, path, 0, fill, w + 2 * extra, cap); // постоянная ширина — штрихом, как в прототипе
+    else ribbon(ctx, path, s => w(s) / 2 + extra, fill, finish);
   }
   const wa = (s: number) => widthAt(w, s);
   for (let k = 1; k < LANES; k++) {
@@ -489,6 +515,10 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = T.ground; ctx.fillRect(0, 0, W, H);
   setCity(!!sc.props?.length);
   ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-cam.x, -cam.y);
+  if (T.sprites) { // земля текстурой в мировых координатах: в городе бетон, за городом пустырь
+    const g = tile(ctx, sc.props?.length ? 'pavement' : 'grass', 512);
+    if (g) { ctx.fillStyle = g; ctx.fillRect(cam.x - W / 2 / z, cam.y - H / 2 / z, W / z, H / z); }
+  }
   setClip({ x0: cam.x - W / 2 / z, y0: cam.y - H / 2 / z, x1: cam.x + W / 2 / z, y1: cam.y + H / 2 / z });
   drawGrid(ctx, cam.x - W / 2 / z, cam.y - H / 2 / z, cam.x + W / 2 / z, cam.y + H / 2 / z);
   // здания под всем, потом поперечные улицы, ветки под главной: её разметка и финиш сверху на стыках
