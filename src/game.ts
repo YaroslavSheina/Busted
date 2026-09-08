@@ -277,7 +277,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       // на красный и жёлтый трафик встаёт перед перекрёстком
       const red = r.crossings.filter(c => lightAt(c, timeAlive) !== 'green');
       const stops = red.map(c => c.s - c.w / 2), stopsBack = red.map(c => c.s + c.w / 2);
-      r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: r.width, playerS: r === rd ? car.s : undefined, playerL: car.L, stops, stopsBack });
+      r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: r.width, playerS: r === rd ? car.s : undefined, playerL: car.L, stops, stopsBack, oncoming: r.oncoming });
     }
     if (roads.length > 1) flowTraffic();
     const me = obb(car.x, car.y, car.h, car.W, car.L);

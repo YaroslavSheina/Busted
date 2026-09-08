@@ -63,6 +63,16 @@ export function anyBlockAhead(layout: Layout, s: number, look: number): boolean 
   return false;
 }
 
+// Для встречной: ближайшее заграждение в её полосе на отрезке [s − look, s] — дальний (для неё ближний) край
+export function blockBehind(layout: Layout, lane: number, s: number, look: number): number | null {
+  let best: number | null = null;
+  const take = (bs: number) => { if (bs <= s + 20 && bs >= s - look && (best === null || bs > best)) best = bs; };
+  for (const p of layout.police) if (p.lane === lane) take(p.s);
+  for (const p of layout.spikes) if (p.lane === lane) take(p.s);
+  for (const w of layout.works) if (w.lane === lane) { const a = w.s - w.l / 2, b = w.s + w.l / 2; if (a <= s + 20 && b >= s - look) take(Math.min(b, s + 20)); }
+  return best;
+}
+
 // Ближайшее заграждение в полосе на отрезке [s, s + look] по своей дороге; null — проезд свободен
 export function blockAhead(layout: Layout, lane: number, s: number, look: number): number | null {
   let best: number | null = null;
@@ -117,7 +127,7 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
 
 // Сортирует по s, подстраивает под машину впереди в той же полосе, убирает доехавших до финиша.
 // С ai (docs/mechanics.md, M4): перед заграждением уходит в свободную полосу, а если её нет — встаёт в пробку
-export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number | WidthFn; playerS?: number; playerL?: number; stops?: number[]; stopsBack?: number[] }): Vehicle[] {
+export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { layout: Layout; width: number | WidthFn; playerS?: number; playerL?: number; stops?: number[]; stopsBack?: number[]; oncoming?: number }): Vehicle[] {
   traffic.sort((a, b) => a.s - b.s);
   for (let i = 0; i < traffic.length; i++) {
     const c = traffic[i];
@@ -146,6 +156,8 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
       // стоп-линия встречной — с дальней стороны поперечной улицы (stopsBack)
       let atLine = false;
       if (ai?.stopsBack) { let stopAt: number | null = null; for (const st of ai.stopsBack) if (st < c.s - 10 && st >= c.s - TRAFFIC_AI.look && (stopAt === null || st > stopAt)) stopAt = st; if (stopAt !== null) { const dist = c.s - (stopAt + TRAFFIC_AI.stopGap); atLine = dist < 2; sp = atLine ? 0 : Math.min(sp, dist * 3); } }
+      // заграждение в её полосе (пост, ежи, ремонт, перекрытие) — встаёт перед ним, как перед красным
+      if (ai) { const blk = blockBehind(ai.layout, c.lane, c.s, TRAFFIC_AI.look); if (blk !== null) { const dist = c.s - (blk + TRAFFIC_AI.stopGap); if (dist < 2) { atLine = true; sp = 0; } else sp = Math.min(sp, dist * 3); } }
       c.v = settle(c, sp, atLine, dt); c.s -= c.v * dt; continue;
     }
     let sp = c.spd, atLine = false;
@@ -179,7 +191,7 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
       if (ahead !== null) {
         // свободная полоса — ближайшая по номеру, без заграждения впереди и без соседа рядом
         let best = -1, bestD = LANES;
-        for (let l = 0; l < nAhead; l++) {
+        for (let l = ai.oncoming ?? 0; l < nAhead; l++) { // встречные полосы попутному трафику не годятся
           if (l === c.lane || blockAhead(ai.layout, l, c.s, TRAFFIC_AI.look) !== null) continue;
           // сосед рядом или впереди ближе gateGap — в эту полосу пока нельзя
           if (traffic.some(o => o !== c && o.lane === l && (Math.abs(o.s - c.s) < TRAFFIC_AI.safeGap || (o.s > c.s && o.s - c.s < TRAFFIC_AI.gateGap)))) continue;
