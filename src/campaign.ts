@@ -2,7 +2,7 @@
 import { LEVEL_KEYS } from './levels';
 
 // Порядок пока из того, что есть; по мере сборки пролога и обучения список заменяется
-export const CAMPAIGN: string[] = ['prologue', '01', '02', '03', 'district2', 'district2b', 'district2c'].filter(k => LEVEL_KEYS.includes(k));
+export const CAMPAIGN: string[] = ['prologue', 'tut01', 'tut02', 'tut03', 'tut04', 'tut05', 'tut06', 'tut07', 'tut08', 'tut09', 'tut10', 'district2', 'district2b', 'district2c'].filter(k => LEVEL_KEYS.includes(k));
 
 const KEY = 'lr.campaign';
 interface Progress { at: number }

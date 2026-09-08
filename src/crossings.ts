@@ -12,6 +12,7 @@ export interface CrossingDef {
   cars?: number;    // машин в группе
   speed?: number;   // px/с поперёк
   width?: number;   // ширина поперечной улицы, px
+  before?: number;  // сценарный: цикл стоит на зелёном с очередью, пока игрок не окажется за before px до перекрёстка; затем жёлтый и красный
 }
 
 export interface Crossing {
@@ -24,6 +25,7 @@ export interface Crossing {
   w: number; n: number; speed: number;
   roadHalf: number;         // половина ширины маршрута в этом месте
   red: number;              // длительность красного, с
+  t0?: number;              // сценарный: время попытки, когда игрок дошёл до before (undefined — ещё нет)
 }
 
 export interface CrossCar { x: number; y: number; h: number; W: number; L: number; obb: Obb }
@@ -46,9 +48,12 @@ export function layoutCrossings(path: Path, defs: CrossingDef[] = [], roadWidth:
   });
 }
 
-// Фаза цикла: 0 — момент включения красного
+// Фаза цикла: 0 — момент включения красного. Сценарный перекрёсток до срабатывания стоит на T − 1.05: зелёный,
+// смена уже подъехала и стоит в очереди; после — идёт дальше: через 0.05 с жёлтый, через 1.05 с красный
+const HOLD = 1.05;
 function phase(c: Crossing, time: number): number {
   const T = c.def.period;
+  if (c.def.before !== undefined) return c.t0 === undefined ? T - HOLD : (((time - c.t0 + T - HOLD) % T) + T) % T;
   return (((time - (c.def.offset ?? 0)) % T) + T) % T;
 }
 

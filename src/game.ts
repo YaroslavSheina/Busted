@@ -147,6 +147,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     slow = 0; zoom = 1; flash = null;
     score = 0; fx = []; buzzedPosts = new Set(); jump = null;
     cardIdx = 0; card = null;
+    for (const r of roads) { for (const rl of r.rails) rl.t0 = undefined; for (const c of r.crossings) c.t0 = undefined; } // сценарные поезда и светофоры ждут игрока заново
     ui.overlay.className = '';
     // контрольная точка: после BUSTED продолжаем с неё — машина на оси, время как при прибытии с постоянной скоростью,
     // трафик рядом убран, коп (если уже был) снова на хвосте
@@ -293,6 +294,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       card = 1.2; ui.overlay.className = 'show card'; ui.ovTitle.textContent = level.cards[cardIdx].text; ui.ovSub.textContent = ''; ui.ovHint.textContent = ''; cardIdx++;
     }
     if (level.trap && ms >= level.trap.s) return trap(level.trap.text);
+    for (const rl of roads[car.road].rails) if (rl.def.after !== undefined && rl.t0 === undefined && car.s >= rl.s) rl.t0 = timeAlive; // игрок пересёк рельсы — поезд пошёл
+    for (const c of roads[car.road].crossings) if (c.def.before !== undefined && c.t0 === undefined && car.s >= c.s - c.def.before) c.t0 = timeAlive; // игрок подъехал — светофор пошёл на красный
     if (level.chaser && !copSpawned && ms >= (level.chaser.at ?? 0)) { copSpawned = true; chaser = { road: car.road, s: car.s - level.chaser.gap, off: car.off }; }
     // коп повторяет выбор: свернул на ветку — запомнить; передумал в её начале и вернулся — забыть
     if (car.road !== before) { if (roads[car.road].parent === before) taken.add(car.road); else if (beforeS < BRANCH.zone + BRANCH.lead) taken.delete(before); }

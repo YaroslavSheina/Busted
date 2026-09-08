@@ -9,6 +9,7 @@ export interface RailDef {
   speed: number;   // px/с вдоль рельсов
   length: number;  // длина состава, px
   offset?: number; // сдвиг фазы, с
+  after?: number;  // сценарный поезд: не по циклу, а один раз — голова у края дороги через after с после того, как игрок пересёк рельсы
 }
 
 export interface Rail {
@@ -17,6 +18,7 @@ export interface Rail {
   dx: number; dy: number; // единичный вектор вдоль рельсов (вправо по ходу дороги)
   h: number;              // курс вдоль рельсов для OBB
   s: number;
+  t0?: number;            // сценарный поезд: время попытки, когда игрок пересёк рельсы (undefined — ещё не пересёк)
 }
 
 export function layoutRails(path: Path, defs: RailDef[] = []): Rail[] {
@@ -28,6 +30,11 @@ export function layoutRails(path: Path, defs: RailDef[] = []): Rail[] {
 
 // Положение головы состава вдоль рельсов в момент time: состав идёт от −reach−length к +reach, цикл — period
 export function trainHead(r: Rail, time: number): number {
+  if (r.def.after !== undefined) { // сценарный: до пересечения состава нет, после — один проход с заданным опозданием
+    if (r.t0 === undefined) return -RAIL.reach - r.def.length - 1;
+    const shift = (RAIL.reach + r.def.length - RAIL.trainW) / r.def.speed - r.def.after;
+    return (time - r.t0 + shift) * r.def.speed - RAIL.reach - r.def.length;
+  }
   const D = r.def.period * r.def.speed;
   const cycle = (((time + (r.def.offset ?? 0)) * r.def.speed) % D + D) % D;
   return cycle - RAIL.reach - r.def.length;

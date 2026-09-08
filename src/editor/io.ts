@@ -89,7 +89,7 @@ function parseCrossings(v: unknown, what: string): CrossingDef[] {
   return v.map((c, i): CrossingDef => {
     if (typeof c !== 'object' || c === null || !isNum(c.s) || !isNum(c.period)) throw new Error(`${what} ${i}: нужны s и period`);
     const out: CrossingDef = { s: c.s, period: c.period };
-    for (const k of ['offset', 'cars', 'speed', 'width'] as const) if (c[k] !== undefined) { if (!isNum(c[k])) throw new Error(`${what} ${i}: «${k}» число`); out[k] = c[k]; }
+    for (const k of ['offset', 'cars', 'speed', 'width', 'before'] as const) if (c[k] !== undefined) { if (!isNum(c[k])) throw new Error(`${what} ${i}: «${k}» число`); out[k] = c[k]; }
     return out;
   });
 }
@@ -100,6 +100,7 @@ function parseRails(v: unknown, what: string): RailDef[] {
     if (typeof r !== 'object' || r === null || !isNum(r.s) || !isNum(r.period) || !isNum(r.speed) || !isNum(r.length)) throw new Error(`${what} ${i}: нужны s, period, speed, length`);
     const out: RailDef = { s: r.s, period: r.period, speed: r.speed, length: r.length };
     if (r.offset !== undefined) { if (!isNum(r.offset)) throw new Error(`${what} ${i}: offset число`); out.offset = r.offset; }
+    if (r.after !== undefined) { if (!isNum(r.after)) throw new Error(`${what} ${i}: after число`); out.after = r.after; }
     return out;
   });
 }

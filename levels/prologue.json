@@ -113,7 +113,7 @@
     {"from":8703,"to":9086,"width":130}
   ],
   "rails": [
-    {"s":2943,"period":14,"speed":260,"length":500,"offset":9.89}
+    {"s":2943,"period":14,"speed":260,"length":500,"offset":0,"after":0.5}
   ],
   "crossings": [
     {"s":642,"period":12,"offset":3.8},

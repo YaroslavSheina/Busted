@@ -115,17 +115,22 @@ function build(district, route) {
     }
     const helpers = { sAt: (x, y) => sAt(sm, x, y), node, L: Math.round(sm.at(-1).s) };
     const cars = typeof rd.cars === 'function' ? rd.cars(helpers) : rd.cars;
-    roads.push({ legs, pts, sm, def, straight: straightNodes(legs), offsets: rd.offsets ?? [], cars, oncoming: rd.oncoming ?? 0, L: helpers.L,
+    roads.push({ legs, pts, sm, def, straight: straightNodes(legs), offsets: rd.offsets ?? [], noCross: rd.crossings === false, cars, oncoming: rd.oncoming ?? 0, L: helpers.L,
       parentIdx: idx ? (rd.parent === undefined ? 0 : rd.parent + 1) : -1, ends: idx ? [node(rd.nodes[0]), node(rd.nodes.at(-1))] : [] });
   });
   // Перекрёстки — на прямых узлах, кроме примыканий: где отходит или вливается ветка, светофора и поперечных нет
   // (боковая улица там — сама ветка; очередь поперечных стояла бы прямо на дуге поворота)
   roads.forEach((r, i) => {
     const junctions = new Set(roads.filter(o => o.parentIdx === i).flatMap(o => o.ends.map(p => p.join(','))));
-    // offsets — массив фаз или 'green': красный загорается через 2 с после прибытия, очередь поперечных видна, но не мешает
-    r.crossings = r.straight.filter(p => !junctions.has(p.join(','))).map(([x, y], k) => {
-      const s = sAt(r.sm, x, y), arrive = s / SPEED;
-      const offset = r.offsets === 'green' ? +(((arrive + 2) % 12).toFixed(1)) : (r.offsets[k] ?? 0);
+    // offsets — 'green' для всех или массив по перекрёсткам: число, 'green' (красный через 2 с после прибытия, очередь
+    // видна, но не мешает) или 'red' (красный за 0.8 с до прибытия — поперечные тронулись, средняя полоса проходит между ними)
+    const mode = k => (r.offsets === 'green' ? 'green' : r.offsets[k] ?? 0);
+    // 'red' — сценарный: красный включается через 1.05 с после того, как игрок за before px до перекрёстка, так что при
+    // прибытии красный горит 2.0 с и средняя полоса проходит между тронувшимися поперечными (по развёртке crosslanes)
+    r.crossings = r.noCross ? [] : r.straight.filter(p => !junctions.has(p.join(','))).map(([x, y], k) => {
+      const s = sAt(r.sm, x, y), arrive = s / SPEED, m = mode(k);
+      if (m === 'red') return { s, period: 12, offset: 0, before: Math.round(3.05 * SPEED), arrive: +arrive.toFixed(1) };
+      const offset = m === 'green' ? +(((arrive + 2) % 12).toFixed(1)) : m;
       return { s, period: 12, offset, arrive: +arrive.toFixed(1) };
     });
   });
@@ -142,10 +147,14 @@ function build(district, route) {
       case 'closure': blocks.push({ s, police: [0, 1, 2] }); break;                             // полное перекрытие — объезд по ветке
       case 'narrow': narrows.push({ from: s, to: atS(e.to), width: e.width ?? 110 }); break;
       case 'rails': {
-        // offset 'behind': голова состава у края дороги через 0.4 с после прибытия — поезд проходит сразу за игроком (и снимает копа)
+        // offset 'behind': сценарный поезд — голова у края дороги через 0.5 с после того, как игрок пересёк рельсы
+        // (снимает копа на дистанции ~200); 'ahead': по циклу, хвост сходит с дороги за 1.5 с до расчётного прибытия
         const speed = e.speed ?? 260, length = e.length ?? 400, period = e.period ?? 14;
-        const offset = e.offset === 'behind' ? +((((700 + length - 40) / speed - (s / SPEED + 0.4)) % period + period) % period).toFixed(2) : (e.offset ?? 0);
-        rails.push({ s, period, speed, length, offset });
+        if (e.offset === 'behind') { rails.push({ s, period, speed, length, offset: 0, after: e.after ?? 0.5 }); }
+        else {
+          const offset = e.offset === 'ahead' ? +((((700 + 2 * length + 40) / speed - (s / SPEED - 1.5)) % period + period) % period).toFixed(2) : (e.offset ?? 0);
+          rails.push({ s, period, speed, length, offset });
+        }
         const leg = main0.legs.find(L => L.dx ? Math.abs(e.at[1] * BY - L.a[1]) < 1 : Math.abs(e.at[0] * BX - L.a[0]) < 1);
         bands.push(leg && leg.dx ? { axis: 'x', c: e.at[0] * BX } : { axis: 'y', c: e.at[1] * BY }); // рельсы поперёк улицы — коридор через кварталы
         break;
@@ -161,6 +170,7 @@ function build(district, route) {
   const trap = route.trap ? { s: atS(route.trap.at), text: route.trap.text } : null;
   const checkpoints = (route.checkpoints ?? []).map(atS);
   const chaser = spec.chaser ? { ...spec.chaser, ...(route.chaserAt ? { at: atS(route.chaserAt) } : {}) } : null;
+  if (!chaser && route.chaserAt) throw new Error(`${spec.name}: chaserAt без chaser`);
 
   // здания: все кварталы в диапазоне, отступ от осей улиц
   let props = [];
@@ -228,6 +238,51 @@ ${props.map(p => '    ' + JSON.stringify(p)).join(',\n')}
 }
 
 const DISTRICTS = [
+  // «Учебный район» (docs/progression.md): десять коротких уровней по одной механике, один город на всех.
+  // Минивэн на 1–5, седан на 6–10. Ветки не используются — уровни линейные (объезды в пост-MVP).
+  { seed: 2026, car: 'minivan', speed: 240, traffic: 0, panic: 0, mix: 0, chaser: null, blocks: { i: [-1, 4], j: [-10, 0] },
+    routes: [
+      { file: 'tut01', name: '1 · Руль', intro: 'Две кнопки: влево и вправо. Газ не нужен — машина едет сама. Доведи её до гаража.',
+        cards: [{ at: [0, -2.3], text: 'Поворот: жми заранее — машину несёт' }, { at: [2, -1.6], text: 'Теперь налево' }],
+        roads: [{ nodes: [[0, 0], [0, -3], [2, -3], [2, -1], [4, -1], [4, -4]], oncoming: 0, crossings: false }] },
+      { file: 'tut02', name: '2 · Трафик', traffic: 0.35, intro: 'Впереди машины. Обгоняй — меняй полосу заранее.',
+        cards: [{ at: [0, -0.8], text: 'Проезд впритирку — NEAR MISS, +100' }],
+        roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -8]], oncoming: 0, crossings: false }] },
+      { file: 'tut03', name: '3 · Перекрёсток', traffic: 0.1, intro: 'Светофоры. На зелёный — езжай. На красный поперечные идут друг за другом — проскочи между ними.',
+        cards: [{ at: [0, -2.5], text: 'Впереди красный: смотри на поперечные' }],
+        roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -7]], oncoming: 0, offsets: ['green', 'green', 'red', 'green', 'red', 'green'] }] },
+      { file: 'tut04', name: '4 · Пост', traffic: 0.15, intro: 'Посты полиции перекрывают полосы. Ищи просвет и перестраивайся заранее.',
+        cards: [{ at: [0, -1.0], text: 'Пост: просвет посередине' }, { at: [0, -2.3], text: 'Просвет слева' }, { at: [1, -5.0], text: 'Просвет справа' }, { at: [1, -6.5], text: 'Ежи справа — только середина' }],
+        events: [{ type: 'post', at: [0, -1.5] }, { type: 'post', at: [0, -2.8], lanes: [1, 2] }, { type: 'post', at: [1, -5.5], lanes: [0, 1] }, { type: 'spikes', at: [1, -7] }],
+        roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -8]], oncoming: 0, crossings: false }] },
+      { file: 'tut05', name: '5 · Ремонт', traffic: 0.2, intro: 'Ремонт закрывает полосы. Сужение — держись середины.',
+        cards: [{ at: [0, -0.7], text: 'Ремонт справа: уходи в левую полосу' }, { at: [1, -4.8], text: 'Сужение впереди' }],
+        events: [{ type: 'works', at: [0, -1.2], lanes: [1, 2], len: 400 }, { type: 'works', at: [0, -2.8], lanes: [0], len: 300 },
+          { type: 'narrow', at: [1, -5.2], to: [1, -5.8], width: 110 }, { type: 'works', at: [1, -6.8], lanes: [2], len: 300 }],
+        roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -8]], oncoming: 0, crossings: false }] },
+      { file: 'tut06', name: '6 · Переезд', car: 'sedan', speed: 300, traffic: 0.15, intro: 'Переезд. Поезд не ждёт — и не догонит. Держи темп.',
+        cards: [{ at: [0, -1.0], text: 'Переезд: поезд пройдёт перед тобой' }, { at: [0, -3.0], text: 'Этот пройдёт сразу за тобой' }],
+        events: [{ type: 'rails', at: [0, -1.5], offset: 'ahead', length: 500 }, { type: 'rails', at: [0, -3.5], offset: 'behind', length: 500 }, { type: 'rails', at: [1, -7], offset: 'behind', length: 600 }],
+        roads: [{ nodes: [[0, 0], [0, -5], [1, -5], [1, -9]], oncoming: 0, crossings: false }] },
+      { file: 'tut07', name: '7 · Погоня', car: 'sedan', speed: 300, traffic: 0.15, chaser: { gap: 200, speed: 1 }, chaserAt: [0, -0.8],
+        intro: 'Полиция на хвосте. В поворотах ты быстрее — не сбавляй.',
+        cards: [{ at: [0, -0.9], text: 'Погоня! Держи дистанцию в поворотах' }, { at: [2, -6.5], text: 'Переезд впереди: поезд разберётся с копом' }],
+        events: [{ type: 'rails', at: [2, -7], offset: 'behind', length: 500 }],
+        roads: [{ nodes: [[0, 0], [0, -2], [2, -2], [2, -4], [0, -4], [0, -6], [2, -6], [2, -8]], oncoming: 0, crossings: false }] },
+      { file: 'tut08', name: '8 · Рампа', car: 'sedan', speed: 300, traffic: 0.1, intro: 'Автовоз с рампой. Заезжай сзади ровно и быстрее него — полетишь.',
+        cards: [{ at: [0, -0.8], text: 'Рампа: заезжай сзади по центру' }, { at: [0, -2.2], text: 'Перелети ремонт' }, { at: [1, -6.0], text: 'Перелети пост' }],
+        events: [{ type: 'ramp', at: [0, -1.3], lane: 1, speed: 100 }, { type: 'ramp', at: [0, -2.6], lane: 1, speed: 100 }, { type: 'works', at: [0, -2.95], lanes: [0, 1, 2], len: 200 },
+          { type: 'ramp', at: [1, -6.5], lane: 1, speed: 100 }, { type: 'closure', at: [1, -6.85] }],
+        roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -9]], oncoming: 0, crossings: false }] },
+      { file: 'tut09', name: '9 · Встречка', car: 'sedan', speed: 300, traffic: 0.4, panic: 0.5, mix: 0.1, intro: 'Левая полоса — встречная. Проезд впритирку пугает водителей: паника — очки.',
+        cards: [{ at: [0, -0.7], text: 'Двойная жёлтая: слева встречка' }, { at: [0, -2.5], text: 'Прижмись к машине — ПАНИКА +300' }],
+        roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -8]], oncoming: 1, crossings: false }] },
+      { file: 'tut10', name: '10 · Экзамен', car: 'sedan', speed: 300, traffic: 0.3, mix: 0.15, panic: 0.3, chaser: { gap: 200, speed: 1 }, chaserAt: [0, -0.5],
+        intro: 'Экзамен. Всё, что умеешь. Гараж в конце.',
+        events: [{ type: 'post', at: [0, -1.5] }, { type: 'works', at: [1.5, -3], lanes: [2], len: 300 }, { type: 'rails', at: [2, -4.5], offset: 'behind', length: 500 },
+          { type: 'ramp', at: [4, -7.4], lane: 1, speed: 100 }, { type: 'closure', at: [4, -7.7] }, { type: 'narrow', at: [4, -8.3], to: [4, -8.7], width: 110 }],
+        roads: [{ nodes: [[0, 0], [0, -3], [2, -3], [2, -6], [4, -6], [4, -9]], oncoming: 1, offsets: ['green', 'red', 'green', 'red', 'green', 'red', 'green', 'green'] }] },
+    ] },
   // «Пролог» (docs/progression.md): широкие улицы, спорткар, линейный длинный маршрут, финал — ловушка перед гаражом
   { seed: 31337, car: 'prologue', speed: 360, traffic: 0.1, panic: 0.4, mix: 0.1, chaser: { gap: 200, speed: 1 },
     grid: { bx: 760, by: 640, road: 220, r: 320 }, blocks: { i: [-1, 8], j: [-13, 1] },
