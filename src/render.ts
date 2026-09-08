@@ -222,14 +222,17 @@ export function drawNoEntry(ctx: CanvasRenderingContext2D, x: number, y: number)
   ctx.fillStyle = '#d93b3b'; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill();
   ctx.fillStyle = '#f2efe8'; ctx.fillRect(x - 6, y - 1.5, 12, 3);
 }
-// Стрелка поворота на асфальте: в крайней полосе со стороны ветки, за s до развилки
+// Стрелка «прямо или в сторону» на асфальте: в крайней полосе со стороны ветки, за s до развилки —
+// на развилке доступны оба варианта, поэтому наконечник вперёд и ответвление с наконечником вбок
 export function drawTurnArrow(ctx: CanvasRenderingContext2D, path: Path, w: number | WidthFn, s: number, side: 1 | -1): void {
   const p = pathAt(path, s), wa = widthAt(w, s), n = lanesFor(wa);
   const off = laneOff(wa, side > 0 ? n - 1 : 0);
   ctx.save(); ctx.translate(p.x + p.nx * off, p.y + p.ny * off); ctx.rotate(heading(p.tx, p.ty)); // вперёд — −y
   ctx.strokeStyle = 'rgba(236,233,224,.8)'; ctx.fillStyle = 'rgba(236,233,224,.8)'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(0, -4); ctx.quadraticCurveTo(0, -16, side * 10, -16); ctx.lineTo(side * 14, -16); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(side * 27, -16); ctx.lineTo(side * 13, -25); ctx.lineTo(side * 13, -7); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, 30); ctx.lineTo(0, -18); ctx.stroke();                                        // прямо
+  ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(-8, -17); ctx.lineTo(8, -17); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, 8); ctx.quadraticCurveTo(0, -4, side * 10, -4); ctx.lineTo(side * 14, -4); ctx.stroke(); // в сторону
+  ctx.beginPath(); ctx.moveTo(side * 27, -4); ctx.lineTo(side * 13, -13); ctx.lineTo(side * 13, 5); ctx.closePath(); ctx.fill();
   ctx.restore();
 }
 // Навигатор: пунктир к гаражу по осевой главной дороги; ветки без линии — на свой страх и риск
