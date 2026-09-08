@@ -35,8 +35,6 @@
     {"s":1768,"lane":2,"speed":0}
   ],
   "crossings": [
-    {"s":518,"period":12,"offset":3.2},
-    {"s":1568,"period":12,"offset":4.5},
     {"s":2615,"period":12,"offset":7.5}
   ],
   "branches": [

@@ -108,10 +108,16 @@ function build(district, route) {
       sm = sample([pAt(from - LEAD), pAt(from), pAt(from + LEAD), ...pts, pAt(to - LEAD), pAt(to), pAt(to + LEAD)]);
       def = { from, to, parent: rd.parent };
     }
-    const crossings = straightNodes(legs).map(([x, y], i) => ({ s: sAt(sm, x, y), period: 12, offset: rd.offsets?.[i] ?? 0, arrive: +(sAt(sm, x, y) / 300).toFixed(1) }));
     const helpers = { sAt: (x, y) => sAt(sm, x, y), node, L: Math.round(sm.at(-1).s) };
     const cars = typeof rd.cars === 'function' ? rd.cars(helpers) : rd.cars;
-    roads.push({ legs, pts, sm, def, crossings, cars, oncoming: rd.oncoming ?? 0, L: helpers.L });
+    roads.push({ legs, pts, sm, def, straight: straightNodes(legs), offsets: rd.offsets ?? [], cars, oncoming: rd.oncoming ?? 0, L: helpers.L,
+      parentIdx: idx ? (rd.parent === undefined ? 0 : rd.parent + 1) : -1, ends: idx ? [node(rd.nodes[0]), node(rd.nodes.at(-1))] : [] });
+  });
+  // Перекрёстки — на прямых узлах, кроме примыканий: где отходит или вливается ветка, светофора и поперечных нет
+  // (боковая улица там — сама ветка; очередь поперечных стояла бы прямо на дуге поворота)
+  roads.forEach((r, i) => {
+    const junctions = new Set(roads.filter(o => o.parentIdx === i).flatMap(o => o.ends.map(p => p.join(','))));
+    r.crossings = r.straight.filter(p => !junctions.has(p.join(','))).map(([x, y], k) => ({ s: sAt(r.sm, x, y), period: 12, offset: r.offsets[k] ?? 0, arrive: +(sAt(r.sm, x, y) / 300).toFixed(1) }));
   });
 
   // здания: все кварталы в диапазоне, отступ от осей улиц
@@ -172,7 +178,7 @@ const DISTRICTS = [
   { seed: 4242, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 3], j: [-5, 0] },
     routes: [
       { file: 'district1', name: 'Район 1', roads: [
-        { nodes: [[0, 0], [0, -2], [2, -2], [2, -4], [3, -4]], oncoming: 1, offsets: [3.2, 4.5, 7.5],
+        { nodes: [[0, 0], [0, -2], [2, -2], [2, -4], [3, -4]], oncoming: 1, offsets: [7.5], // перекрёсток (2,−3): красный при прибытии, средняя полоса проходит
           cars: h => [{ s: 300, lane: 2, speed: 0 }, { s: 620, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -2])) + 200, lane: 2, speed: 0 }] },
         { nodes: [[0, -1], [1, -1], [1, -2]], oncoming: 1 },
       ] },
@@ -183,20 +189,20 @@ const DISTRICTS = [
       // маршрут 1: старт (0,0), север 3, восток 3, север 1. Ветка А: направо у (0,−1), прямо через (1,−1), налево у (2,−1),
       // прямо через (2,−2), вливается в главную у (2,−3). Ветка Б от А: налево у (1,−1), направо у (1,−2), вливается в А у (2,−2)
       { file: 'district2', name: 'Район 2 · маршрут 1', roads: [
-        { nodes: [[0, 0], [0, -3], [3, -3], [3, -4]], oncoming: 1, offsets: [3.0, 2.5, 9.5, 6.5], // зелёный, красный, зелёный, красный при прибытии (routebot SWEEP)
+        { nodes: [[0, 0], [0, -3], [3, -3], [3, -4]], oncoming: 1, offsets: [2.5, 9.5], // (0,−2) красный, (1,−3) зелёный при прибытии (routebot SWEEP)
           cars: h => [{ s: 340, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -3])) + 220, lane: 2, speed: 0 }] },
-        { nodes: [[0, -1], [1, -1], [2, -1], [2, -2], [2, -3]], oncoming: 1, offsets: [4.5, 5.5] }, // зелёный, красный при прибытии
+        { nodes: [[0, -1], [1, -1], [2, -1], [2, -2], [2, -3]], oncoming: 1 }, // её прямые узлы — примыкания ветки Б, перекрёстков нет
         { nodes: [[1, -1], [1, -2], [2, -2]], parent: 0, oncoming: 1 },
       ] },
       // маршрут 2: старт (3,0), север 1, запад 2, север 2, восток 2, север 1. Ветка: направо у (1,−2), налево у (2,−2), вливается у (2,−3)
       { file: 'district2b', name: 'Район 2 · маршрут 2', roads: [
-        { nodes: [[3, 0], [3, -1], [1, -1], [1, -3], [3, -3], [3, -4]], oncoming: 1, offsets: [5.0, 6.0, 0.5], // зелёный, красный, зелёный при прибытии
+        { nodes: [[3, 0], [3, -1], [1, -1], [1, -3], [3, -3], [3, -4]], oncoming: 1, offsets: [5.0], // (2,−1) зелёный при прибытии
           cars: h => [{ s: 300, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -1])) + 260, lane: 2, speed: 0 }] },
         { nodes: [[1, -2], [2, -2], [2, -3]], oncoming: 1 },
       ] },
       // маршрут 3: старт (1,0), север 2, восток 2, север 2. Ветка: направо у (1,−1), налево у (2,−1), вливается у (2,−2)
       { file: 'district2c', name: 'Район 2 · маршрут 3', roads: [
-        { nodes: [[1, 0], [1, -2], [3, -2], [3, -4]], oncoming: 1, offsets: [3.2, 4.5, 7.5], // как в «Районе 1»: та же форма маршрута
+        { nodes: [[1, 0], [1, -2], [3, -2], [3, -4]], oncoming: 1, offsets: [7.5], // (3,−3) красный при прибытии, как в «Районе 1»
           cars: h => [{ s: 320, lane: 2, speed: 0 }, { s: h.sAt(...h.node([2, -2])) + 240, lane: 2, speed: 0 }] },
         { nodes: [[1, -1], [2, -1], [2, -2]], oncoming: 1 },
       ] },
