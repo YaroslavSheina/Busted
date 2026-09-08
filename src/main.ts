@@ -3,7 +3,7 @@ import { createGame } from './game';
 import { setTheme } from './render';
 import { loadArt } from './art';
 const query = new URLSearchParams(location.search);
-setTheme(query.get('theme')); // ?theme=night|comic|dark|bright|sprites
+setTheme(query.get('theme')); // ?theme=comic|dark|bright|sprites — эксперименты; без параметра night
 loadArt();
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';

@@ -66,8 +66,10 @@ const THEMES: Record<ThemeName, Theme> = {
   // спрайты и текстуры из Higgsfield поверх геометрии comic
   sprites: { ...COMIC, sprites: true },
 };
-let T: Theme = THEMES.comic;
-export function setTheme(name: string | null | undefined): void { T = THEMES[(name as ThemeName)] ?? THEMES.comic; }
+// Основная тема — night (решение 2026-09-08 после сравнения на телефоне); остальные остаются для экспериментов
+let T: Theme = THEMES.night;
+export function setTheme(name: string | null | undefined): void { T = THEMES[(name as ThemeName)] ?? THEMES.night; }
+export const groundColor = (): string => T.ground;
 export const themeName = (): ThemeName => (Object.keys(THEMES) as ThemeName[]).find(k => THEMES[k] === T) ?? 'comic';
 let city = false; // тротуары вдоль дорог — только там, где есть здания
 export function setCity(v: boolean): void { city = v; }
