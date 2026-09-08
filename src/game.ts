@@ -19,18 +19,22 @@ export interface GameUI {
   overlay: HTMLElement;
   ovTitle: HTMLElement;
   ovSub: HTMLElement;
+  ovHint: HTMLElement;
   left: HTMLElement;
   right: HTMLElement;
 }
+// Конец уровня: done — доставил, trap — ловушка по сценарию (тоже «пройдено»). Вернуть true, если следующий уровень уже загружен
+export type EndHook = (how: 'done' | 'trap') => boolean;
 
 export interface Game {
   load(level: LevelData): void;
   reset(): void;
+  onEnd(hook: EndHook | null): void;
   pause(on: boolean): void; // меню открыто — мир стоит, кадр рисуется
   stop(): void;
 }
 
-type State = 'play' | 'busted' | 'done';
+type State = 'play' | 'busted' | 'done' | 'trap' | 'intro';
 type Car = CarState & { s: number; off: number; W: number; L: number; road: number };
 
 // Дорога графа: 0 — главная, дальше ветки. Всё, что живёт на дороге, лежит здесь
@@ -82,6 +86,13 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let buzzedPosts: Set<string>; // «дорога:индекс» полицейских машин постов, к которым уже прижимались
   // Прыжок с рампы (M8): t — прошло, over — что пролетели (объекты считаем один раз)
   let jump: { t: number; over: Set<object> } | null = null;
+  // Сценарий (docs/progression.md): отсчёт при первом старте уровня, карточки по ходу, контрольные точки, коп по событию
+  let firstStart = true;                 // отсчёт 3-2-1 только при первом старте уровня, рестарт после BUSTED мгновенный
+  let intro: number | null = null;       // остаток отсчёта, с
+  let cardIdx = 0, card: number | null = null; // следующая карточка и остаток стоп-кадра, с
+  let cpS = 0;                           // s последней пройденной контрольной точки (0 — старт)
+  let copSpawned = false;                // коп уже появлялся (после выбывания не возвращается)
+  let endHook: EndHook | null = null;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
     const r: Road = { path, def, parent: -1, width: P.width.v, narrows, blockDefs: blocks, rails: [], crossings: [], oncoming: 0, blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
@@ -99,7 +110,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
 
   function load(l: LevelData): void {
-    level = l;
+    level = l; firstStart = true; cpS = 0;
     spec = carByKey(l.car);
     // Машина и уровень задают стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
     P.width.v = l.width; P.traffic.v = l.traffic;
@@ -128,22 +139,41 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
     roads.forEach((r, i) => { refreshRoad(r); r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars, r.blocks, r.width, r.oncoming, level.mix ?? 0); });
-    chaser = level.chaser ? { road: 0, s: -level.chaser.gap, off: 0 } : null;
+    chaser = null; copSpawned = false;
     taken = new Set();
     flat = false;
     slow = 0; zoom = 1; flash = null;
     score = 0; fx = []; buzzedPosts = new Set(); jump = null;
+    cardIdx = 0; card = null;
     ui.overlay.className = '';
+    // контрольная точка: после BUSTED продолжаем с неё — машина на оси, время как при прибытии с постоянной скоростью,
+    // трафик рядом убран, коп (если уже был) снова на хвосте
+    if (cpS > 0) {
+      const p = pathAt(roads[0].path, cpS);
+      car.x = p.x; car.y = p.y; car.h = heading(p.tx, p.ty); car.vx = p.tx * P.speed.v; car.vy = p.ty * P.speed.v; car.s = cpS;
+      timeAlive = cpS / P.speed.v; cam = { x: car.x, y: car.y };
+      roads[0].traffic = roads[0].traffic.filter(c => Math.abs(c.s - cpS) > 350);
+      cardIdx = (level.cards ?? []).filter(c => c.s <= cpS).length;
+    }
+    if (firstStart) { firstStart = false; intro = 3; state = 'intro'; ui.overlay.className = 'show intro'; ui.ovTitle.textContent = '3'; ui.ovSub.textContent = level.intro ?? level.name; ui.ovHint.textContent = 'нажми, чтобы начать'; }
   }
 
   function busted(why: string): void {
     state = 'busted'; ui.overlay.className = 'show busted';
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = why + '\n' + holdText() + `\nочки ${fmtScore(score)}`;
+    ui.ovHint.textContent = cpS > 0 ? 'нажми — продолжить с контрольной точки' : 'нажми, чтобы повторить';
   }
   function finish(): void {
     state = 'done'; ui.overlay.className = 'show';
     ui.ovTitle.textContent = 'DELIVERED';
     ui.ovSub.textContent = `${timeAlive.toFixed(1)} с · очки ${fmtScore(score)} × ${SCORE.finishMul} = ${fmtScore(score * SCORE.finishMul)}`;
+    ui.ovHint.textContent = endHook ? 'нажми — дальше' : 'нажми, чтобы повторить';
+  }
+  // Ловушка по сценарию: BUSTED с текстом уровня, но это «пройдено» — дальше следующий уровень
+  function trap(text: string): void {
+    state = 'trap'; ui.overlay.className = 'show busted trap';
+    ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = text + `\nочки ${fmtScore(score)}`;
+    ui.ovHint.textContent = 'нажми — дальше';
   }
 
   // Начислить очки с надписью и искрами у борта машины (side: с какой стороны событие)
@@ -254,6 +284,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const before = car.road, beforeS = car.s, beforeMain = mainS(car.road, car.s);
     const nr = switchRoad(car, car.x, car.y);
     car.off = nr.off;
+    // сценарий: контрольные точки, карточки, ловушка, появление копа — по s главной
+    const ms = mainS(car.road, car.s);
+    for (const c of level.checkpoints ?? []) if (ms >= c && c > cpS) cpS = c;
+    if (level.cards && cardIdx < level.cards.length && ms >= level.cards[cardIdx].s) {
+      card = 1.2; ui.overlay.className = 'show card'; ui.ovTitle.textContent = level.cards[cardIdx].text; ui.ovSub.textContent = ''; ui.ovHint.textContent = ''; cardIdx++;
+    }
+    if (level.trap && ms >= level.trap.s) return trap(level.trap.text);
+    if (level.chaser && !copSpawned && ms >= (level.chaser.at ?? 0)) { copSpawned = true; chaser = { road: car.road, s: car.s - level.chaser.gap, off: car.off }; }
     // коп повторяет выбор: свернул на ветку — запомнить; передумал в её начале и вернулся — забыть
     if (car.road !== before) { if (roads[car.road].parent === before) taken.add(car.road); else if (beforeS < BRANCH.zone + BRANCH.lead) taken.delete(before); }
     const rd = roads[car.road];
@@ -381,7 +419,13 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     cam.x += (tx - cam.x) * cl; cam.y += (ty - cam.y) * cl;
   }
 
-  const restart = () => { if (state !== 'play') reset(); };
+  const restart = () => {
+    if (state === 'intro') { intro = null; state = 'play'; ui.overlay.className = ''; return; } // тап пропускает отсчёт
+    if (card !== null) { card = null; ui.overlay.className = ''; return; }                         // тап снимает карточку
+    if (state === 'play') return;
+    if ((state === 'done' || state === 'trap') && endHook && endHook(state)) return;             // кампания загрузила следующий
+    reset();
+  };
   const onOverlay = (e: PointerEvent) => { e.preventDefault(); restart(); };
   const disposeInput = initInput({ left: ui.left, right: ui.right }, restart);
   ui.overlay.addEventListener('pointerdown', onOverlay);
@@ -394,7 +438,10 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (slow > 0) slow -= dt;
     zoom += ((slow > 0 ? PANIC.zoom : 1) - zoom) * Math.min(1, 8 * dt);
     if (flash) { flash.t -= dt; if (flash.t <= 0) flash = null; }
-    if (!paused) update(slow > 0 ? dt * PANIC.slowScale : dt);
+    // отсчёт и карточка: мир стоит
+    if (intro !== null && !paused) { intro -= dt; const n = Math.ceil(intro); ui.ovTitle.textContent = n > 0 ? String(n) : 'GO'; if (intro <= 0) { intro = null; state = 'play'; ui.overlay.className = ''; } }
+    else if (card !== null && !paused) { card -= dt; if (card <= 0) { card = null; ui.overlay.className = ''; } }
+    else if (!paused) update(slow > 0 ? dt * PANIC.slowScale : dt);
     // Хвост считаем по главной дороге, чтобы сравнивать положение на разных ветках
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
     const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings, oncoming: r.oncoming, from: r.def?.from, parent: r.def ? r.parent : undefined }));
@@ -411,6 +458,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   return {
     load, reset,
+    onEnd(hook) { endHook = hook; },
     pause(on) { paused = on; },
     stop() {
       cancelAnimationFrame(raf);

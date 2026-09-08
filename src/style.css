@@ -28,3 +28,14 @@ canvas{display:block;width:100vw;height:100vh}
 #overlay h1{margin:0;font-size:52px;letter-spacing:.14em;font-weight:800}
 #overlay p{margin:0;opacity:.7;font-size:14px;line-height:1.6;text-align:center}
 #overlay small{opacity:.45;font-size:12px;letter-spacing:.1em;margin-top:8px}
+/* отсчёт перед стартом: мир виден, цифра крупно, карточка уровня под ней */
+#overlay.intro{background:rgba(21,23,28,.35)}
+#overlay.intro h1{font-size:96px;color:#f4b942;text-shadow:0 4px 0 #1a1408}
+#overlay.intro p{font-size:16px;opacity:.9;max-width:300px}
+/* сценарная карточка: стоп-кадр и полоса-стрип с текстом, как в комиксе */
+#overlay.card{background:none;justify-content:center}
+#overlay.card h1{font-size:26px;letter-spacing:.06em;line-height:1.25;text-align:center;max-width:88vw;padding:18px 26px;background:#f4b942;color:#1a1408;transform:skew(-8deg);box-shadow:8px 8px 0 #1a1408;animation:strip .25s ease-out}
+#overlay.card p,#overlay.card small{display:none}
+@keyframes strip{from{transform:skew(-8deg) translateX(-60vw);opacity:0}to{transform:skew(-8deg) translateX(0);opacity:1}}
+#overlay.trap{animation:none}
+#overlay.trap h1{color:#ff4a4a}

@@ -143,6 +143,11 @@ function build(district, route) {
     }
   }
   blocks.sort((a, b) => a.s - b.s); mainCars.sort((a, b) => a.s - b.s);
+  // сценарий (docs/progression.md): карточки, ловушка, контрольные точки — по координатам сетки; коп по событию
+  const cards = (route.cards ?? []).map(c => ({ s: atS(c.at), text: c.text }));
+  const trap = route.trap ? { s: atS(route.trap.at), text: route.trap.text } : null;
+  const checkpoints = (route.checkpoints ?? []).map(atS);
+  const chaser = spec.chaser ? { ...spec.chaser, ...(route.chaserAt ? { at: atS(route.chaserAt) } : {}) } : null;
 
   // здания: все кварталы в диапазоне, отступ от осей улиц
   let props = [];
@@ -187,7 +192,7 @@ ${main.pts.map(p => `    [${p[0]}, ${p[1]}]`).join(',\n')}
   "nav": true,
   "mix": ${spec.mix ?? 0.15},
   "oncoming": ${main.oncoming},
-  "chaser": ${JSON.stringify(spec.chaser)},
+  "chaser": ${JSON.stringify(chaser)},${route.intro ? `\n  "intro": ${JSON.stringify(route.intro)},` : ''}${cards.length ? `\n  "cards": [\n${cards.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ],` : ''}${trap ? `\n  "trap": ${JSON.stringify(trap)},` : ''}${checkpoints.length ? `\n  "checkpoints": ${JSON.stringify(checkpoints)},` : ''}
   "cars": [
 ${mainCars.map(c => '    ' + JSON.stringify(c)).join(',\n')}
   ],${blocks.length ? `\n  "blocks": [\n${blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ],` : ''}${narrows.length ? `\n  "narrows": [\n${narrows.map(n => '    ' + JSON.stringify(n)).join(',\n')}\n  ],` : ''}${rails.length ? `\n  "rails": [\n${rails.map(r => '    ' + JSON.stringify(r)).join(',\n')}\n  ],` : ''}
@@ -257,7 +262,8 @@ const DISTRICTS = [
   // восток 2, север 1 — гараж с сужением перед ним. Ветка: направо у (0,−2), прямо через перекрёсток (1,−3), вливается у (1,−4)
   { seed: 999, car: 'sedan', traffic: 0.35, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 2], j: [-6, 0] },
     routes: [
-      { file: 'gfx', name: 'Графика', roads: [
+      { file: 'gfx', name: 'Графика', intro: 'Витрина графики: всё, что рисуется, за один проезд', chaserAt: [0, -0.3],
+        cards: [{ at: [0, -1.2], text: 'Переезд впереди' }], checkpoints: [[0, -2], [1, -4]], roads: [
         { nodes: [[0, 0], [0, -4], [2, -4], [2, -5]], oncoming: 1, offsets: [3.0, 6.5],
           cars: h => [{ s: 260, lane: 2, speed: 0 }, { s: 420, lane: 2, speed: 0 }] },
         { nodes: [[0, -2], [1, -2], [1, -4]], oncoming: 1, offsets: [8.0] }, // на ветку сворачивают на 3.5 с, к её перекрёстку подъезжают на 7 с — зелёный

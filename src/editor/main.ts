@@ -241,7 +241,7 @@ function syncPanel(): void {
 }
 
 function load(l: LevelData): void {
-  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.nav; delete level.mix; delete level.narrows; delete level.rails; delete level.crossings; delete level.props; delete level.oncoming;
+  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.nav; delete level.mix; delete level.intro; delete level.cards; delete level.trap; delete level.checkpoints; delete level.narrows; delete level.rails; delete level.crossings; delete level.props; delete level.oncoming;
   Object.assign(level, structuredClone(l));
   level.car ??= DEFAULT_CAR;
   select(null);
@@ -288,7 +288,7 @@ $('play').onclick = () => {
   editorEl.hidden = true; playEl.hidden = false;
   game = createGame({
     canvas: $<HTMLCanvasElement>('c'),
-    hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'),
+    hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), ovHint: $('ovHint'),
     left: $('left'), right: $('right'),
   }, structuredClone(level));
 };

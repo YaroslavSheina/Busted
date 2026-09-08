@@ -151,11 +151,12 @@ docs/refs/         — референсы визуала от пользоват
   narrow.ts        — сужения: ширина как функция от s (makeWidthFn/widthAt), переходы NARROW.ramp
   roads.ts         — граф дорог: ветка { from, to, points, parent? } пристыковывается к родителю (главная или другая ветка), buildRoadPaths, parentEquivalent для прогресса
   debug.ts         — панель «уровень»: список уровней + кнопка «тюнинг» со слайдерами (в проде слайдеры выключены)
+  campaign.ts      — порядок уровней кампании и локальный прогресс (localStorage); сценарий уровня — docs/progression.md
   editor/
     main.ts        — панель, экспорт/импорт, «Играть» через createGame на той же странице
     canvas.ts      — холст: панорама, зум, точки; дорога рисуется drawRoad
     io.ts          — формат файла уровня, валидация импорта
-levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings?, props?, oncoming?, nav?, mix? } — см. docs/mechanics.md
+levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings?, props?, oncoming?, nav?, mix?, intro?, cards?, trap?, checkpoints? } — см. docs/mechanics.md и docs/progression.md
 tools/district.cjs — генератор районов: район (сетка, здания, машина) × маршруты (дороги по узлам: главная + ветки с родителем, перекрёстки, события: посты, ремонт, перекрытия, сужения, переезды) → levels/district*.json, один район — несколько уровней
 docs/concept.md
 docs/design.md     — диздок BUSTED

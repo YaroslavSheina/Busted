@@ -10,8 +10,11 @@ import type { CrossingDef } from './crossings';
 // Окружение — только для отрисовки, физика его не знает (docs/mechanics.md, «город»)
 export interface Prop { type: 'building'; x: number; y: number; w: number; h: number; tone?: number }
 
-// Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же)
-export interface Chaser { gap: number; speed: number }
+// Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же); at — s, с которого он появляется
+export interface Chaser { gap: number; speed: number; at?: number }
+
+// Сценарные карточки (docs/progression.md): стоп-кадр мира и полоса с текстом, когда игрок доехал до s
+export interface Card { s: number; text: string }
 
 export interface LevelData {
   name: string;
@@ -32,6 +35,10 @@ export interface LevelData {
   oncoming?: number;   // необязательно: сколько левых полос едут навстречу (docs/mechanics.md, M10)
   nav?: boolean;       // необязательно: навигатор — линия к гаражу по главной дороге
   mix?: number;        // необязательно: доля длинных машин в трафике (автобусы, грузовики), 0..0.5; фургонов — ещё столько же
+  intro?: string;      // необязательно: карточка перед стартом (показывается с отсчётом 3-2-1 при первом старте уровня)
+  cards?: Card[];      // необязательно: карточки по ходу — стоп-кадр на секунду
+  trap?: Card;         // необязательно: ловушка — на s BUSTED по сценарию с этим текстом, уровень считается пройденным
+  checkpoints?: number[]; // необязательно: контрольные точки (s): после BUSTED попытка продолжается с последней пройденной
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

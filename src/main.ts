@@ -8,19 +8,28 @@ loadArt();
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';
 import { CARS, type CarKey } from './cars';
+import { campaign } from './campaign';
 
 const $ = (id: string) => document.getElementById(id)!;
 const panel = $('panel'), carPanel = $('carPanel');
-// ?level=gfx — открыть сразу нужный уровень (ключ = имя файла в levels/)
-const FIRST = LEVEL_KEYS.includes(query.get('level') ?? '') ? query.get('level')! : LEVEL_KEYS[0];
+// ?level=gfx — открыть сразу нужный уровень (ключ = имя файла в levels/); без параметра — текущий уровень кампании
+const FIRST = LEVEL_KEYS.includes(query.get('level') ?? '') ? query.get('level')! : campaign.current();
 let levelKey = FIRST;
 let carOverride: CarKey | null = null; // выбор в меню «авто» действует поверх машины уровня
 
 const game = createGame({
   canvas: $('c') as HTMLCanvasElement,
-  hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'),
+  hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), ovHint: $('ovHint'),
   left: $('left'), right: $('right'),
 }, levelByName(FIRST));
+// Пройденный уровень кампании ведёт к следующему; уровень, открытый из меню, — просто повтор
+game.onEnd(() => {
+  if (levelKey !== campaign.current()) return false;
+  const next = campaign.advance();
+  if (!next) return false;
+  selectLevel(next);
+  return true;
+});
 
 function currentLevel() {
   const l = levelByName(levelKey);
