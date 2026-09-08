@@ -2,7 +2,8 @@ import './style.css';
 import { createGame } from './game';
 import { setTheme } from './render';
 import { loadArt } from './art';
-setTheme(new URLSearchParams(location.search).get('theme')); // ?theme=night|comic|dark|bright|sprites
+const query = new URLSearchParams(location.search);
+setTheme(query.get('theme')); // ?theme=night|comic|dark|bright|sprites
 loadArt();
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';
@@ -10,7 +11,8 @@ import { CARS, type CarKey } from './cars';
 
 const $ = (id: string) => document.getElementById(id)!;
 const panel = $('panel'), carPanel = $('carPanel');
-const FIRST = LEVEL_KEYS[0];
+// ?level=gfx — открыть сразу нужный уровень (ключ = имя файла в levels/)
+const FIRST = LEVEL_KEYS.includes(query.get('level') ?? '') ? query.get('level')! : LEVEL_KEYS[0];
 let levelKey = FIRST;
 let carOverride: CarKey | null = null; // выбор в меню «авто» действует поверх машины уровня
 
