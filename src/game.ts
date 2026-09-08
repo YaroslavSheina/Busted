@@ -175,10 +175,15 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (ending || !inside(cur, nr)) {
       let moved = false;
       for (let i = 1; i < roads.length && !moved; i++) {
-        const b = roads[i].def!;
-        if (roads[i].parent !== who.road || who.s < b.from - BRANCH.lead || who.s > b.from + BRANCH.zone) continue;
-        const nb = nearest(roads[i].path, x, y, who.s - (b.from - BRANCH.lead));
-        if (nb.s > BRANCH.lead && inside(roads[i], nb)) { who.road = i; nr = nb; moved = true; }
+        const b = roads[i].def!, L = roads[i].path.L;
+        if (roads[i].parent !== who.road) continue;
+        // подсказка для поиска на ветке: у развилки — от её начала, у слияния — от её конца (срезал угол и снова на дуге ветки)
+        let hint: number | null = null;
+        if (who.s >= b.from - BRANCH.lead && who.s <= b.from + BRANCH.zone) hint = who.s - (b.from - BRANCH.lead);
+        else if (who.s >= b.to - BRANCH.zone && who.s <= b.to + BRANCH.lead) hint = L - (b.to + BRANCH.lead - who.s);
+        if (hint === null) continue;
+        const nb = nearest(roads[i].path, x, y, hint);
+        if (nb.s > BRANCH.lead && nb.s < L - BRANCH.lead && inside(roads[i], nb)) { who.road = i; nr = nb; moved = true; }
       }
       if (!moved && cur.def) {
         const atStart = who.s < BRANCH.zone + BRANCH.lead, atEnd = who.s > cur.path.L - BRANCH.zone;
