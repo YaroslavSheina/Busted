@@ -253,7 +253,7 @@ const DISTRICTS = [
         roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -7]], oncoming: 0, offsets: ['green', 'green', 'red', 'green', 'red', 'green'] }] },
       { file: 'tut04', name: '4 · Пост', traffic: 0.15, intro: 'Посты полиции перекрывают полосы. Ищи просвет и перестраивайся заранее.',
         cards: [{ at: [0, -1.0], text: 'Пост: просвет посередине' }, { at: [0, -2.3], text: 'Просвет слева' }, { at: [1, -5.0], text: 'Просвет справа' }, { at: [1, -6.5], text: 'Ежи справа — только середина' }],
-        events: [{ type: 'post', at: [0, -1.5] }, { type: 'post', at: [0, -2.8], lanes: [1, 2] }, { type: 'post', at: [1, -5.5], lanes: [0, 1] }, { type: 'spikes', at: [1, -7] }],
+        events: [{ type: 'post', at: [0, -1.5] }, { type: 'post', at: [0, -2.8], lanes: [1, 2] }, { type: 'post', at: [1, -5.9], lanes: [0, 1] }, { type: 'spikes', at: [1, -7.2] }], // после дуги угла 600 px на перестроение
         roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -8]], oncoming: 0, crossings: false }] },
       { file: 'tut05', name: '5 · Ремонт', traffic: 0.2, intro: 'Ремонт закрывает полосы. Сужение — держись середины.',
         cards: [{ at: [0, -0.7], text: 'Ремонт справа: уходи в левую полосу' }, { at: [1, -4.8], text: 'Сужение впереди' }],

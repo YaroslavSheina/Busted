@@ -42,8 +42,8 @@
   "blocks": [
     {"s":781,"police":[0,2]},
     {"s":1457,"police":[1,2]},
-    {"s":3295,"police":[0,1]},
-    {"s":4076,"police":[0],"spikes":[2]}
+    {"s":3504,"police":[0,1]},
+    {"s":4179,"police":[0],"spikes":[2]}
   ],
   "crossings": [
 
