@@ -8,7 +8,7 @@ import { buildPath, curvatureAt, heading, laneOff, nearest, nearestGlobal, pathA
 import { buildRoadPaths, parentEquivalent, parentRoad, type BranchDef } from './roads';
 import { layoutBlocks, type Block, type Layout } from './blocks';
 import { makeWidthFn, widthAt, type Narrow, type WidthFn } from './narrow';
-import { brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, vehiclePose, type Obb, type TrafficCar, type Vehicle } from './traffic';
+import { NEAR, brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, vehiclePose, type Obb, type TrafficCar, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { fmtScore, hudHtml, render, type Cam, type Fx, type Mark, type RoadScene } from './render';
 import type { LevelData } from './levels';
@@ -295,16 +295,17 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     }
     if (jump) {
       // в полёте ничего не задевает, но всё, над чем пролетели, — в копилку
-      for (const c of rd.traffic) if (c.kind !== 'ramp' && Math.abs(c.s - car.s) < 120) { const p = vehiclePose(rd.path, c, rd.width); if (hit(me, obb(p.x, p.y, p.h, c.W, c.L))) jump.over.add(c); }
+      for (const r of roads) for (const c of r.traffic) { if (c.kind === 'ramp' || (r === rd ? Math.abs(c.s - car.s) >= 120 : false)) continue; const p = vehiclePose(r.path, c, r.width); if ((r === rd || (p.x - car.x) ** 2 + (p.y - car.y) ** 2 < NEAR * NEAR) && hit(me, obb(p.x, p.y, p.h, c.W, c.L))) jump.over.add(c); }
       for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) jump.over.add(o);
       for (const r of rd.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - car.s) < 200 && hit(me, t)) jump.over.add(r); }
-      for (const c of rd.crossings) if (Math.abs(c.s - car.s) < 200) for (const cc of crossCars(c, timeAlive)) if (hit(me, cc.obb)) jump.over.add(c);
+      for (const r of roads) for (const c of r.crossings) if (r === rd ? Math.abs(c.s - car.s) < 200 : (c.x - car.x) ** 2 + (c.y - car.y) ** 2 < 400 * 400) for (const cc of crossCars(c, timeAlive)) if (hit(me, cc.obb)) jump.over.add(c);
     } else {
       // Паникёр, пока мечется, не убивает игрока — провокация награда, а не ловушка; вставший у края — обычное препятствие
-      if (collides(rd.traffic.filter(c => !(c.panic && !c.crashed) && !(c.kind === 'ramp' && car.s < c.s)), rd.path, rd.width, me, car.s)) return busted('столкновение');
+      // трафик всех дорог: на общем заходе развилки машина, уже переданная на ветку, для игрока на главной — не призрак
+      for (const r of roads) if (collides(r.traffic.filter(c => !(c.panic && !c.crashed) && !(c.kind === 'ramp' && (r !== rd || car.s < c.s))), r.path, r.width, me, r === rd ? car : { x: car.x, y: car.y })) return busted('столкновение');
       for (const o of rd.solids) if (Math.abs(o.s - car.s) < 400 && hit(me, o.obb)) return busted(o.why);
       for (const r of rd.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - car.s) < 200 && hit(me, t)) return busted('поезд'); }
-      for (const c of rd.crossings) if (Math.abs(c.s - car.s) < 200) for (const cc of crossCars(c, timeAlive)) if (hit(me, cc.obb)) return busted('перекрёсток');
+      for (const r of roads) for (const c of r.crossings) if (r === rd ? Math.abs(c.s - car.s) < 200 : (c.x - car.x) ** 2 + (c.y - car.y) ** 2 < 400 * 400) for (const cc of crossCars(c, timeAlive)) if (hit(me, cc.obb)) return busted('перекрёсток');
     }
     // Поезд сносит трафик на переезде
     for (const r of rd.rails) {

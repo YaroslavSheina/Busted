@@ -225,10 +225,14 @@ export function hit(a: Obb, b: Obb): boolean {
 }
 
 // Проверяем только машины в окне |s − car.s| < 120
-export function collides(traffic: Vehicle[], path: Path, width: number | WidthFn, me: Obb, carS: number): boolean {
+// Кандидаты: на своей дороге — по s (как в прототипе: соседний рукав кольца не считается), на чужой — по положению,
+// так видны машины соседней дороги на общем заходе развилки
+export const NEAR = 150;
+export function collides(traffic: Vehicle[], path: Path, width: number | WidthFn, me: Obb, at: { x: number; y: number; s?: number }): boolean {
   for (const c of traffic) {
-    if (Math.abs(c.s - carS) > 120) continue;
+    if (at.s !== undefined && Math.abs(c.s - at.s) > 120) continue;
     const v = vehiclePose(path, c, width);
+    if (at.s === undefined && (v.x - at.x) ** 2 + (v.y - at.y) ** 2 > NEAR * NEAR) continue;
     if (hit(me, obb(v.x, v.y, v.h, c.W, c.L))) return true;
   }
   return false;
