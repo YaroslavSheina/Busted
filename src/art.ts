@@ -22,34 +22,42 @@ export function loadArt(): void {
 
 export function art(key: ArtKey): HTMLImageElement | null { return images.get(key) ?? null; }
 
-// Паттерн из тайла в мировом масштабе: тайл размером size px мира, повторяется; кэш по контексту и ключу
+// Паттерн из тайла в мировом масштабе: тайл один раз пережимается в офскрин ровно size×size px и повторяется
+// без матрицы паттерна — уменьшение на лету каждый кадр (без мипмапов) на телефоне слишком дорого. Кэш по контексту и ключу
 const patterns = new WeakMap<CanvasRenderingContext2D, Map<string, CanvasPattern>>();
+const scaled = new Map<string, HTMLCanvasElement>();
+function scaledTile(img: HTMLImageElement, key: ArtKey, size: number): HTMLCanvasElement {
+  const id = `${key}:${size}`;
+  let c = scaled.get(id);
+  if (!c) { c = document.createElement('canvas'); c.width = c.height = size; c.getContext('2d')!.drawImage(img, 0, 0, size, size); scaled.set(id, c); }
+  return c;
+}
 export function tile(ctx: CanvasRenderingContext2D, key: ArtKey, size: number): CanvasPattern | null {
   const img = images.get(key); if (!img) return null;
   let m = patterns.get(ctx); if (!m) { m = new Map(); patterns.set(ctx, m); }
   const id = `${key}:${size}`;
   let p = m.get(id);
   if (!p) {
-    const made = ctx.createPattern(img, 'repeat'); if (!made) return null;
-    made.setTransform(new DOMMatrix().scale(size / img.width));
+    const made = ctx.createPattern(scaledTile(img, key, size), 'repeat'); if (!made) return null;
     m.set(id, made); p = made;
   }
   return p;
 }
 
-// Спрайт машины, подкрашенный цветом (source-atop поверх спрайта в офскрине), кэш по ключу и цвету
-const tinted = new Map<string, HTMLCanvasElement>();
-export function sprite(key: ArtKey, col?: string): HTMLCanvasElement | HTMLImageElement | null {
+// Спрайт машины: пережат в офскрин высотой SPRITE_H (в игре машина ~58 px, рисуется с двукратным запасом, а не из 256),
+// при цвете подкрашен source-atop; кэш по ключу и цвету
+const SPRITE_H = 128;
+const sprites = new Map<string, HTMLCanvasElement>();
+export function sprite(key: ArtKey, col?: string): HTMLCanvasElement | null {
   const img = images.get(key); if (!img) return null;
-  if (!col) return img;
-  const id = `${key}:${col}`;
-  let c = tinted.get(id);
+  const id = `${key}:${col ?? ''}`;
+  let c = sprites.get(id);
   if (!c) {
-    c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    c = document.createElement('canvas'); c.height = SPRITE_H; c.width = Math.round(img.width * SPRITE_H / img.height);
     const g = c.getContext('2d')!;
-    g.drawImage(img, 0, 0);
-    g.globalCompositeOperation = 'source-atop'; g.fillStyle = col; g.globalAlpha = 0.55; g.fillRect(0, 0, c.width, c.height);
-    tinted.set(id, c);
+    g.drawImage(img, 0, 0, c.width, c.height);
+    if (col) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = col; g.globalAlpha = 0.55; g.fillRect(0, 0, c.width, c.height); }
+    sprites.set(id, c);
   }
   return c;
 }
