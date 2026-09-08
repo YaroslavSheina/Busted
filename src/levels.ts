@@ -31,6 +31,7 @@ export interface LevelData {
   props?: Prop[];      // необязательно: здания и прочее окружение
   oncoming?: number;   // необязательно: сколько левых полос едут навстречу (docs/mechanics.md, M10)
   nav?: boolean;       // необязательно: навигатор — линия к гаражу по главной дороге
+  mix?: number;        // необязательно: доля длинных машин в трафике (автобусы, грузовики), 0..0.5; фургонов — ещё столько же
 }
 
 const files = import.meta.glob<LevelData>('../levels/*.json', { eager: true, import: 'default' });

@@ -33,6 +33,7 @@
   "car": "sedan",
   "panic": 0.3,
   "nav": true,
+  "mix": 0.15,
   "oncoming": 1,
   "chaser": {"gap":160,"speed":1},
   "cars": [

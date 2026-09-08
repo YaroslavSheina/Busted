@@ -32,6 +32,7 @@
       </div>
       <div class="row"><label>Паника трафика<br><small>шанс при проезде впритирку, 0 — выкл</small></label><input id="panic" type="number" min="0" max="1" step="0.05"></div>
       <div class="row"><label>Навигатор<br><small>линия к гаражу по главной</small></label><input id="nav" type="checkbox"></div>
+      <div class="row"><label>Длинные машины<br><small>доля автобусов и грузовиков, 0 — только легковые</small></label><input id="mix" type="number" min="0" max="0.5" step="0.05"></div>
       <div class="row"><label>Заграждение<br><small>на s, px от старта</small></label><select id="blockType"><option value="gap">пост с просветом</option><option value="full">перекрытие + обочина</option><option value="spikes">машина + ежи</option><option value="works">ремонт дороги</option></select></div>
       <div class="row"><label></label><input id="blockS" type="number" step="10" placeholder="s"><button id="blockAdd" class="mini">+</button></div>
       <div id="blockList"></div>

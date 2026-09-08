@@ -156,11 +156,22 @@ function carSprite(ctx: CanvasRenderingContext2D, key: string, w: number, l: num
 // Пул легковых спрайтов трафика (pixel): по «монетке» машины — у каждой своя модель, но одна и та же каждый кадр
 const PIXEL_POOL = ['px_gray_sedan', 'px_white_sedan', 'px_pick_up', 'px_jeep', 'px_retro_1', 'px_retro_2', 'px_retro_3', 'px_roadster', 'px_sport_car', 'px_muscle_car'];
 const poolKey = (pick: number) => PIXEL_POOL[Math.floor(((Math.abs(pick) * 7919) % 1) * PIXEL_POOL.length)];
-export function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, w: number, l: number, col: string, player: boolean, pick = 0.5): void {
+// Спрайт по модели трафика (pixel): длинные — из референсов, легковые — из пула
+function modelKey(model: string | undefined, pick: number): string {
+  switch (model) {
+    case 'bus': return 'px_bus';
+    case 'truck': return Math.abs(pick) * 3 % 1 < 0.5 ? 'px_truck_1' : 'px_truck_2';
+    case 'tanker': return 'px_gasoline';
+    case 'limo': return 'px_limousine';
+    case 'van': return 'px_happy_bus';
+    default: return poolKey(pick);
+  }
+}
+export function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, w: number, l: number, col: string, player: boolean, pick = 0.5, model?: string): void {
   ctx.save(); ctx.translate(x, y); ctx.rotate(h);
   const police = col === '#e6e8ee';
-  if (T.sprites === 'pixel' ? carSprite(ctx, police ? 'px_police_regular' : poolKey(pick), w, l)
-    : carSprite(ctx, police ? 'police' : 'car', w, l, police ? undefined : col)) { ctx.restore(); return; }
+  if (T.sprites === 'pixel' ? carSprite(ctx, police ? 'px_police_regular' : modelKey(model, pick), w, l)
+    : (!model || model === 'car') && carSprite(ctx, police ? 'police' : 'car', w, l, police ? undefined : col)) { ctx.restore(); return; }
   carUnder(ctx, w, l, 6);
   ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 6); ctx.fill();
   ctx.fillStyle = 'rgba(20,22,28,.55)'; ctx.fillRect(-w / 2 + 4, -l / 2 + 12, w - 8, 11); ctx.fillRect(-w / 2 + 4, l / 2 - 14, w - 8, 7);
@@ -342,10 +353,15 @@ export function drawProps(ctx: CanvasRenderingContext2D, props: Prop[]): void {
 function drawRoofs(ctx: CanvasRenderingContext2D, props: Prop[]): void {
   const roofs = T.roofs!;
   const seen = props.filter(p => p.type === 'building' && visible(p.x + p.w / 2, p.y + p.h / 2, Math.max(p.w, p.h) / 2 + 20));
-  if (T.shadow) { const [dx, dy] = T.parapet ? [24, 28] : [10, 12]; ctx.fillStyle = T.shadow; for (const p of seen) ctx.fillRect(p.x + dx, p.y + dy, p.w, p.h); }
+  if (T.shadow) { const [dx, dy] = T.parapet ? [26, 30] : [10, 12]; ctx.fillStyle = T.shadow; for (const p of seen) ctx.fillRect(p.x + dx, p.y + dy, p.w + (T.parapet ? 10 : 0), p.h + (T.parapet ? 10 : 0)); }
   for (const p of seen) {
     const t = p.tone ?? 0.5, k = Math.floor(t * 97) % roofs.length;
     if (T.parapet) { // pixel: бежевый парапет по периметру, крыша внутри, тёмная кромка с юга и востока, будки с вентиляцией
+      // солнце слева сверху: видны южная и восточная стены под парапетом (фасад), восточная темнее
+      const WALL = 10;
+      ctx.fillStyle = '#6b5a4c'; ctx.fillRect(p.x, p.y + p.h, p.w + WALL, WALL);
+      ctx.fillStyle = '#54463c'; ctx.fillRect(p.x + p.w, p.y, WALL, p.h);
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; for (let x = p.x + 14; x < p.x + p.w - 8; x += 22) ctx.fillRect(x, p.y + p.h + 3, 8, 4); // окна фасада
       ctx.fillStyle = T.parapet; ctx.fillRect(p.x, p.y, p.w, p.h);
       ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(p.x + p.w - 10, p.y, 10, p.h); ctx.fillRect(p.x, p.y + p.h - 10, p.w, 10);
       ctx.fillStyle = roofs[k]; ctx.fillRect(p.x + 12, p.y + 12, p.w - 24, p.h - 24);
@@ -455,8 +471,14 @@ export function drawCrossingTop(ctx: CanvasRenderingContext2D, c: Crossing, road
   for (const [side, ahead] of [[1, -1], [-1, 1]] as const) {
     const px = c.x + c.nx * side * (roadWidth / 2 + 14) + c.tx * ahead * (c.w / 2 + 14);
     const py = c.y + c.ny * side * (roadWidth / 2 + 14) + c.ty * ahead * (c.w / 2 + 14);
-    ctx.fillStyle = '#1e2026'; ctx.beginPath(); ctx.roundRect(px - 7, py - 16, 14, 32, 4); ctx.fill();
     const cols = [['#5a1c1c', '#ff4a4a'], ['#5a4a10', '#ffcf3d'], ['#1c4a2a', '#4ade80']];
+    if (T.slabs) { // pixel: компактная коробка на тротуаре, как в референсе
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(px - 3, py - 7, 10, 18);
+      ctx.fillStyle = '#23262c'; ctx.fillRect(px - 5, py - 9, 10, 18);
+      ['red', 'yellow', 'green'].forEach((l, i) => { ctx.fillStyle = cols[i][light === l ? 1 : 0]; ctx.fillRect(px - 2, py - 7 + i * 5.5, 4, 4); });
+      continue;
+    }
+    ctx.fillStyle = '#1e2026'; ctx.beginPath(); ctx.roundRect(px - 7, py - 16, 14, 32, 4); ctx.fill();
     ['red', 'yellow', 'green'].forEach((l, i) => { ctx.fillStyle = cols[i][light === l ? 1 : 0]; ctx.beginPath(); ctx.arc(px, py - 10 + i * 10, 3.5, 0, 7); ctx.fill(); });
   }
   crossCars(c, time).forEach((cc, i) => drawCar(ctx, cc.x, cc.y, cc.h, cc.W, cc.L, '#8a94a6', false, (c.s * 0.013 + i * 0.37) % 1));
@@ -637,7 +659,7 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
     const v = vehiclePose(r.path, c, r.width);
     if (!visible(v.x, v.y, 120)) continue;
     if (c.kind === 'ramp') drawRamp(ctx, v.x, v.y, v.h, c.W, c.L);
-    else drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.crashed ? '#4a4d55' : c.col, false, c.pick);
+    else drawCar(ctx, v.x, v.y, v.h, c.W, c.L, c.crashed ? '#4a4d55' : c.col, false, c.pick, c.model);
     if (c.panic && !c.crashed) { // «!» над испуганным водителем
       ctx.fillStyle = '#f4b942'; ctx.beginPath(); ctx.arc(v.x, v.y - 34, 11, 0, 7); ctx.fill();
       ctx.fillStyle = '#1a1408'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', v.x, v.y - 33);

@@ -89,6 +89,7 @@ for (const k of ['width', 'traffic'] as const) {
 inp('name').oninput = () => { level.name = inp('name').value; };
 inp('oncoming').onchange = () => { const v = Math.max(0, Math.min(2, Math.round(parseFloat(inp('oncoming').value) || 0))); if (v > 0) level.oncoming = v; else delete level.oncoming; inp('oncoming').value = String(v); canvas.draw(); };
 inp('nav').onchange = () => { if (inp('nav').checked) level.nav = true; else delete level.nav; changed(); canvas.draw(); };
+inp('mix').onchange = () => { const v = Math.max(0, Math.min(0.5, parseFloat(inp('mix').value) || 0)); if (v > 0) level.mix = v; else delete level.mix; inp('mix').value = String(v); canvas.draw(); };
 inp('panic').onchange = () => { const v = Math.max(0, Math.min(1, parseFloat(inp('panic').value) || 0)); if (v > 0) level.panic = v; else delete level.panic; inp('panic').value = String(v); };
 inp('seed').onchange = () => { level.seed = Math.round(parseFloat(inp('seed').value)) || 0; inp('seed').value = String(level.seed); canvas.draw(); };
 
@@ -234,12 +235,13 @@ function syncPanel(): void {
   inp('seed').value = String(level.seed);
   inp('panic').value = String(level.panic ?? 0);
   inp('nav').checked = !!level.nav;
+  inp('mix').value = String(level.mix ?? 0);
   inp('oncoming').value = String(level.oncoming ?? 0);
   changed();
 }
 
 function load(l: LevelData): void {
-  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.nav; delete level.narrows; delete level.rails; delete level.crossings; delete level.props; delete level.oncoming;
+  delete level.cars; delete level.chaser; delete level.blocks; delete level.branches; delete level.panic; delete level.nav; delete level.mix; delete level.narrows; delete level.rails; delete level.crossings; delete level.props; delete level.oncoming;
   Object.assign(level, structuredClone(l));
   level.car ??= DEFAULT_CAR;
   select(null);
