@@ -34,13 +34,23 @@ export function buildPath(pts: Pt[]): Path {
   }
   raw.push({ x: pts[pts.length - 1][0], y: pts[pts.length - 1][1] });
 
+  // Касательная — по соседям не ближе SPAN px с каждой стороны. При обычном шаге (~6 px) это просто соседние точки,
+  // как и было; а там, где за длинным отрезком идут частые точки и равномерный Катмулл-Ром делает микропетлю
+  // в пару пикселей, окно перешагивает петлю, и касательная не разворачивается (нормаль не переворачивается,
+  // разметка со смещением от оси не прыгает через дорогу). Сами точки и длина дороги не меняются
+  const SPAN = 3;
   const pt: Sample[] = [];
-  let s = 0;
+  let s = 0, ptx = 0, pty = 0;
   for (let i = 0; i < raw.length; i++) {
     if (i > 0) s += Math.hypot(raw[i].x - raw[i - 1].x, raw[i].y - raw[i - 1].y);
-    const a = raw[Math.max(i - 1, 0)], b = raw[Math.min(i + 1, raw.length - 1)];
+    let ia = i - 1, ib = i + 1;
+    while (ia > 0 && Math.hypot(raw[i].x - raw[ia].x, raw[i].y - raw[ia].y) < SPAN) ia--;
+    while (ib < raw.length - 1 && Math.hypot(raw[ib].x - raw[i].x, raw[ib].y - raw[i].y) < SPAN) ib++;
+    const a = raw[Math.max(ia, 0)], b = raw[Math.min(ib, raw.length - 1)];
     const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1;
-    const tx = dx / l, ty = dy / l;
+    let tx = dx / l, ty = dy / l;
+    if (i > 0 && tx * ptx + ty * pty < 0) { tx = -tx; ty = -ty; } // назад не разворачиваемся
+    ptx = tx; pty = ty;
     pt.push({ x: raw[i].x, y: raw[i].y, s, tx, ty, nx: -ty, ny: tx });
   }
   return { pt, L: s };

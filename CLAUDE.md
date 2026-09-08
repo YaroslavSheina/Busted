@@ -137,7 +137,7 @@ src/
   game.ts          — одна попытка: createGame(ui, level) — состояние, update, цикл, resize, DPR
   config.ts        — все тюнинг-параметры в одном месте (см. таблицу выше)
   physics.ts       — модель машины, чистые функции: step(car, input, params, dt)
-  road.ts          — сплайн, сэмплирование, pathAt(s), nearest(pos, sGuess)
+  road.ts          — сплайн, сэмплирование, pathAt(s), nearest(pos, sGuess); касательная по окну ≥3 px без разворотов — микропетли равномерного Катмулла-Рома не переворачивают нормаль
   traffic.ts       — спавн (seeded), движение, OBB, SAT
   input.ts         — зоны LEFT/RIGHT, клавиатура, трекинг длительности удержания
   render.ts        — камера, drawGrid/drawRoad (общие с редактором), точка А и гараж Б, машины, следы заноса, HUD; статика рисуется только в видимой области (setClip/visible), точки дороги через STEP, окна зданий паттерном
