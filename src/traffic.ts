@@ -14,6 +14,8 @@ export interface Vehicle {
   L: number;
   col: string;
   pick: number;   // детерминированная «монетка» машины (0..1) — например, сворачивать ли на ветку
+  hold?: number;  // остаток реакции после стоп-линии, с: зелёный уже горит, а машина ещё стоит
+  ramp?: boolean; // разгоняется с места (до целевой скорости)
   buzzed?: boolean;        // игрок уже проезжал впритирку — одна провокация на машину
   panic?: { side: 1 | -1; back?: boolean }; // паника: рывок от игрока, затем перекоррекция через всю дорогу к другому краю
   crashed?: boolean;       // встала в отбойник — стоит и не двигается
@@ -142,10 +144,11 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
         if (o.lane === c.lane && o.dir === -1) { if (c.s - o.s < 110) sp = Math.min(sp, o.v); break; }
       }
       // стоп-линия встречной — с дальней стороны поперечной улицы (stopsBack)
-      if (ai?.stopsBack) { let stopAt: number | null = null; for (const st of ai.stopsBack) if (st < c.s - 10 && st >= c.s - TRAFFIC_AI.look && (stopAt === null || st > stopAt)) stopAt = st; if (stopAt !== null) { const dist = c.s - (stopAt + TRAFFIC_AI.stopGap); sp = dist < 2 ? 0 : Math.min(sp, dist * 3); } }
-      c.v = sp; c.s -= sp * dt; continue;
+      let atLine = false;
+      if (ai?.stopsBack) { let stopAt: number | null = null; for (const st of ai.stopsBack) if (st < c.s - 10 && st >= c.s - TRAFFIC_AI.look && (stopAt === null || st > stopAt)) stopAt = st; if (stopAt !== null) { const dist = c.s - (stopAt + TRAFFIC_AI.stopGap); atLine = dist < 2; sp = atLine ? 0 : Math.min(sp, dist * 3); } }
+      c.v = settle(c, sp, atLine, dt); c.s -= c.v * dt; continue;
     }
-    let sp = c.spd;
+    let sp = c.spd, atLine = false;
     // у поста колонна растягивается до gateGap — иначе в единственную проходную полосу не втиснуться
     // число полос по местной ширине: при его смене центр полосы прыгает — компенсируем сдвигом, он сам рассосётся
     if (ai) {
@@ -171,7 +174,7 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
       // красный светофор — стоп-линия на всю ширину; кто уже на перекрёстке, едет дальше
       let stopAt: number | null = null;
       for (const st of ai.stops ?? []) if (st > c.s + 10 && st <= c.s + TRAFFIC_AI.look && (stopAt === null || st < stopAt)) stopAt = st;
-      if (stopAt !== null) { const dist = stopAt - TRAFFIC_AI.stopGap - c.s; sp = dist < 2 ? 0 : Math.min(sp, dist * 3); }
+      if (stopAt !== null) { const dist = stopAt - TRAFFIC_AI.stopGap - c.s; atLine = dist < 2; sp = atLine ? 0 : Math.min(sp, dist * 3); }
       const nAhead = lanesAhead(ai.width, c.s, TRAFFIC_AI.look);
       if (ahead !== null) {
         // свободная полоса — ближайшая по номеру, без заграждения впереди и без соседа рядом
@@ -188,10 +191,23 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
       }
       if (c.shift !== 0) { const st = TRAFFIC_AI.laneChange * dt; c.shift = Math.abs(c.shift) <= st ? 0 : c.shift - Math.sign(c.shift) * st; }
     }
-    c.v = sp;
-    c.s += sp * dt;
+    c.v = settle(c, sp, atLine, dt);
+    c.s += c.v * dt;
   }
   return traffic.filter(c => c.dir === -1 ? c.s > 140 : c.s < path.L - 140);
+}
+
+// Скорость кадра: тормозит сразу (безопасность стоп-линий как была), с места разгоняется с accel; у стоп-линии
+// запоминает реакцию и после зелёного ещё стоит её — колонна трогается волной, никто не прыгает игроку под колёса.
+// Ускорение на ходу (догнал медленного, тот ушёл) мгновенное, как в прототипе
+function settle(c: Vehicle, sp: number, atLine: boolean, dt: number): number {
+  if (atLine) c.hold = TRAFFIC_AI.react * (0.5 + Math.abs(c.pick));
+  else if (c.hold && c.hold > 0) { c.hold -= dt; sp = 0; }
+  if (c.v < 1 && sp > 0) c.ramp = true;
+  if (!c.ramp) return sp;
+  const v = Math.min(sp, c.v + TRAFFIC_AI.accel * dt);
+  if (v >= sp) c.ramp = false;
+  return v;
 }
 
 export function vehiclePose(path: Path, c: Vehicle, width: number | WidthFn): { x: number; y: number; h: number } {

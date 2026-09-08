@@ -30,6 +30,9 @@ export interface CrossCar { x: number; y: number; h: number; W: number; L: numbe
 
 // Позиция в очереди машины m своего направления: от осевой маршрута наружу, первая — у края перекрёстка
 const queueAt = (c: Crossing, m: number) => c.roadHalf + CROSS.queueGap + m * (CROSS.carL + 16);
+// Разгон с места (и, зеркально, торможение к очереди) с CROSS.accel до speed: путь за t секунд и время на путь d
+const travel = (c: Crossing, t: number) => { const t1 = c.speed / CROSS.accel; return t <= 0 ? 0 : t < t1 ? CROSS.accel * t * t / 2 : c.speed * t - c.speed * t1 / 2; };
+const timeFor = (c: Crossing, d: number) => { const t1 = c.speed / CROSS.accel, d1 = c.speed * t1 / 2; return d <= d1 ? Math.sqrt(2 * d / CROSS.accel) : t1 + (d - d1) / c.speed; };
 
 export function layoutCrossings(path: Path, defs: CrossingDef[] = [], roadWidth: number): Crossing[] {
   return defs.map(def => {
@@ -38,7 +41,7 @@ export function layoutCrossings(path: Path, defs: CrossingDef[] = [], roadWidth:
     const c: Crossing = { def, x: p.x, y: p.y, tx: p.tx, ty: p.ty, nx: p.nx, ny: p.ny, hCross: Math.atan2(p.nx, -p.ny), s: def.s, w, n, speed, roadHalf: roadWidth / 2, red: 0 };
     // красный — пока последняя машина группы не покинет проезжую часть
     const mMax = Math.ceil(n / 2) - 1;
-    c.red = mMax * CROSS.gapT + (queueAt(c, mMax) + c.roadHalf + CROSS.carL / 2) / speed + 0.3;
+    c.red = mMax * CROSS.gapT + timeFor(c, queueAt(c, mMax) + c.roadHalf + CROSS.carL / 2) + 0.3;
     return c;
   });
 }
@@ -71,12 +74,12 @@ export function crossCars(c: Crossing, time: number): CrossCar[] {
   for (let k = 0; k < c.n; k++) {
     const dir = k % 2 === 0 ? 1 : -1, m = Math.floor(k / 2);
     const q = queueAt(c, m), tGo = m * CROSS.gapT;
-    // уехавшая или стоящая
-    if (ph >= tGo) { const d = -q + (ph - tGo) * c.speed; if (d <= CROSS.reach) add(dir, d); }
+    // уехавшая (с плавным разгоном) или стоящая
+    if (ph >= tGo) { const d = -q + travel(c, ph - tGo); if (d <= CROSS.reach) add(dir, d); }
     else add(dir, -q);
-    // подъезжающая на смену: к концу цикла встаёт в очередь
-    const arrive = T - 1.0 + m * 0.25, start = arrive - (CROSS.reach - q) / c.speed;
-    if (ph >= start && ph >= tGo) add(dir, Math.min(-q, -CROSS.reach + (ph - start) * c.speed));
+    // подъезжающая на смену: тормозит и к концу цикла встаёт в очередь
+    const arrive = T - 1.0 + m * 0.25, start = arrive - timeFor(c, CROSS.reach - q);
+    if (ph >= start && ph >= tGo) add(dir, -q - travel(c, arrive - ph));
   }
   return out;
 }

@@ -19,7 +19,7 @@
   ],
   "crossings": [
     { "s": 1000, "period": 12, "offset": 4.5 },
-    { "s": 2100, "period": 11, "offset": 6.0 },
-    { "s": 3300, "period": 13, "offset": 10.0, "speed": 220 }
+    { "s": 2100, "period": 11, "offset": 5.0 },
+    { "s": 3300, "period": 13, "offset": 9.0, "speed": 220 }
   ]
 }
