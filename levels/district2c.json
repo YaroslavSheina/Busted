@@ -18,7 +18,7 @@
     [1860, -2080]
   ],
   "width": 180,
-  "traffic": 0.3,
+  "traffic": 0.4,
   "seed": 777,
   "car": "sedan",
   "panic": 0.3,
@@ -28,6 +28,15 @@
   "cars": [
     {"s":320,"lane":2,"speed":0},
     {"s":1808,"lane":2,"speed":0}
+  ],
+  "blocks": [
+    {"s":2877,"police":[0,2]}
+  ],
+  "narrows": [
+    {"from":2228,"to":2434,"width":110}
+  ],
+  "rails": [
+    {"s":313,"period":14,"speed":260,"length":500,"offset":2.9}
   ],
   "crossings": [
     {"s":2617,"period":12,"offset":7.5}
@@ -42,16 +51,16 @@
     {"type":"building","x":-504,"y":-1444,"w":199,"h":288,"tone":0.62},
     {"type":"building","x":-265,"y":-1444,"w":149,"h":288,"tone":0.77},
     {"type":"building","x":-504,"y":-924,"w":388,"h":288,"tone":0.85},
-    {"type":"building","x":-504,"y":-404,"w":194,"h":288,"tone":0.55},
-    {"type":"building","x":-270,"y":-404,"w":154,"h":288,"tone":0.93},
+    {"type":"building","x":-504,"y":-272,"w":194,"h":156,"tone":0.55},
+    {"type":"building","x":-270,"y":-272,"w":154,"h":156,"tone":0.93},
     {"type":"building","x":-504,"y":116,"w":388,"h":288,"tone":0.09},
     {"type":"building","x":116,"y":-2484,"w":388,"h":288,"tone":0.73},
     {"type":"building","x":116,"y":-1964,"w":388,"h":288,"tone":0.12},
     {"type":"building","x":116,"y":-1444,"w":127,"h":288,"tone":0.78},
     {"type":"building","x":283,"y":-1444,"w":221,"h":288,"tone":0.58},
     {"type":"building","x":116,"y":-924,"w":388,"h":288,"tone":0.73},
-    {"type":"building","x":116,"y":-404,"w":179,"h":288,"tone":0.03},
-    {"type":"building","x":335,"y":-404,"w":169,"h":288,"tone":0.27},
+    {"type":"building","x":116,"y":-272,"w":179,"h":156,"tone":0.03},
+    {"type":"building","x":335,"y":-272,"w":169,"h":156,"tone":0.27},
     {"type":"building","x":116,"y":116,"w":388,"h":288,"tone":0.46},
     {"type":"building","x":736,"y":-2484,"w":128,"h":288,"tone":0.66},
     {"type":"building","x":904,"y":-2484,"w":220,"h":288,"tone":0.38},
@@ -59,7 +68,7 @@
     {"type":"building","x":736,"y":-1444,"w":220,"h":288,"tone":0.64},
     {"type":"building","x":996,"y":-1444,"w":128,"h":288,"tone":0.14},
     {"type":"building","x":736,"y":-924,"w":388,"h":288,"tone":0.97},
-    {"type":"building","x":736,"y":-404,"w":388,"h":288,"tone":0.95},
+    {"type":"building","x":736,"y":-272,"w":388,"h":156,"tone":0.95},
     {"type":"building","x":736,"y":116,"w":226,"h":288,"tone":0.61},
     {"type":"building","x":1002,"y":116,"w":122,"h":288,"tone":0.23},
     {"type":"building","x":1356,"y":-2484,"w":388,"h":288,"tone":0.31},
@@ -67,15 +76,15 @@
     {"type":"building","x":1356,"y":-1444,"w":151,"h":288,"tone":0.23},
     {"type":"building","x":1547,"y":-1444,"w":197,"h":288,"tone":0.62},
     {"type":"building","x":1356,"y":-924,"w":388,"h":288,"tone":0.87},
-    {"type":"building","x":1356,"y":-404,"w":174,"h":288,"tone":0.2},
-    {"type":"building","x":1570,"y":-404,"w":174,"h":288,"tone":0.12},
+    {"type":"building","x":1356,"y":-272,"w":174,"h":156,"tone":0.2},
+    {"type":"building","x":1570,"y":-272,"w":174,"h":156,"tone":0.12},
     {"type":"building","x":1356,"y":116,"w":184,"h":288,"tone":0.69},
     {"type":"building","x":1580,"y":116,"w":164,"h":288,"tone":0.37},
     {"type":"building","x":1976,"y":-2484,"w":388,"h":288,"tone":0.75},
     {"type":"building","x":1976,"y":-1964,"w":388,"h":288,"tone":0.96},
     {"type":"building","x":1976,"y":-1444,"w":388,"h":288,"tone":0.61},
     {"type":"building","x":1976,"y":-924,"w":388,"h":288,"tone":0.8},
-    {"type":"building","x":1976,"y":-404,"w":388,"h":288,"tone":0.55},
+    {"type":"building","x":1976,"y":-272,"w":388,"h":156,"tone":0.55},
     {"type":"building","x":1976,"y":116,"w":147,"h":288,"tone":0.76},
     {"type":"building","x":2163,"y":116,"w":201,"h":288,"tone":0.51}
   ]

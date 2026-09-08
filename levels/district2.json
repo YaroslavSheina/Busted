@@ -30,6 +30,10 @@
     {"s":340,"lane":2,"speed":0},
     {"s":2306,"lane":2,"speed":0}
   ],
+  "blocks": [
+    {"s":1299,"police":[0,2]},
+    {"s":2462,"works":[2],"len":400}
+  ],
   "crossings": [
     {"s":1042,"period":12,"offset":3},
     {"s":2086,"period":12,"offset":9.5}

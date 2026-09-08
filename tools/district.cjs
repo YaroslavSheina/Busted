@@ -120,8 +120,32 @@ function build(district, route) {
     r.crossings = r.straight.filter(p => !junctions.has(p.join(','))).map(([x, y], k) => ({ s: sAt(r.sm, x, y), period: 12, offset: r.offsets[k] ?? 0, arrive: +(sAt(r.sm, x, y) / 300).toFixed(1) }));
   });
 
+  // события маршрута на главной: at — координата сетки (дробная — между узлами), s по главной считается сам
+  const main0 = roads[0], mainCars = [...(main0.cars ?? [])], blocks = [], narrows = [], rails = [], bands = [];
+  const atS = at => sAt(main0.sm, at[0] * BX, at[1] * BY);
+  for (const e of route.events ?? []) {
+    const s = atS(e.at);
+    switch (e.type) {
+      case 'post': blocks.push({ s, police: e.lanes ?? [0, 2] }); break;                        // пост с просветом в средней
+      case 'spikes': blocks.push({ s, police: e.lanes ?? [0], spikes: e.spikes ?? [2] }); break; // машина слева, ежи справа
+      case 'works': blocks.push({ s, works: e.lanes ?? [1, 2], len: e.len ?? 400 }); break;      // ремонт: полосы закрыты на len
+      case 'closure': blocks.push({ s, police: [0, 1, 2] }); break;                             // полное перекрытие — объезд по ветке
+      case 'narrow': narrows.push({ from: s, to: atS(e.to), width: e.width ?? 110 }); break;
+      case 'rails': {
+        rails.push({ s, period: e.period ?? 14, speed: e.speed ?? 260, length: e.length ?? 400, offset: e.offset ?? 0 });
+        const leg = main0.legs.find(L => L.dx ? Math.abs(e.at[1] * BY - L.a[1]) < 1 : Math.abs(e.at[0] * BX - L.a[0]) < 1);
+        bands.push(leg && leg.dx ? { axis: 'x', c: e.at[0] * BX } : { axis: 'y', c: e.at[1] * BY }); // рельсы поперёк улицы — коридор через кварталы
+        break;
+      }
+      case 'ramp': mainCars.push({ s, lane: e.lane ?? 1, speed: e.speed ?? 120, type: 'ramp' }); break;
+      case 'parked': mainCars.push({ s, lane: e.lane ?? 2, speed: 0 }); break;
+      default: throw new Error(`${spec.name}: неизвестное событие ${e.type}`);
+    }
+  }
+  blocks.sort((a, b) => a.s - b.s); mainCars.sort((a, b) => a.s - b.s);
+
   // здания: все кварталы в диапазоне, отступ от осей улиц
-  const props = [];
+  let props = [];
   for (let i = spec.blocks.i[0]; i <= spec.blocks.i[1]; i++) for (let j = spec.blocks.j[0]; j <= spec.blocks.j[1]; j++) {
     const x0 = i * BX + ROAD / 2 + MARGIN, x1 = (i + 1) * BX - ROAD / 2 - MARGIN;
     const y0 = j * BY + ROAD / 2 + MARGIN, y1 = (j + 1) * BY - ROAD / 2 - MARGIN;
@@ -130,6 +154,14 @@ function build(district, route) {
     if (!split) props.push({ type: 'building', x: x0, y: y0, w: x1 - x0, h: y1 - y0, tone: +rnd().toFixed(2) });
     else { const gap = 40, wA = Math.round((x1 - x0 - gap) * (0.35 + rnd() * 0.3)); props.push({ type: 'building', x: x0, y: y0, w: wA, h: y1 - y0, tone: +rnd().toFixed(2) }, { type: 'building', x: x0 + wA + gap, y: y0, w: x1 - x0 - wA - gap, h: y1 - y0, tone: +rnd().toFixed(2) }); }
   }
+
+  // железнодорожный коридор режет здания
+  const cut = (list, band) => list.flatMap(p => {
+    const [p0, p1] = band.axis === 'y' ? [p.y, p.y + p.h] : [p.x, p.x + p.w], b0 = band.c - 40, b1 = band.c + 40;
+    if (p1 <= b0 || p0 >= b1) return [p];
+    return [[p0, Math.min(p1, b0)], [Math.max(p0, b1), p1]].filter(([a, b]) => b - a >= 80).map(([a, b]) => band.axis === 'y' ? { ...p, y: a, h: b - a } : { ...p, x: a, w: b - a });
+  });
+  for (const band of bands) props = cut(props, band);
 
   const main = roads[0];
   const strip = c => { const { arrive, ...r } = c; return r; };
@@ -156,8 +188,8 @@ ${main.pts.map(p => `    [${p[0]}, ${p[1]}]`).join(',\n')}
   "oncoming": ${main.oncoming},
   "chaser": ${JSON.stringify(spec.chaser)},
   "cars": [
-${(main.cars ?? []).map(c => '    ' + JSON.stringify(c)).join(',\n')}
-  ],
+${mainCars.map(c => '    ' + JSON.stringify(c)).join(',\n')}
+  ],${blocks.length ? `\n  "blocks": [\n${blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ],` : ''}${narrows.length ? `\n  "narrows": [\n${narrows.map(n => '    ' + JSON.stringify(n)).join(',\n')}\n  ],` : ''}${rails.length ? `\n  "rails": [\n${rails.map(r => '    ' + JSON.stringify(r)).join(',\n')}\n  ],` : ''}
   "crossings": [
 ${main.crossings.map(c => '    ' + JSON.stringify(strip(c))).join(',\n')}
   ],
@@ -171,7 +203,8 @@ ${props.map(p => '    ' + JSON.stringify(p)).join(',\n')}
 `;
   fs.writeFileSync(`levels/${spec.file}.json`, json);
   const desc = roads.map((r, i) => `${i ? `ветка ${i - 1}${r.def.parent !== undefined ? ` (от ветки ${r.def.parent})` : ''} ${r.def.from}→${r.def.to}` : 'главная'}: длина ${r.L}, перекрёстки ${r.crossings.map(c => `s${c.s}@${c.arrive}с`).join(', ') || '—'}`);
-  console.log(`${spec.name}: точек ${main.pts.length}, зданий ${props.length}\n   ${desc.join('\n   ')}`);
+  const ev = (route.events ?? []).map(e => `${e.type}@s${atS(e.at)}`).join(', ');
+  console.log(`${spec.name}: точек ${main.pts.length}, зданий ${props.length}${ev ? `, события: ${ev}` : ''}\n   ${desc.join('\n   ')}`);
 }
 
 const DISTRICTS = [
@@ -189,20 +222,30 @@ const DISTRICTS = [
     routes: [
       // маршрут 1: старт (0,0), север 3, восток 3, север 1. Ветка А: направо у (0,−1), прямо через (1,−1), налево у (2,−1),
       // прямо через (2,−2), вливается в главную у (2,−3). Ветка Б от А: налево у (1,−1), направо у (1,−2), вливается в А у (2,−2)
-      { file: 'district2', name: 'Район 2 · маршрут 1', roads: [
+      { file: 'district2', name: 'Район 2 · маршрут 1', traffic: 0.3,
+        // вводный: пост с просветом после первого перекрёстка, ремонт правой полосы на восточном отрезке
+        events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [1.6, -3], lanes: [2], len: 400 }],
+        roads: [
         { nodes: [[0, 0], [0, -3], [3, -3], [3, -4]], oncoming: 1, offsets: [3.0, 9.5], // (0,−2) красный, (1,−3) зелёный при прибытии (routebot SWEEP)
           cars: h => [{ s: 340, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -3])) + 220, lane: 2, speed: 0 }] },
         { nodes: [[0, -1], [1, -1], [2, -1], [2, -2], [2, -3]], oncoming: 1 }, // её прямые узлы — примыкания ветки Б, перекрёстков нет
         { nodes: [[1, -1], [1, -2], [2, -2]], parent: 0, oncoming: 1 },
       ] },
       // маршрут 2: старт (3,0), север 1, запад 2, север 2, восток 2, север 1. Ветка: направо у (1,−2), налево у (2,−2), вливается у (2,−3)
-      { file: 'district2b', name: 'Район 2 · маршрут 2', roads: [
+      { file: 'district2b', name: 'Район 2 · маршрут 2', traffic: 0.35,
+        // ремонт правой полосы на западном отрезке, полное перекрытие северного отрезка за (1,−2) — объезд по ветке
+        events: [{ type: 'works', at: [1.85, -1], lanes: [2], len: 220 }, { type: 'closure', at: [1, -2.55] }],
+        roads: [
         { nodes: [[3, 0], [3, -1], [1, -1], [1, -3], [3, -3], [3, -4]], oncoming: 1, offsets: [5.0], // (2,−1) зелёный при прибытии
           cars: h => [{ s: 300, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -1])) + 260, lane: 2, speed: 0 }] },
         { nodes: [[1, -2], [2, -2], [2, -3]], oncoming: 1 },
       ] },
       // маршрут 3: старт (1,0), север 2, восток 2, север 2. Ветка: направо у (1,−1), налево у (2,−1), вливается у (2,−2)
-      { file: 'district2c', name: 'Район 2 · маршрут 3', roads: [
+      { file: 'district2c', name: 'Район 2 · маршрут 3', traffic: 0.4,
+        // переезд на первом отрезке (поезд проходит сразу за игроком — коп под поездом), сужение и пост на последнем
+        events: [{ type: 'rails', at: [1, -0.6], period: 14, length: 500, offset: 2.9 }, { type: 'narrow', at: [3, -2.25], to: [3, -2.65], width: 110 },
+          { type: 'post', at: [3, -3.5] }],
+        roads: [
         { nodes: [[1, 0], [1, -2], [3, -2], [3, -4]], oncoming: 1, offsets: [7.5], // (3,−3) красный при прибытии, как в «Районе 1»
           cars: h => [{ s: 320, lane: 2, speed: 0 }, { s: h.sAt(...h.node([2, -2])) + 240, lane: 2, speed: 0 }] },
         { nodes: [[1, -1], [2, -1], [2, -2]], oncoming: 1 },

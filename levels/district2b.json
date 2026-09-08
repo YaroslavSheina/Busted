@@ -28,7 +28,7 @@
     [1860, -2080]
   ],
   "width": 180,
-  "traffic": 0.3,
+  "traffic": 0.35,
   "seed": 777,
   "car": "sedan",
   "panic": 0.3,
@@ -38,6 +38,10 @@
   "cars": [
     {"s":300,"lane":2,"speed":0},
     {"s":1881,"lane":2,"speed":0}
+  ],
+  "blocks": [
+    {"s":1143,"works":[2],"len":220},
+    {"s":2382,"police":[0,1,2]}
   ],
   "crossings": [
     {"s":1047,"period":12,"offset":5}

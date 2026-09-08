@@ -154,7 +154,7 @@ src/
     canvas.ts      — холст: панорама, зум, точки; дорога рисуется drawRoad
     io.ts          — формат файла уровня, валидация импорта
 levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings?, props?, oncoming?, nav? } — см. docs/mechanics.md
-tools/district.cjs — генератор районов: район (сетка, здания, машина) × маршруты (дороги по узлам: главная + ветки с родителем, перекрёстки) → levels/district*.json, один район — несколько уровней
+tools/district.cjs — генератор районов: район (сетка, здания, машина) × маршруты (дороги по узлам: главная + ветки с родителем, перекрёстки, события: посты, ремонт, перекрытия, сужения, переезды) → levels/district*.json, один район — несколько уровней
 docs/concept.md
 docs/design.md     — диздок BUSTED
 docs/mechanics.md  — лаборатория механик: карточки идей со статусами, формат данных каждой
