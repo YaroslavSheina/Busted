@@ -37,6 +37,30 @@ export interface Scene {
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
 }
 
+// Тема. comic — рисованный вид сверху в духе ранних GTA (диздок): контуры, плоские цвета, тротуары в городе,
+// тени под машинами и зданиями. night — прежний тёмный вид (?theme=night). Физика и данные о теме не знают
+export type ThemeName = 'comic' | 'night';
+interface Theme {
+  ground: string; grid: string; asphalt: string; shoulder: string; cross: string;
+  lane: string; edge: string; dyellow: string;
+  outline: string | null;   // контур дорог и машин; null — без контуров
+  sidewalk: string | null;  // тротуары вдоль дорог в городе; null — без тротуаров
+  shadow: string | null;    // тень под машинами и зданиями
+  roofs: string[] | null;   // цвета крыш; null — серые коробки с окнами
+}
+const THEMES: Record<ThemeName, Theme> = {
+  night: { ground: '#15171c', grid: 'rgba(255,255,255,.035)', asphalt: '#262930', shoulder: '#3a3d46', cross: '#2d3038',
+    lane: 'rgba(236,233,224,.28)', edge: 'rgba(244,185,66,.5)', dyellow: 'rgba(244,185,66,.75)', outline: null, sidewalk: null, shadow: null, roofs: null },
+  comic: { ground: '#474c55', grid: 'rgba(255,255,255,.04)', asphalt: '#2e3138', shoulder: '#3a3d46', cross: '#33363d',
+    lane: 'rgba(240,238,230,.55)', edge: 'rgba(244,185,66,.75)', dyellow: 'rgba(244,185,66,.9)', outline: '#14161a', sidewalk: '#8f949c', shadow: 'rgba(0,0,0,.35)',
+    roofs: ['#8a5a4a', '#6f7d5a', '#5b6b85', '#9a8a62', '#7a6c8a', '#6d7a80'] },
+};
+let T: Theme = THEMES.comic;
+export function setTheme(name: string | null | undefined): void { T = THEMES[(name as ThemeName)] ?? THEMES.comic; }
+let city = false; // тротуары вдоль дорог — только там, где есть здания
+export function setCity(v: boolean): void { city = v; }
+const SIDEWALK = 26;
+
 // Отсечение: статика рисуется только в видимой области (плюс запас). null — рисовать всё
 export interface Rect { x0: number; y0: number; x1: number; y1: number }
 let clip: Rect | null = null;
@@ -85,12 +109,26 @@ function dashed(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: nu
   ctx.stroke();
 }
 
+// Комикс-подложка машины: тень со сдвигом и четыре колеса, чуть выступающие из-под кузова
+function carUnder(ctx: CanvasRenderingContext2D, w: number, l: number, r: number): void {
+  if (!T.shadow) return;
+  ctx.fillStyle = T.shadow; ctx.beginPath(); ctx.roundRect(-w / 2 + 3, -l / 2 + 5, w, l, r); ctx.fill();
+  ctx.fillStyle = '#101216';
+  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) ctx.fillRect(sx * (w / 2 - 2) - 2.5, sy * (l / 2 - 13) - 5, 5, 10);
+}
+// Контур кузова
+function carOutline(ctx: CanvasRenderingContext2D, trace: () => void): void {
+  if (!T.outline) return;
+  ctx.strokeStyle = T.outline; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.beginPath(); trace(); ctx.stroke();
+}
 export function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, w: number, l: number, col: string, player: boolean): void {
   ctx.save(); ctx.translate(x, y); ctx.rotate(h);
+  carUnder(ctx, w, l, 6);
   ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 6); ctx.fill();
   ctx.fillStyle = 'rgba(20,22,28,.55)'; ctx.fillRect(-w / 2 + 4, -l / 2 + 12, w - 8, 11); ctx.fillRect(-w / 2 + 4, l / 2 - 14, w - 8, 7);
   if (player) { ctx.fillStyle = '#fff3c4'; ctx.fillRect(-w / 2 + 3, -l / 2 - 1, 6, 3); ctx.fillRect(w / 2 - 9, -l / 2 - 1, 6, 3); }
   else { ctx.fillStyle = '#e04a3a'; ctx.fillRect(-w / 2 + 3, l / 2 - 2, 6, 2); ctx.fillRect(w / 2 - 9, l / 2 - 2, 6, 2); }
+  carOutline(ctx, () => ctx.roundRect(-w / 2, -l / 2, w, l, 6));
   ctx.restore();
 }
 
@@ -98,7 +136,10 @@ export function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: 
 export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, spec: CarSpec): void {
   const { W: w, L: l } = spec;
   const glass = 'rgba(20,22,28,.6)', trim = 'rgba(20,22,28,.35)', lamp = '#fff3c4';
+  const wedge = () => { ctx.moveTo(-w / 2 + 6, -l / 2); ctx.lineTo(w / 2 - 6, -l / 2); ctx.lineTo(w / 2, -l / 2 + 16); ctx.lineTo(w / 2, l / 2 - 4); ctx.lineTo(-w / 2, l / 2 - 4); ctx.lineTo(-w / 2, -l / 2 + 16); ctx.closePath(); };
+  const round = { sedan: 6, minivan: 9, supercar: 0, bus: 5 }[spec.body];
   ctx.save(); ctx.translate(x, y); ctx.rotate(h);
+  carUnder(ctx, w, l, round);
   switch (spec.body) {
     case 'sedan':
       ctx.fillStyle = '#f4b942'; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 6); ctx.fill();
@@ -116,9 +157,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, 
       break;
     case 'supercar':
       // клин: узкий нос, широкая корма, низкий кокпит, антикрыло
-      ctx.fillStyle = '#ffcf3d'; ctx.beginPath();
-      ctx.moveTo(-w / 2 + 6, -l / 2); ctx.lineTo(w / 2 - 6, -l / 2); ctx.lineTo(w / 2, -l / 2 + 16); ctx.lineTo(w / 2, l / 2 - 4);
-      ctx.lineTo(-w / 2, l / 2 - 4); ctx.lineTo(-w / 2, -l / 2 + 16); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffcf3d'; ctx.beginPath(); wedge(); ctx.fill();
       ctx.fillStyle = glass; ctx.beginPath();
       ctx.moveTo(-w / 2 + 7, -l / 2 + 18); ctx.lineTo(w / 2 - 7, -l / 2 + 18); ctx.lineTo(w / 2 - 5, -l / 2 + 30); ctx.lineTo(-w / 2 + 5, -l / 2 + 30); ctx.closePath(); ctx.fill();
       ctx.fillStyle = trim; ctx.fillRect(-4, -l / 2 + 32, 8, l / 2 - 40); ctx.fillRect(-w / 2 + 3, -l / 2 + 4, 6, 3); ctx.fillRect(w / 2 - 9, -l / 2 + 4, 6, 3);
@@ -135,6 +174,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, 
       ctx.fillStyle = lamp; ctx.fillRect(-w / 2 + 3, -l / 2 - 1, 7, 3); ctx.fillRect(w / 2 - 10, -l / 2 - 1, 7, 3);
       break;
   }
+  carOutline(ctx, spec.body === 'supercar' ? wedge : () => ctx.roundRect(-w / 2, -l / 2, w, l, round));
   ctx.restore();
 }
 
@@ -243,6 +283,7 @@ function windowsPattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
   return windowsPat;
 }
 export function drawProps(ctx: CanvasRenderingContext2D, props: Prop[]): void {
+  if (T.roofs) { drawRoofs(ctx, props); return; }
   for (const p of props) {
     if (p.type !== 'building' || !visible(p.x + p.w / 2, p.y + p.h / 2, Math.max(p.w, p.h) / 2 + 10)) continue;
     const t = p.tone ?? 0.5;
@@ -255,13 +296,38 @@ export function drawProps(ctx: CanvasRenderingContext2D, props: Prop[]): void {
   }
 }
 
+// Комикс-здания: тень к юго-востоку, цветная крыша по tone, контур, светлая кромка, пара будок на крыше
+function drawRoofs(ctx: CanvasRenderingContext2D, props: Prop[]): void {
+  const roofs = T.roofs!;
+  const seen = props.filter(p => p.type === 'building' && visible(p.x + p.w / 2, p.y + p.h / 2, Math.max(p.w, p.h) / 2 + 20));
+  if (T.shadow) { ctx.fillStyle = T.shadow; for (const p of seen) ctx.fillRect(p.x + 10, p.y + 12, p.w, p.h); }
+  for (const p of seen) {
+    const t = p.tone ?? 0.5, k = Math.floor(t * 97) % roofs.length;
+    ctx.fillStyle = roofs[k]; ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(p.x, p.y, p.w, 6); ctx.fillRect(p.x, p.y, 6, p.h);        // свет с северо-запада
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(p.x, p.y + p.h - 6, p.w, 6); ctx.fillRect(p.x + p.w - 6, p.y, 6, p.h);
+    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 2; ctx.strokeRect(p.x + 12, p.y + 12, p.w - 24, p.h - 24); // парапет
+    // будки и люки на крыше — от tone, чтобы крыши не были одинаковыми
+    const n = 1 + Math.floor(t * 13) % 3;
+    for (let i = 0; i < n; i++) {
+      const bw = 26 + ((k + i * 7) % 3) * 10, bh = 22 + ((k + i * 5) % 3) * 8;
+      const bx = p.x + 24 + ((t * 1000 + i * 137) % Math.max(1, p.w - 48 - bw)), by = p.y + 24 + ((t * 3170 + i * 89) % Math.max(1, p.h - 48 - bh));
+      if (T.shadow) { ctx.fillStyle = T.shadow; ctx.fillRect(bx + 4, by + 5, bw, bh); }
+      ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.fillRect(bx, by, bw, bh);
+      ctx.strokeStyle = T.outline ?? '#000'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
+    }
+    ctx.strokeStyle = T.outline ?? 'rgba(0,0,0,.45)'; ctx.lineWidth = 3; ctx.strokeRect(p.x, p.y, p.w, p.h);
+  }
+}
+
 // Перекрёсток: поперечная улица под маршрутом, светофоры по правым углам, машины группы
 // Поперечная улица — не маршрут: асфальт светлее, без разметки, у обоих въездов «кирпич» (drawCrossingTop)
 export function drawCrossingRoad(ctx: CanvasRenderingContext2D, c: Crossing): void {
   if (!visible(c.x, c.y, CROSS.reach + 20)) return;
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.hCross); // ось y — вдоль поперечной улицы
-  ctx.fillStyle = '#3a3d46'; ctx.fillRect(-c.w / 2 - 4, -CROSS.reach, c.w + 8, CROSS.reach * 2);
-  ctx.fillStyle = '#2d3038'; ctx.fillRect(-c.w / 2, -CROSS.reach, c.w, CROSS.reach * 2);
+  if (T.sidewalk && city) { ctx.fillStyle = T.outline!; ctx.fillRect(-c.w / 2 - SIDEWALK - 3, -CROSS.reach, c.w + 2 * SIDEWALK + 6, CROSS.reach * 2); ctx.fillStyle = T.sidewalk; ctx.fillRect(-c.w / 2 - SIDEWALK, -CROSS.reach, c.w + 2 * SIDEWALK, CROSS.reach * 2); }
+  ctx.fillStyle = T.outline ?? T.shoulder; ctx.fillRect(-c.w / 2 - 4, -CROSS.reach, c.w + 8, CROSS.reach * 2);
+  ctx.fillStyle = T.cross; ctx.fillRect(-c.w / 2, -CROSS.reach, c.w, CROSS.reach * 2);
   ctx.restore();
 }
 // «Кирпич»: красный круг с белой перекладиной на столбике посреди въезда
@@ -332,7 +398,7 @@ export function drawPolice(ctx: CanvasRenderingContext2D, x: number, y: number, 
 // Сетка земли — ориентир для движения. Границы — видимый прямоугольник в мировых координатах.
 export function drawGrid(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, g = 120, lw = 1): void {
   const gx = Math.floor(x0 / g) * g, gy = Math.floor(y0 / g) * g;
-  ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = lw; ctx.beginPath();
+  ctx.strokeStyle = T.grid; ctx.lineWidth = lw; ctx.beginPath();
   for (let x = gx; x < x1; x += g) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
   for (let y = gy; y < y1; y += g) { ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
   ctx.stroke();
@@ -364,19 +430,21 @@ function ribbon(ctx: CanvasRenderingContext2D, path: Path, half: (s: number) => 
 export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | WidthFn, finish = true, oncoming = 0): void {
   // у веток торцы плоские: концы лежат на главной дороге и должны прятаться под ней
   const cap: CanvasLineCap = finish ? 'round' : 'butt';
-  if (typeof w === 'number') {
-    // постоянная ширина — штрихом, как в прототипе
-    poly(ctx, path, 0, '#3a3d46', w + 8, cap); poly(ctx, path, 0, '#262930', w, cap);
-  } else {
-    ribbon(ctx, path, s => w(s) / 2 + 4, '#3a3d46', finish); ribbon(ctx, path, s => w(s) / 2, '#262930', finish);
+  // слои полотна снизу вверх: тротуар с контуром (в городе), контур/обочина, асфальт
+  const layers: [number, string][] = [];
+  if (T.sidewalk && city) layers.push([SIDEWALK + 3, T.outline!], [SIDEWALK, T.sidewalk]);
+  layers.push([T.outline ? 5 : 4, T.outline ?? T.shoulder], [0, T.asphalt]);
+  for (const [extra, color] of layers) {
+    if (typeof w === 'number') poly(ctx, path, 0, color, w + 2 * extra, cap); // постоянная ширина — штрихом, как в прототипе
+    else ribbon(ctx, path, s => w(s) / 2 + extra, color, finish);
   }
   const wa = (s: number) => widthAt(w, s);
   for (let k = 1; k < LANES; k++) {
     // граница встречки — сплошная двойная жёлтая; остальные — пунктир
-    if (k === oncoming) { poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) - 2.5, 'rgba(244,185,66,.75)', 2); poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) + 2.5, 'rgba(244,185,66,.75)', 2); }
-    else dashed(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES), 26, 22, 'rgba(236,233,224,.28)', 2);
+    if (k === oncoming) { poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) - 2.5, T.dyellow, 2); poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) + 2.5, T.dyellow, 2); }
+    else dashed(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES), 26, 22, T.lane, 2);
   }
-  poly(ctx, path, s => -wa(s) / 2 + 3, 'rgba(244,185,66,.5)', 2); poly(ctx, path, s => wa(s) / 2 - 3, 'rgba(244,185,66,.5)', 2);
+  poly(ctx, path, s => -wa(s) / 2 + 3, T.edge, 2); poly(ctx, path, s => wa(s) / 2 - 3, T.edge, 2);
   if (!finish) return;
   drawStart(ctx, path, wa(0));
   const e = pathAt(path, path.L - 60), we = wa(path.L - 60);
@@ -418,7 +486,8 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   const { W, H, DPR } = view;
   const { roads, car, marks, cam } = sc;
   const z = sc.zoom ?? 1;
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = '#15171c'; ctx.fillRect(0, 0, W, H);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = T.ground; ctx.fillRect(0, 0, W, H);
+  setCity(!!sc.props?.length);
   ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-cam.x, -cam.y);
   setClip({ x0: cam.x - W / 2 / z, y0: cam.y - H / 2 / z, x1: cam.x + W / 2 / z, y1: cam.y + H / 2 / z });
   drawGrid(ctx, cam.x - W / 2 / z, cam.y - H / 2 / z, cam.x + W / 2 / z, cam.y + H / 2 / z);

@@ -140,7 +140,7 @@ src/
   road.ts          — сплайн, сэмплирование, pathAt(s), nearest(pos, sGuess); касательная по окну ≥3 px без разворотов — микропетли равномерного Катмулла-Рома не переворачивают нормаль
   traffic.ts       — спавн (seeded), движение, OBB, SAT
   input.ts         — зоны LEFT/RIGHT, клавиатура, трекинг длительности удержания
-  render.ts        — камера, drawGrid/drawRoad (общие с редактором), точка А и гараж Б, машины, следы заноса, HUD; статика рисуется только в видимой области (setClip/visible), точки дороги через STEP, окна зданий паттерном
+  render.ts        — камера, drawGrid/drawRoad (общие с редактором), точка А и гараж Б, машины, следы заноса, HUD; тема comic/night (setTheme, ?theme=night); статика рисуется только в видимой области (setClip/visible), точки дороги через STEP
   levels.ts        — загрузка levels/*.json через import.meta.glob, ключ = имя файла
   cars.ts          — таблица машин: name, body (рисунок), W/L, speed, steer, damp, grip, spin, skidGrip
   blocks.ts        — заграждения: данные уровня → геометрия (посты, ежи, ремонт, обочины)

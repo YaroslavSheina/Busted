@@ -1,5 +1,7 @@
 import './style.css';
 import { createGame } from './game';
+import { setTheme } from './render';
+setTheme(new URLSearchParams(location.search).get('theme')); // ?theme=night — прежний тёмный вид
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';
 import { CARS, type CarKey } from './cars';
