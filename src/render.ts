@@ -46,11 +46,10 @@ export const visible = (x: number, y: number, m: number): boolean => !clip || (x
 // Точки дороги идут через ≤6 px; для рисования хватает каждой третьей: хорда 18 px на радиусе 150 отклоняется на 0.3 px
 const STEP = 3;
 
-// off — смещение от осевой: число или функция от s (сужения). Ломаная рисуется кусками, которые видны;
-// фаза пунктира привязана к s, чтобы куски не расходились с тем, как рисовалось бы целиком
-function poly(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: number) => number), dash: number[], color: string, lw: number, cap: CanvasLineCap = 'round'): void {
-  const pt = path.pt, last = pt.length - 1, m = lw + 60, period = dash.reduce((a, b) => a + b, 0);
-  ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = cap;
+// Сплошная линия со смещением off от осевой (число или функция от s — сужения). Рисуется кусками, которые видны
+function poly(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: number) => number), color: string, lw: number, cap: CanvasLineCap = 'round'): void {
+  const pt = path.pt, last = pt.length - 1, m = lw + 60;
+  ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = cap;
   let open = false;
   for (let i = 0; i <= last; i += STEP) {
     const p = pt[Math.min(i, last)];
@@ -59,11 +58,31 @@ function poly(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: numb
     if (!vis) { if (open) { ctx.stroke(); open = false; } continue; }
     const o = typeof off === 'number' ? off : off(p.s);
     const x = p.x + p.nx * o, y = p.y + p.ny * o;
-    if (!open) { ctx.beginPath(); ctx.lineDashOffset = period ? p.s % period : 0; ctx.moveTo(x, y); open = true; } else ctx.lineTo(x, y);
+    if (!open) { ctx.beginPath(); ctx.moveTo(x, y); open = true; } else ctx.lineTo(x, y);
     if (i < last && i + STEP > last) { const q = pt[last], oq = typeof off === 'number' ? off : off(q.s); ctx.lineTo(q.x + q.nx * oq, q.y + q.ny * oq); } // последняя точка — всегда
   }
   if (open) ctx.stroke();
-  ctx.setLineDash([]); ctx.lineDashOffset = 0;
+}
+
+// Пунктир: каждый штрих стоит на своём месте по s (от k·период до k·период + on), поэтому не «ползёт»,
+// когда видимый кусок дороги начинается с другой точки. Рисуются штрихи в видимом диапазоне s
+function dashed(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: number) => number), on: number, gap: number, color: string, lw: number): void {
+  const pt = path.pt, period = on + gap, m = lw + 60;
+  let s0 = Infinity, s1 = -Infinity;
+  for (let i = 0; i < pt.length; i += STEP) { const p = pt[i]; if (visible(p.x, p.y, m)) { if (p.s < s0) s0 = p.s; if (p.s > s1) s1 = p.s; } }
+  if (s0 === Infinity) return;
+  const at = (s: number) => { const p = pathAt(path, s), o = typeof off === 'number' ? off : off(s); return [p.x + p.nx * o, p.y + p.ny * o]; };
+  ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  let i = 0;
+  for (let k = Math.max(0, Math.floor((s0 - period) / period)); k * period <= s1 && k * period < path.L; k++) {
+    const a = k * period, b = Math.min(a + on, path.L);
+    const [ax, ay] = at(a); ctx.moveTo(ax, ay);
+    while (i < pt.length && pt[i].s <= a) i++;                      // точки внутри штриха — по ним идёт кривая
+    for (; i < pt.length && pt[i].s < b; i++) { const p = pt[i], o = typeof off === 'number' ? off : off(p.s); ctx.lineTo(p.x + p.nx * o, p.y + p.ny * o); }
+    const [bx, by] = at(b); ctx.lineTo(bx, by);
+  }
+  ctx.stroke();
 }
 
 export function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, w: number, l: number, col: string, player: boolean): void {
@@ -266,7 +285,7 @@ export function drawTurnArrow(ctx: CanvasRenderingContext2D, path: Path, w: numb
 }
 // Навигатор: пунктир к гаражу по осевой главной дороги; ветки без линии — на свой страх и риск
 export function drawNav(ctx: CanvasRenderingContext2D, path: Path): void {
-  poly(ctx, path, 0, [30, 24], 'rgba(90,200,255,.3)', 6);
+  dashed(ctx, path, 0, 30, 24, 'rgba(90,200,255,.3)', 6);
 }
 // С какой стороны родителя отходит ветка: знак смещения её точки за заходом от оси родителя
 export function branchSide(parent: Path, branch: Path, from: number): 1 | -1 {
@@ -347,17 +366,17 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
   const cap: CanvasLineCap = finish ? 'round' : 'butt';
   if (typeof w === 'number') {
     // постоянная ширина — штрихом, как в прототипе
-    poly(ctx, path, 0, [], '#3a3d46', w + 8, cap); poly(ctx, path, 0, [], '#262930', w, cap);
+    poly(ctx, path, 0, '#3a3d46', w + 8, cap); poly(ctx, path, 0, '#262930', w, cap);
   } else {
     ribbon(ctx, path, s => w(s) / 2 + 4, '#3a3d46', finish); ribbon(ctx, path, s => w(s) / 2, '#262930', finish);
   }
   const wa = (s: number) => widthAt(w, s);
   for (let k = 1; k < LANES; k++) {
     // граница встречки — сплошная двойная жёлтая; остальные — пунктир
-    if (k === oncoming) { poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) - 2.5, [], 'rgba(244,185,66,.75)', 2); poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) + 2.5, [], 'rgba(244,185,66,.75)', 2); }
-    else poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES), [26, 22], 'rgba(236,233,224,.28)', 2);
+    if (k === oncoming) { poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) - 2.5, 'rgba(244,185,66,.75)', 2); poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) + 2.5, 'rgba(244,185,66,.75)', 2); }
+    else dashed(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES), 26, 22, 'rgba(236,233,224,.28)', 2);
   }
-  poly(ctx, path, s => -wa(s) / 2 + 3, [], 'rgba(244,185,66,.5)', 2); poly(ctx, path, s => wa(s) / 2 - 3, [], 'rgba(244,185,66,.5)', 2);
+  poly(ctx, path, s => -wa(s) / 2 + 3, 'rgba(244,185,66,.5)', 2); poly(ctx, path, s => wa(s) / 2 - 3, 'rgba(244,185,66,.5)', 2);
   if (!finish) return;
   drawStart(ctx, path, wa(0));
   const e = pathAt(path, path.L - 60), we = wa(path.L - 60);
