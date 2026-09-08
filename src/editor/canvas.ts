@@ -2,7 +2,7 @@
 // Дорога и машины рисуются теми же drawRoad/drawCar, что и в игре.
 import { lanesFor } from '../road';
 import { buildPath, nearestGlobal, pathAtExt, type Path, type Pt } from '../road';
-import { arrowSpots, branchSide, drawBlocks, drawCar, drawCrossingRoad, drawCrossingTop, drawGrid, drawNav, drawPolice, drawProps, drawRails, drawRamp, drawRoad, drawTurnArrow } from '../render';
+import { arrowSpots, branchSide, setClip, drawBlocks, drawCar, drawCrossingRoad, drawCrossingTop, drawGrid, drawNav, drawPolice, drawProps, drawRails, drawRamp, drawRoad, drawTurnArrow } from '../render';
 import { layoutRails } from '../rails';
 import { layoutCrossings } from '../crossings';
 import { layoutBlocks } from '../blocks';
@@ -66,6 +66,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
     ctx.fillStyle = '#15171c'; ctx.fillRect(0, 0, W, H);
     ctx.setTransform(DPR * zoom, 0, 0, DPR * zoom, DPR * (W / 2 - cam.x * zoom), DPR * (H / 2 - cam.y * zoom));
     const [x0, y0] = toWorld(0, 0), [x1, y1] = toWorld(W, H);
+    setClip({ x0, y0, x1, y1 });
     let g = 120; while (g * zoom < 40) g *= 2; // при отдалении сетка укрупняется, а не сливается
     drawGrid(ctx, x0, y0, x1, y1, g, 1 / zoom);
 
