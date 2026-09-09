@@ -432,7 +432,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   const restart = () => {
     if (state === 'intro') { intro = null; state = 'play'; ui.overlay.className = ''; return; } // тап пропускает отсчёт
-    if (card !== null) { card = null; ui.overlay.className = ''; return; }                         // тап снимает карточку
+    if (card !== null) return;                                                                      // карточку тапом не снять: игрок должен её увидеть (решение 2026-09-10)
     if (state === 'play') return;
     if ((state === 'done' || state === 'trap') && endHook && endHook(state)) return;             // кампания загрузила следующий
     reset();
