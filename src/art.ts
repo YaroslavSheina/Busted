@@ -8,19 +8,22 @@ const FILES: Record<string, string> = {
 };
 export const PIXEL_KEYS = ['armored_vehicle', 'bat', 'bus', 'fire_truck', 'gasoline', 'gray_sedan', 'happy_bus', 'jeep', 'limousine', 'muscle_car',
   'pick_up', 'police_regular', 'police_sport', 'retro_1', 'retro_2', 'retro_3', 'roadster', 'schoolbus', 'sport_car', 'super_car',
-  'tank', 'truck_1', 'truck_2', 'truck_3', 'white_sedan'] as const;
+  'tank', 'truck_1', 'truck_2', 'truck_3', 'white_sedan',
+  // второй набор (2026-09-09): автовоз с рампой, погрузчики, контейнер, коробки, конус, ежи с базой слева/справа и без базы
+  'truck_4', 'loader', 'loader_boxes', 'trash_can', 'box_1', 'box_2', 'box_3', 'box_4', 'cone', 'spikes_l', 'spikes_r', 'spikes_m'] as const;
 for (const k of PIXEL_KEYS) FILES['px_' + k] = 'pixel/' + k + '.png';
 export type ArtKey = string;
 
 const images = new Map<ArtKey, HTMLImageElement>();
 let started = false;
 
-export function loadArt(): void {
+// onLoad — вызывается после каждой загруженной картинки (редактор перерисовывает кадр: он рисует только по событиям)
+export function loadArt(onLoad?: () => void): void {
   if (started || typeof Image === 'undefined') return;
   started = true;
   for (const [key, file] of Object.entries(FILES)) {
     const img = new Image();
-    img.onload = () => images.set(key, img);
+    img.onload = () => { images.set(key, img); onLoad?.(); };
     img.src = `${import.meta.env.BASE_URL}art/${file}`;
   }
 }

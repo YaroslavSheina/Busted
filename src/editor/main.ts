@@ -10,6 +10,7 @@ import { createGame, type Game } from '../game';
 import { buildPath } from '../road';
 import { initCanvas, type Sel } from './canvas';
 import { fileName, formatLevel, parseLevel } from './io';
+import { loadArt } from '../art';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const inp = (id: string) => $<HTMLInputElement>(id);
@@ -36,6 +37,7 @@ const canvas = initCanvas($<HTMLCanvasElement>('ec'), {
   removeCar: i => { level.cars!.splice(i, 1); select(null); changed(); },
   hint: t => { $('cursor').textContent = t; },
 });
+loadArt(() => canvas.draw()); // спрайты темы pixel: редактор рисует по событиям, после каждой картинки — перерисовка
 
 function select(s: Sel): void { sel = s; syncSel(); }
 

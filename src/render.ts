@@ -40,7 +40,7 @@ export interface Scene {
 
 // Тема. comic — рисованный вид сверху в духе ранних GTA (диздок): контуры, плоские цвета, тротуары в городе,
 // тени под машинами и зданиями. night — прежний тёмный вид (?theme=night). Физика и данные о теме не знают
-export type ThemeName = 'comic' | 'night' | 'dark' | 'bright' | 'sprites' | 'pixel';
+export type ThemeName = 'comic' | 'night' | 'dark' | 'bright' | 'sprites' | 'pixel' | 'pixelnight';
 interface Theme {
   ground: string; grid: string; asphalt: string; shoulder: string; cross: string;
   lane: string; edge: string; dyellow: string;
@@ -53,6 +53,9 @@ interface Theme {
   parapet?: string;         // парапет крыши (pixel): светлая кромка по периметру здания
   slabs?: string;           // линии плит тротуара (pixel)
   lights?: string;          // фонари вдоль тротуаров (pixel)
+  windows?: string;         // светящиеся окна фасадов (pixelnight) — ночь: часть окон горит тёплым светом с ореолом
+  walls?: [string, string]; // цвет южной и восточной стены под парапетом (pixel)
+  zebra?: string;           // полосы зебры (pixel)
 }
 const COMIC: Theme = { ground: '#474c55', grid: 'rgba(255,255,255,.04)', asphalt: '#2e3138', shoulder: '#3a3d46', cross: '#33363d',
   lane: 'rgba(240,238,230,.55)', edge: 'rgba(244,185,66,.75)', dyellow: 'rgba(244,185,66,.9)', outline: '#14161a', sidewalk: '#8f949c', shadow: 'rgba(0,0,0,.35)',
@@ -73,11 +76,18 @@ const THEMES: Record<ThemeName, Theme> = {
   // светлый бордюр вместо контура, плитка тротуара, серые крыши с бежевым парапетом и длинной тенью, фонари; машины — спрайты
   pixel: { ground: '#3b4046', grid: 'rgba(0,0,0,.06)', asphalt: '#3a4149', shoulder: '#c6c8bf', cross: '#3a4149',
     lane: 'rgba(222,224,216,.9)', edge: '', dyellow: '#d9b830', outline: '#c6c8bf', sidewalk: '#9ba0a5', shadow: 'rgba(0,0,0,.28)',
-    roofs: ['#5f656c', '#656b72', '#585e65', '#6a6f76', '#616770'], sprites: 'pixel', dash: [18, 26], parapet: '#cdbf9f', slabs: '#8b9096', lights: '#2c3036' },
+    roofs: ['#5f656c', '#656b72', '#585e65', '#6a6f76', '#616770'], sprites: 'pixel', dash: [18, 26], parapet: '#cdbf9f', slabs: '#8b9096', lights: '#2c3036',
+    walls: ['#6b5a4c', '#54463c'], zebra: 'rgba(236,233,224,.9)' },
+  // ночь по референсу docs/refs/night road.png (2026-09-10): тёмно-синий асфальт, голубовато-серые штрихи, оливковая двойная,
+  // светлый бордюр, плитка тротуара со светлыми швами, крыши темнее тротуара, парапет и стены сине-серые, окна фасадов горят
+  pixelnight: { ground: '#253a52', grid: 'rgba(0,0,0,0)', asphalt: '#0c182c', shoulder: '#556e81', cross: '#0c182c',
+    lane: '#45637c', edge: '', dyellow: '#505330', outline: '#556e81', sidewalk: '#253a52', shadow: 'rgba(0,0,0,.35)',
+    roofs: ['#14263a', '#132438', '#172a40', '#112235', '#152840'], sprites: 'pixel', dash: [18, 26], parapet: '#526d84', slabs: '#364d65', lights: '#202f44',
+    walls: ['#0b1220', '#070d18'], zebra: '#445e78', windows: '#d9b565' },
 };
-// Основная тема — night (решение 2026-09-08 после сравнения на телефоне); остальные остаются для экспериментов
-let T: Theme = THEMES.night;
-export function setTheme(name: string | null | undefined): void { T = THEMES[(name as ThemeName)] ?? THEMES.night; }
+// Основная тема — pixelnight: ночная улица по референсам пользователя (2026-09-10); прежняя night и остальные — ?theme=…
+let T: Theme = THEMES.pixelnight;
+export function setTheme(name: string | null | undefined): void { T = THEMES[(name as ThemeName)] ?? THEMES.pixelnight; }
 export const groundColor = (): string => T.ground;
 export const themeName = (): ThemeName => (Object.keys(THEMES) as ThemeName[]).find(k => THEMES[k] === T) ?? 'comic';
 let city = false; // тротуары вдоль дорог — только там, где есть здания
@@ -151,6 +161,14 @@ function carSprite(ctx: CanvasRenderingContext2D, key: string, w: number, l: num
   if (T.shadow) { ctx.fillStyle = T.shadow; ctx.beginPath(); ctx.roundRect(-w / 2 + 3, -l / 2 + 5, w, l, 6); ctx.fill(); }
   const k = (l + 6) / img.height, dw = img.width * k, dh = img.height * k;
   ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  return true;
+}
+// Спрайт предмета (pixel): вписывается по высоте dh (или ширине dw), центр в (dx, dy); false — тема без спрайтов или картинка ещё не загружена
+function propSprite(ctx: CanvasRenderingContext2D, key: string, dw?: number, dh?: number, dx = 0, dy = 0): boolean {
+  if (T.sprites !== 'pixel') return false;
+  const img = sprite('px_' + key); if (!img) return false;
+  const k = dh !== undefined ? dh / img.height : dw! / img.width, w = img.width * k, h = img.height * k;
+  ctx.drawImage(img, dx - w / 2, dy - h / 2, w, h);
   return true;
 }
 // Пул легковых спрайтов трафика (pixel): по «монетке» машины — у каждой своя модель, но одна и та же каждый кадр
@@ -248,8 +266,20 @@ export function drawBlocks(ctx: CanvasRenderingContext2D, path: Path, width: num
     strip(ctx, path, bp.s0, bp.s1, off, BLOCK.bypassW, '#30333c');
     ctx.setLineDash([10, 8]); strip(ctx, path, bp.s0, bp.s1, off + bp.side * (BLOCK.bypassW / 2 - 2), 2, 'rgba(236,233,224,.35)'); ctx.setLineDash([]);
   }
+  const closed = new Set(b.works.map(w => `${w.s}:${w.lane}`)); // соседние закрытые полосы одного ремонта — без конусов между ними
   for (const w of b.works) {
     ctx.save(); ctx.translate(w.x, w.y); ctx.rotate(w.h);
+    if (T.sprites === 'pixel' && sprite('px_cone')) { // pixel: конусы по открытым краям и в торце, погрузчик с коробками в первой закрытой полосе, коробки на асфальте
+      ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(-w.w / 2, -w.l / 2, w.w, w.l);
+      const left = closed.has(`${w.s}:${w.lane - 1}`), right = closed.has(`${w.s}:${w.lane + 1}`);
+      const k = Math.floor(Math.abs(w.x * 0.37 + w.y * 0.53)) % 4;
+      if (w.l >= 160 && !left) { propSprite(ctx, k % 2 ? 'loader_boxes' : 'loader', undefined, 54, 0, w.l / 2 - 70); propSprite(ctx, 'box_' + (k + 1), 14, undefined, -w.w / 4, w.l / 2 - 110); }
+      else propSprite(ctx, 'box_' + ((k + 3) % 4 + 1), 14, undefined, -w.w / 4 + 4, w.l / 2 - 60);
+      propSprite(ctx, 'box_' + ((k + 2) % 4 + 1), 14, undefined, w.w / 4 - 2, -w.l / 2 + 40);
+      for (let y = w.l / 2 - 6; y > -w.l / 2; y -= 36) { if (!left) propSprite(ctx, 'cone', undefined, 14, -w.w / 2 + 8, y); if (!right) propSprite(ctx, 'cone', undefined, 14, w.w / 2 - 8, y); }
+      for (let x = -w.w / 2 + (left ? 6 : 22); x < w.w / 2 - (right ? 0 : 14); x += 14) propSprite(ctx, 'cone', undefined, 14, x, w.l / 2 - 6);
+      ctx.restore(); continue;
+    }
     ctx.fillStyle = 'rgba(244,120,40,.12)'; ctx.fillRect(-w.w / 2, -w.l / 2, w.w, w.l);
     // барьер в начале закрытого отрезка (дальний по ходу край — это -l/2, машина едет к -y)
     for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? '#f0f0f0' : '#f0782a'; ctx.fillRect(-w.w / 2 + i * w.w / 6, w.l / 2 - 8, w.w / 6, 8); }
@@ -261,6 +291,8 @@ export function drawBlocks(ctx: CanvasRenderingContext2D, path: Path, width: num
   }
   for (const s of b.spikes) {
     ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.h);
+    // pixel: лента ежей поперёк полосы; база с мигалкой у края дороги (в крайних полосах), в средней — без базы
+    if (propSprite(ctx, s.lane === 0 ? 'spikes_l' : s.lane === LANES - 1 ? 'spikes_r' : 'spikes_m', s.w + 4)) { ctx.restore(); continue; }
     ctx.fillStyle = '#1a1c22'; ctx.fillRect(-s.w / 2, -s.l / 2, s.w, s.l);
     ctx.fillStyle = '#c9ccd4';
     for (let x = -s.w / 2 + 4; x < s.w / 2 - 2; x += 7) { ctx.beginPath(); ctx.moveTo(x, s.l / 2); ctx.lineTo(x + 2.5, -s.l / 2 - 2); ctx.lineTo(x + 5, s.l / 2); ctx.fill(); }
@@ -272,7 +304,7 @@ export function drawBlocks(ctx: CanvasRenderingContext2D, path: Path, width: num
 // Грузовик-рампа: длинный тягач, сзади наклонная рампа с полосами
 export function drawRamp(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, w: number, l: number): void {
   ctx.save(); ctx.translate(x, y); ctx.rotate(h);
-  if (T.sprites === 'pixel' && carSprite(ctx, 'px_truck_3', w, l)) { ctx.restore(); return; } // автовоз из референсов
+  if (T.sprites === 'pixel' && carSprite(ctx, 'px_truck_4', w, l)) { ctx.restore(); return; } // автовоз с опущенной рампой из референсов
   ctx.fillStyle = '#5d6470'; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 4); ctx.fill();
   ctx.fillStyle = 'rgba(20,22,28,.6)'; ctx.fillRect(-w / 2 + 4, -l / 2 + 6, w - 8, 10); // кабина
   // рампа: от середины к корме светлеет — «поднимается»
@@ -359,9 +391,18 @@ function drawRoofs(ctx: CanvasRenderingContext2D, props: Prop[]): void {
     if (T.parapet) { // pixel: бежевый парапет по периметру, крыша внутри, тёмная кромка с юга и востока, будки с вентиляцией
       // солнце слева сверху: видны южная и восточная стены под парапетом (фасад), восточная темнее
       const WALL = 10;
-      ctx.fillStyle = '#6b5a4c'; ctx.fillRect(p.x, p.y + p.h, p.w + WALL, WALL);
-      ctx.fillStyle = '#54463c'; ctx.fillRect(p.x + p.w, p.y, WALL, p.h);
-      ctx.fillStyle = 'rgba(0,0,0,.35)'; for (let x = p.x + 14; x < p.x + p.w - 8; x += 22) ctx.fillRect(x, p.y + p.h + 3, 8, 4); // окна фасада
+      ctx.fillStyle = T.walls![0]; ctx.fillRect(p.x, p.y + p.h, p.w + WALL, WALL);
+      ctx.fillStyle = T.walls![1]; ctx.fillRect(p.x + p.w, p.y, WALL, p.h);
+      if (T.windows) { // ночь: часть окон фасада горит тёплым светом с ореолом на тротуаре, остальные тёмные
+        let i = 0;
+        for (let x = p.x + 14; x < p.x + p.w - 8; x += 22, i++) {
+          const lit = ((t * 1000 + i * 41) % 7) < 3;
+          if (lit) { ctx.fillStyle = 'rgba(217,181,101,.14)'; ctx.fillRect(x - 6, p.y + p.h + 1, 20, 22); }
+          ctx.fillStyle = lit ? T.windows : 'rgba(0,0,0,.45)'; ctx.fillRect(x, p.y + p.h + 3, 8, 4);
+        }
+        // контейнер у южной стены — на каждом третьем здании
+        if (k % 3 === 0 && p.w > 120) { ctx.save(); ctx.translate(p.x + 34, p.y + p.h + WALL + 16); propSprite(ctx, 'trash_can', 34); ctx.restore(); }
+      } else { ctx.fillStyle = 'rgba(0,0,0,.35)'; for (let x = p.x + 14; x < p.x + p.w - 8; x += 22) ctx.fillRect(x, p.y + p.h + 3, 8, 4); } // окна фасада
       ctx.fillStyle = T.parapet; ctx.fillRect(p.x, p.y, p.w, p.h);
       ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(p.x + p.w - 10, p.y, 10, p.h); ctx.fillRect(p.x, p.y + p.h - 10, p.w, 10);
       ctx.fillStyle = roofs[k]; ctx.fillRect(p.x + 12, p.y + 12, p.w - 24, p.h - 24);
@@ -371,9 +412,9 @@ function drawRoofs(ctx: CanvasRenderingContext2D, props: Prop[]): void {
         const bw = 22 + ((k + i * 7) % 3) * 8, bh = 18 + ((k + i * 5) % 3) * 6;
         const bx = p.x + 30 + ((t * 1000 + i * 137) % Math.max(1, p.w - 60 - bw)), by = p.y + 30 + ((t * 3170 + i * 89) % Math.max(1, p.h - 60 - bh));
         ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(bx + 4, by + 4, bw, bh);
-        ctx.fillStyle = '#9297a0'; ctx.fillRect(bx, by, bw, bh);
-        ctx.strokeStyle = '#3a3e44'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
-        ctx.fillStyle = '#5c6169'; for (let y = by + 5; y < by + bh - 3; y += 5) ctx.fillRect(bx + 4, y, bw - 8, 2);
+        ctx.fillStyle = T.windows ? '#3c4e5e' : '#9297a0'; ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeStyle = T.windows ? '#0b1220' : '#3a3e44'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
+        ctx.fillStyle = T.windows ? '#526d84' : '#5c6169'; for (let y = by + 5; y < by + bh - 3; y += 5) ctx.fillRect(bx + 4, y, bw - 8, 2);
       }
       continue;
     }
@@ -457,7 +498,7 @@ export function drawCrossingTop(ctx: CanvasRenderingContext2D, c: Crossing, road
       ctx.fillStyle = slabs(ctx) ?? T.sidewalk!; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a0, a1); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = T.outline!; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, R + 1.5, a0, a1); ctx.stroke();
     }
-    ctx.fillStyle = 'rgba(236,233,224,.9)';
+    ctx.fillStyle = T.zebra!;
     // широкие полосы через маршрут и через поперечную улицу, как в референсе
     for (const side of [-1, 1]) { const y0 = side * (cw + 4) - (side > 0 ? 0 : 30); for (let x = -rw + 4; x < rw - 4; x += 14) ctx.fillRect(x, y0, 8, 30); }
     for (const side of [-1, 1]) { const x0 = side * (rw + 4) - (side > 0 ? 0 : 30); for (let y = -cw + 4; y < cw - 4; y += 14) ctx.fillRect(x0, y, 30, 8); }
@@ -592,7 +633,7 @@ function drawLights(ctx: CanvasRenderingContext2D, path: Path, wa: (s: number) =
       ctx.save(); ctx.translate(p.x + p.nx * off, p.y + p.ny * off); ctx.rotate(heading(p.tx, p.ty));
       ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-3, -6, 10, 14);
       ctx.fillStyle = T.lights!; ctx.fillRect(-5, -8, 10, 14);
-      ctx.fillStyle = '#dcd6b8'; ctx.fillRect(-3, -6, 6, 4);
+      ctx.fillStyle = T.windows ? '#f0d890' : '#dcd6b8'; ctx.fillRect(-3, -6, 6, 4);
       ctx.restore();
     }
   }
