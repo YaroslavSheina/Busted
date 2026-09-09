@@ -1,6 +1,7 @@
 // Панель «уровень»: список уровней и кнопка «тюнинг», раскрывающая слайдеры всех параметров из config.
 import { P, type ParamKey } from './config';
-import { LEVEL_KEYS, LEVELS } from './levels';
+import { LEVELS } from './levels';
+import { MENU } from './campaign';
 
 export interface PanelHandlers {
   onLevel: (k: string) => void;
@@ -17,7 +18,7 @@ let tuningOpen = false; // раскрыты ли слайдеры; пережи�
 export function buildPanel(panel: HTMLElement, levelKey: string, h: PanelHandlers): void {
   panel.innerHTML = '';
   const lv = document.createElement('div'); lv.className = 'levels';
-  for (const k of LEVEL_KEYS) {
+  for (const k of MENU) {
     const b = document.createElement('button');
     b.textContent = LEVELS[k].name;
     if (k === levelKey) b.classList.add('on');

@@ -4,6 +4,10 @@ import { LEVEL_KEYS } from './levels';
 // Порядок пока из того, что есть; по мере сборки пролога и обучения список заменяется
 export const CAMPAIGN: string[] = ['prologue', 'tut01', 'tut02', 'tut03', 'tut04', 'tut05', 'tut06', 'tut07', 'tut08', 'tut09', 'tut10', 'district2', 'district2b', 'district2c'].filter(k => LEVEL_KEYS.includes(k));
 
+// Меню «уровень» показывает кампанию по порядку и полигон для тестов; остальные файлы levels/ (старые полигоны механик,
+// «Район 1», «Графика») скрыты, но открываются по ?level= и в редакторе (решение 2026-09-10). В харнессе меню — все уровни (bundle.py)
+export const MENU: string[] = [...CAMPAIGN, 'polygon'].filter(k => LEVEL_KEYS.includes(k));
+
 const KEY = 'lr.campaign';
 interface Progress { at: number }
 
