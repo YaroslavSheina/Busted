@@ -15,7 +15,7 @@ export function formatLevel(l: LevelData): string {
   const cars = l.cars?.length
     ? `,\n  "cars": [\n${l.cars.map(c => `    { "s": ${c.s}, "lane": ${c.lane}, "speed": ${c.speed}${c.type ? `, "type": "${c.type}"` : ''}${c.oncoming ? ', "oncoming": true' : ''}${c.model ? `, "model": "${c.model}"` : ''} }`).join(',\n')}\n  ]`
     : '';
-  const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed}${l.chaser.at ? `, "at": ${l.chaser.at}` : ''} }` : '';
+  const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed}${l.chaser.at !== undefined ? `, "at": ${JSON.stringify(l.chaser.at)}` : ''} }` : '';
   const panic = l.panic ? `,\n  "panic": ${l.panic}` : '';
   const nav = l.nav ? ',\n  "nav": true' : '';
   const mix = l.mix ? `,\n  "mix": ${l.mix}` : '';
@@ -101,6 +101,7 @@ function parseRails(v: unknown, what: string): RailDef[] {
     const out: RailDef = { s: r.s, period: r.period, speed: r.speed, length: r.length };
     if (r.offset !== undefined) { if (!isNum(r.offset)) throw new Error(`${what} ${i}: offset число`); out.offset = r.offset; }
     if (r.after !== undefined) { if (!isNum(r.after)) throw new Error(`${what} ${i}: after число`); out.after = r.after; }
+    if (r.before !== undefined) { if (!isNum(r.before) || !isNum(r.clear)) throw new Error(`${what} ${i}: before и clear — числа`); out.before = r.before; out.clear = r.clear; }
     return out;
   });
 }
@@ -118,7 +119,10 @@ export function parseLevel(raw: unknown): LevelData {
     const c = o.chaser as Record<string, unknown>;
     if (typeof c !== 'object' || c === null || !isNum(c.gap) || !isNum(c.speed)) throw new Error('«chaser» не { gap, speed }');
     level.chaser = { gap: c.gap, speed: c.speed };
-    if (c.at !== undefined) { if (!isNum(c.at)) throw new Error('«chaser.at» — число'); level.chaser.at = c.at; }
+    if (c.at !== undefined) {
+      if (!(isNum(c.at) || (Array.isArray(c.at) && c.at.every(isNum)))) throw new Error('«chaser.at» — число или массив чисел');
+      level.chaser.at = c.at as number | number[];
+    }
   }
   if (o.panic !== undefined) { if (!isNum(o.panic) || o.panic < 0 || o.panic > 1) throw new Error('«panic» — число 0..1'); level.panic = o.panic; }
   if (o.nav !== undefined) { if (o.nav !== true && o.nav !== false) throw new Error('«nav» — true/false'); if (o.nav) level.nav = true; }

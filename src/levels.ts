@@ -11,7 +11,7 @@ import type { CrossingDef } from './crossings';
 export interface Prop { type: 'building'; x: number; y: number; w: number; h: number; tone?: number }
 
 // Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же); at — s, с которого он появляется
-export interface Chaser { gap: number; speed: number; at?: number }
+export interface Chaser { gap: number; speed: number; at?: number | number[] } // at — s главной, с которого появляется коп; массив — повторные погони: новый коп в каждой точке, если прежний выбыл
 
 // Сценарные карточки (docs/progression.md): стоп-кадр мира и полоса с текстом, когда игрок доехал до s
 export interface Card { s: number; text: string }

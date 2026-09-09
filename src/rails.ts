@@ -10,6 +10,8 @@ export interface RailDef {
   length: number;  // длина состава, px
   offset?: number; // сдвиг фазы, с
   after?: number;  // сценарный поезд: не по циклу, а один раз — голова у края дороги через after с после того, как игрок пересёк рельсы
+  before?: number; // сценарный поезд «перед носом»: один раз, старт когда игрок за before px до рельсов…
+  clear?: number;  // …и через clear с после старта хвост сходит с дороги (генератор считает clear из before и скорости машины)
 }
 
 export interface Rail {
@@ -18,7 +20,7 @@ export interface Rail {
   dx: number; dy: number; // единичный вектор вдоль рельсов (вправо по ходу дороги)
   h: number;              // курс вдоль рельсов для OBB
   s: number;
-  t0?: number;            // сценарный поезд: время попытки, когда игрок пересёк рельсы (undefined — ещё не пересёк)
+  t0?: number;            // сценарный поезд: время попытки, когда игрок пересёк рельсы (after) или подъехал на before (undefined — ещё нет)
 }
 
 export function layoutRails(path: Path, defs: RailDef[] = []): Rail[] {
@@ -29,7 +31,12 @@ export function layoutRails(path: Path, defs: RailDef[] = []): Rail[] {
 }
 
 // Положение головы состава вдоль рельсов в момент time: состав идёт от −reach−length к +reach, цикл — period
+const ROAD_CLEAR = 130; // хвост «сошёл с дороги»: на столько px за осью маршрута (полдороги 90–110 плюс запас)
 export function trainHead(r: Rail, time: number): number {
+  if (r.def.before !== undefined) { // сценарный «перед носом»: до старта состава нет; при старте голова на length + ROAD_CLEAR − speed·clear
+    if (r.t0 === undefined) return -RAIL.reach - r.def.length - 1;
+    return r.def.length + ROAD_CLEAR - r.def.speed * (r.def.clear ?? 0) + (time - r.t0) * r.def.speed;
+  }
   if (r.def.after !== undefined) { // сценарный: до пересечения состава нет, после — один проход с заданным опозданием
     if (r.t0 === undefined) return -RAIL.reach - r.def.length - 1;
     const shift = (RAIL.reach + r.def.length - RAIL.trainW) / r.def.speed - r.def.after;

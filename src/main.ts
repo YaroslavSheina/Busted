@@ -19,7 +19,7 @@ let carOverride: CarKey | null = null; // выбор в меню «авто» д
 
 const game = createGame({
   canvas: $('c') as HTMLCanvasElement,
-  hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), ovHint: $('ovHint'),
+  hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), ovHint: $('ovHint'), ovName: $('ovName'),
   left: $('left'), right: $('right'),
 }, levelByName(FIRST));
 // Пройденный уровень кампании ведёт к следующему; уровень, открытый из меню, — просто повтор
@@ -69,9 +69,14 @@ function showPanel(key: string): void {
   });
 }
 
-// Пока открыто меню, мир стоит; тап по игровому полю закрывает меню и продолжает попытку
+// Загрузочный экран с ключевым артом: мир стоит (отсчёт не идёт), тап убирает экран
+const splash = $('splash');
+splash.style.backgroundImage = `url(${import.meta.env.BASE_URL}art/hero.jpg)`;
+splash.addEventListener('pointerdown', e => { e.preventDefault(); splash.classList.add('hide'); syncPause(); });
+// Пока открыто меню или загрузочный экран, мир стоит; тап по игровому полю закрывает меню и продолжает попытку
 const menus = [panel, carPanel];
-const syncPause = () => game.pause(menus.some(m => m.classList.contains('open')));
+const syncPause = () => game.pause(!splash.classList.contains('hide') || menus.some(m => m.classList.contains('open')));
+syncPause();
 initToggle($('levelBtn'), panel, [carPanel], syncPause);
 initToggle($('carBtn'), carPanel, [panel], syncPause);
 document.addEventListener('pointerdown', e => {

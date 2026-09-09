@@ -28,10 +28,23 @@ canvas{display:block;width:100vw;height:100vh}
 #overlay h1{margin:0;font-size:52px;letter-spacing:.14em;font-weight:800}
 #overlay p{margin:0;opacity:.7;font-size:14px;line-height:1.6;text-align:center}
 #overlay small{opacity:.45;font-size:12px;letter-spacing:.1em;margin-top:8px}
-/* отсчёт перед стартом: мир виден, цифра крупно, карточка уровня под ней */
-#overlay.intro{background:rgba(21,23,28,.35)}
-#overlay.intro h1{font-size:96px;color:#f4b942;text-shadow:0 4px 0 #1a1408}
-#overlay.intro p{font-size:16px;opacity:.9;max-width:300px}
+/* отсчёт перед стартом: полоса с именем уровня, цифра крупно, текст в рамке-подписи, как в комиксе */
+#overlay.intro{background:rgba(12,24,44,.5);gap:16px}
+#ovName{display:none}
+#overlay.intro #ovName{display:block;font-size:20px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:10px 24px;background:#f4b942;color:#1a1408;transform:skew(-8deg);box-shadow:6px 6px 0 #1a1408}
+#overlay.intro h1{font-size:96px;color:#f4b942;text-shadow:0 5px 0 #1a1408;line-height:1}
+#overlay.intro p{font-size:16px;opacity:1;max-width:min(340px,84vw);background:#ece9e0;color:#1a1408;padding:14px 20px;border:3px solid #1a1408;box-shadow:6px 6px 0 #1a1408;line-height:1.5;font-weight:500}
+#overlay.intro small{color:#ece9e0;opacity:.7}
+/* загрузочный экран: арт во весь экран, название и полоса загрузки внизу; после полосы — подсказка «нажми» */
+#splash{position:fixed;inset:0;z-index:10;background:#0c182c center/cover no-repeat;display:flex;justify-content:center;align-items:flex-end;padding-bottom:calc(36px + env(safe-area-inset-bottom));pointer-events:auto;-webkit-user-select:none;user-select:none}
+#splash.hide{display:none}
+#splash .brand{display:flex;flex-direction:column;align-items:center;padding:18px 26px 14px;background:rgba(12,24,44,.72);border:3px solid #1a1408;box-shadow:6px 6px 0 #1a1408}
+#splash h1{margin:0;font-size:58px;letter-spacing:.18em;font-weight:900;color:#f4b942;text-shadow:4px 4px 0 #1a1408;transform:skew(-8deg)}
+#splash .bar{width:min(240px,64vw);height:10px;background:#1a1408;border:2px solid #ece9e0;margin:14px 0 10px}
+#splash .bar i{display:block;height:100%;width:0;background:#f4b942;animation:load 2.2s ease-in-out forwards}
+@keyframes load{to{width:100%}}
+#splash small{opacity:0;font-size:12px;letter-spacing:.14em;color:#ece9e0;animation:hint .4s 2.2s forwards}
+@keyframes hint{to{opacity:.9}}
 /* сценарная карточка: стоп-кадр и полоса-стрип с текстом, как в комиксе */
 #overlay.card{background:none;justify-content:center}
 #overlay.card h1{font-size:26px;letter-spacing:.06em;line-height:1.25;text-align:center;max-width:88vw;padding:18px 26px;background:#f4b942;color:#1a1408;transform:skew(-8deg);box-shadow:8px 8px 0 #1a1408;animation:strip .25s ease-out}

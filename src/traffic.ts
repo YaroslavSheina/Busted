@@ -218,8 +218,9 @@ export function moveTraffic(traffic: Vehicle[], path: Path, dt: number, ai?: { l
           const d = Math.abs(l - c.lane);
           if (d < bestD) { bestD = d; best = l; }
         }
-        if (best >= 0) { const w = widthAt(ai.width, c.s); c.shift += laneOff(w, c.lane) - laneOff(w, best); c.lane = best; }
-        else { const dist = ahead - TRAFFIC_AI.stopGap - c.s; sp = dist < 2 ? 0 : Math.min(sp, dist * 3); }
+        // автовоз полосу не меняет (сценарий ждёт его в своей) и встаёт от преграды на RAMP.stopGap
+        if (best >= 0 && c.kind !== 'ramp') { const w = widthAt(ai.width, c.s); c.shift += laneOff(w, c.lane) - laneOff(w, best); c.lane = best; }
+        else { const dist = ahead - (c.kind === 'ramp' ? RAMP.stopGap : TRAFFIC_AI.stopGap) - c.s; sp = dist < 2 ? 0 : Math.min(sp, dist * 3); }
       }
       if (c.shift !== 0) { const st = TRAFFIC_AI.laneChange * dt; c.shift = Math.abs(c.shift) <= st ? 0 : c.shift - Math.sign(c.shift) * st; }
     }

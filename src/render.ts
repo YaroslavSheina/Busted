@@ -208,7 +208,8 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.save(); ctx.translate(x, y); ctx.rotate(h);
   // pixel: кузов игрока — свой референс, подкрашенный в жёлтый (школьный автобус и так жёлтый)
   const PX: Record<string, [string, string | undefined]> = { sedan: ['px_white_sedan', '#f4b942'], minivan: ['px_happy_bus', '#f4b942'], supercar: ['px_super_car', '#f4b942'], bus: ['px_schoolbus', undefined] };
-  if (T.sprites === 'pixel' ? carSprite(ctx, PX[spec.body][0], w, l, PX[spec.body][1], 0.7) : spec.body === 'sedan' && carSprite(ctx, 'sedan', w, l)) { ctx.restore(); return; }
+  const tint = spec.tint === undefined ? PX[spec.body][1] : spec.tint ?? undefined; // машина может просить родной цвет спрайта (спорткар пролога — красный)
+  if (T.sprites === 'pixel' ? carSprite(ctx, PX[spec.body][0], w, l, tint, 0.7) : spec.body === 'sedan' && carSprite(ctx, 'sedan', w, l)) { ctx.restore(); return; }
   carUnder(ctx, w, l, round);
   switch (spec.body) {
     case 'sedan':

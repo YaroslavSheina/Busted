@@ -1,5 +1,5 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, RAMP, SCORE, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
+import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CARD_HOLD, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, RAMP, SCORE, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { layoutRails, trainObb, type Rail } from './rails';
 import { crossCars, layoutCrossings, lightAt, type Crossing } from './crossings';
 import { carByKey, type CarSpec } from './cars';
@@ -20,6 +20,7 @@ export interface GameUI {
   ovTitle: HTMLElement;
   ovSub: HTMLElement;
   ovHint: HTMLElement;
+  ovName?: HTMLElement;   // полоса с именем уровня в интро (в редакторе нет)
   left: HTMLElement;
   right: HTMLElement;
 }
@@ -91,7 +92,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let intro: number | null = null;       // остаток отсчёта, с
   let cardIdx = 0, card: number | null = null; // следующая карточка и остаток стоп-кадра, с
   let cpS = 0;                           // s последней пройденной контрольной точки (0 — старт)
-  let copSpawned = false;                // коп уже появлялся (после выбывания не возвращается)
+  let copIdx = 0;                        // сколько точек появления копа (chaser.at) уже пройдено; новый коп — только если прежний выбыл
+  const copAts = () => !level.chaser ? [] : Array.isArray(level.chaser.at) ? level.chaser.at : [level.chaser.at ?? 0];
   let endHook: EndHook | null = null;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
@@ -141,7 +143,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     roads.forEach((r, i) => { refreshRoad(r); r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars, r.blocks, r.width, r.oncoming, level.mix ?? 0); });
     // перед ловушкой трафика нет: иначе к перекрытию собирается очередь, и игрок врезается в неё раньше, чем сработает сценарий
     if (level.trap) roads[0].traffic = roads[0].traffic.filter(c => c.kind === 'ramp' || c.s < level.trap!.s - 1200);
-    chaser = null; copSpawned = false;
+    chaser = null; copIdx = 0;
     taken = new Set();
     flat = false;
     slow = 0; zoom = 1; flash = null;
@@ -157,8 +159,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       timeAlive = cpS / P.speed.v; cam = { x: car.x, y: car.y };
       roads[0].traffic = roads[0].traffic.filter(c => Math.abs(c.s - cpS) > 350);
       cardIdx = (level.cards ?? []).filter(c => c.s <= cpS).length;
+      copIdx = Math.max(0, copAts().filter(a => a <= cpS).length - 1); // последняя пройденная точка копа срабатывает снова
     }
-    if (firstStart) { firstStart = false; intro = 3; state = 'intro'; ui.overlay.className = 'show intro'; ui.ovTitle.textContent = '3'; ui.ovSub.textContent = level.intro ?? level.name; ui.ovHint.textContent = 'нажми, чтобы начать'; }
+    if (firstStart) { firstStart = false; intro = 3; state = 'intro'; ui.overlay.className = 'show intro'; ui.ovTitle.textContent = '3'; ui.ovSub.textContent = level.intro ?? level.name; ui.ovHint.textContent = 'нажми, чтобы начать'; if (ui.ovName) ui.ovName.textContent = level.name; }
   }
 
   function busted(why: string): void {
@@ -291,12 +294,15 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const ms = mainS(car.road, car.s);
     for (const c of level.checkpoints ?? []) if (ms >= c && c > cpS) cpS = c;
     if (level.cards && cardIdx < level.cards.length && ms >= level.cards[cardIdx].s) {
-      card = 1.2; ui.overlay.className = 'show card'; ui.ovTitle.textContent = level.cards[cardIdx].text; ui.ovSub.textContent = ''; ui.ovHint.textContent = ''; cardIdx++;
+      card = CARD_HOLD; ui.overlay.className = 'show card'; ui.ovTitle.textContent = level.cards[cardIdx].text; ui.ovSub.textContent = ''; ui.ovHint.textContent = ''; cardIdx++;
     }
     if (level.trap && ms >= level.trap.s) return trap(level.trap.text);
-    for (const rl of roads[car.road].rails) if (rl.def.after !== undefined && rl.t0 === undefined && car.s >= rl.s) rl.t0 = timeAlive; // игрок пересёк рельсы — поезд пошёл
+    for (const rl of roads[car.road].rails) {
+      if (rl.def.after !== undefined && rl.t0 === undefined && car.s >= rl.s) rl.t0 = timeAlive;                       // игрок пересёк рельсы — поезд пошёл
+      if (rl.def.before !== undefined && rl.t0 === undefined && car.s >= rl.s - rl.def.before) rl.t0 = timeAlive;     // игрок подъехал — поезд «перед носом» пошёл
+    }
     for (const c of roads[car.road].crossings) if (c.def.before !== undefined && c.t0 === undefined && car.s >= c.s - c.def.before) c.t0 = timeAlive; // игрок подъехал — светофор пошёл на красный
-    if (level.chaser && !copSpawned && ms >= (level.chaser.at ?? 0)) { copSpawned = true; chaser = { road: car.road, s: car.s - level.chaser.gap, off: car.off }; }
+    { const ats = copAts(); if (copIdx < ats.length && ms >= ats[copIdx]) { copIdx++; if (!chaser) chaser = { road: car.road, s: car.s - level.chaser!.gap, off: car.off }; } }
     // коп повторяет выбор: свернул на ветку — запомнить; передумал в её начале и вернулся — забыть
     if (car.road !== before) { if (roads[car.road].parent === before) taken.add(car.road); else if (beforeS < BRANCH.zone + BRANCH.lead) taken.delete(before); }
     const rd = roads[car.road];
@@ -331,7 +337,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       let dh = car.h - p.h; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI;
       const rearOk = car.s < c.s && car.s + car.L / 2 >= c.s - c.L / 2;
       const off = laneOff(widthAt(rd.width, c.s), c.lane) + c.shift;
-      const fits = Math.abs(car.off - off) <= (c.W - car.W) / 2 + 6;
+      const fits = Math.abs(car.off - off) <= (c.W - car.W) / 2 + RAMP.fit;
       if (rearOk && fits && Math.abs(dh) < RAMP.alignDeg * Math.PI / 180 && P.speed.v - c.v >= RAMP.minRel) {
         jump = { t: 0, over: new Set() }; addScore(SCORE.jump, 'ТРЮК', 1); break;
       }
