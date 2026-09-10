@@ -22,10 +22,9 @@ const game = createGame({
   hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), ovHint: $('ovHint'), ovName: $('ovName'),
   left: $('left'), right: $('right'),
 }, levelByName(FIRST));
-// Пройденный уровень кампании ведёт к следующему; уровень, открытый из меню, — просто повтор
+// Пройденный уровень кампании (в том числе открытый из меню) ведёт к следующему по списку; уровень не из кампании — повтор
 game.onEnd(() => {
-  if (levelKey !== campaign.current()) return false;
-  const next = campaign.advance();
+  const next = campaign.advance(levelKey);
   if (!next) return false;
   selectLevel(next);
   return true;

@@ -170,14 +170,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     ui.ovHint.textContent = cpS > 0 ? 'нажми — продолжить с контрольной точки' : 'нажми, чтобы повторить';
   }
   function finish(): void {
-    state = 'done'; ui.overlay.className = 'show';
+    state = 'done'; cpS = 0; ui.overlay.className = 'show'; // уровень пройден: повтор — с начала, а не с контрольной точки
     ui.ovTitle.textContent = 'DELIVERED';
     ui.ovSub.textContent = `${timeAlive.toFixed(1)} с · очки ${fmtScore(score)} × ${SCORE.finishMul} = ${fmtScore(score * SCORE.finishMul)}`;
     ui.ovHint.textContent = endHook ? 'нажми — дальше' : 'нажми, чтобы повторить';
   }
   // Ловушка по сценарию: BUSTED с текстом уровня, но это «пройдено» — дальше следующий уровень
   function trap(text: string): void {
-    state = 'trap'; ui.overlay.className = 'show busted trap';
+    state = 'trap'; cpS = 0; ui.overlay.className = 'show busted trap';
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = text + `\nочки ${fmtScore(score)}`;
     ui.ovHint.textContent = 'нажми — дальше';
   }
