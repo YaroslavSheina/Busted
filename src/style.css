@@ -1,7 +1,7 @@
 html,body{margin:0;height:100%;background:#15171c;overflow:hidden;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;color:#ece9e0;-webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none}
 canvas{display:block;width:100vw;height:100vh}
 #ui{position:fixed;inset:0;pointer-events:none}
-.zone{position:absolute;bottom:0;height:36vh;width:50%;pointer-events:auto;display:flex;align-items:flex-end;justify-content:center;padding-bottom:calc(26px + env(safe-area-inset-bottom));box-sizing:border-box;font-weight:700;letter-spacing:.18em;font-size:13px;color:rgba(236,233,224,.3);background:linear-gradient(to top,rgba(255,255,255,.035),transparent 70%)}
+.zone{position:absolute;bottom:0;height:50vh;width:50%;pointer-events:auto;display:flex;align-items:flex-end;justify-content:center;padding-bottom:calc(26px + env(safe-area-inset-bottom));box-sizing:border-box;font-weight:700;letter-spacing:.18em;font-size:13px;color:rgba(236,233,224,.3);background:linear-gradient(to top,rgba(255,255,255,.035),transparent 70%)}
 .zone.on{color:#f4b942;background:linear-gradient(to top,rgba(244,185,66,.14),transparent 70%)}
 #left{left:0;border-right:1px solid rgba(255,255,255,.05)} #right{right:0}
 #top{position:absolute;top:calc(12px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:center}
