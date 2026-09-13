@@ -119,7 +119,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     spec = carByKey(l.car);
     // Машина и уровень задают стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
     P.width.v = l.width; P.traffic.v = l.traffic;
-    P.speed.v = spec.speed; P.steer.v = spec.steer; P.damp.v = spec.damp; P.grip.v = spec.grip; P.spin.v = spec.spin; P.skidGrip.v = spec.skidGrip;
+    P.speed.v = spec.speed; P.steer.v = spec.steer; P.damp.v = spec.damp; P.grip.v = spec.grip * (l.grip ?? 1); P.spin.v = spec.spin; P.skidGrip.v = spec.skidGrip * (l.grip ?? 1); // grip уровня — «мокрая дорога»
     const main = buildPath(l.points);
     roads = [makeRoad(main, null, l.blocks, l.cars, l.narrows)];
     roads[0].oncoming = l.oncoming ?? 0;
@@ -143,7 +143,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     marks = [];
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
-    roads.forEach((r, i) => { refreshRoad(r); r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars, r.blocks, r.width, r.oncoming, level.mix ?? 0); });
+    roads.forEach((r, i) => { refreshRoad(r); r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars, r.blocks, r.width, r.oncoming, level.mix ?? 0, level.pace); });
     // перед ловушкой трафика нет: иначе к перекрытию собирается очередь, и игрок врезается в неё раньше, чем сработает сценарий
     if (level.trap) roads[0].traffic = roads[0].traffic.filter(c => c.kind === 'ramp' || c.s < level.trap!.s - 1200);
     chaser = null; copIdx = 0;

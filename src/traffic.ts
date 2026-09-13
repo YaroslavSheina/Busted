@@ -117,7 +117,7 @@ export function rng(seed: number): () => number {
   };
 }
 
-export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number, cars: TrafficCar[] = [], layout?: Layout, width?: number | WidthFn, oncoming = 0, mix = 0): Vehicle[] {
+export function spawnTraffic(path: Path, density: number, playerSpeed: number, seed: number, cars: TrafficCar[] = [], layout?: Layout, width?: number | WidthFn, oncoming = 0, mix = 0, pace?: [number, number]): Vehicle[] {
   const r = rng(seed);
   const traffic: Vehicle[] = [];
   const n = Math.round(path.L / 380 * density);
@@ -130,7 +130,7 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
       if (traffic.some(c => c.lane === lane && Math.abs(c.s - s) < 130 + (size.L - 48) + (c.L - 48))) continue;
       if (layout && blockAhead(layout, lane, s - 120, 240) !== null) continue; // не рождаться на посту
       if (width !== undefined && lane >= lanesAhead(width, s - 120, 240)) continue; // и в исчезнувшей полосе сужения
-      const spd = playerSpeed * (0.4 + r() * 0.3);
+      const spd = pace ? playerSpeed * (pace[0] + r() * (pace[1] - pace[0])) : playerSpeed * (0.4 + r() * 0.3); // без pace — выражение прототипа, бит в бит
       const v: Vehicle = { s, lane, shift: 0, spd, v: spd, W: size.W, L: size.L, col: COLORS[Math.floor(r() * 5)], pick };
       if (model !== 'car') v.model = model;
       if (lane < oncoming) v.dir = -1; // левые полосы — встречка
