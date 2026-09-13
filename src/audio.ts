@@ -10,9 +10,18 @@ let master: GainNode | null = null;
 let enabled = true;
 let noiseBuf: AudioBuffer | null = null;
 
-// мотор: пила через фильтр, тон от скорости машины, «хрип» в заносе — шум через полосовой фильтр
-let engOsc: OscillatorNode | null = null, engGain: GainNode | null = null, engFilter: BiquadFilterNode | null = null;
-let rough: GainNode | null = null;
+// мотор (2026-09-14, «слишком синтезированно»): три голоса — пила, пила на октаву ниже и чуть расстроенный квадрат — через мягкую
+// перегрузку (WaveShaper) и резонансный фильтр, поверх шум выхлопа; амплитуда пульсирует на частоте «вспышек» (f/2), тон медленно
+// дрожит случайным блужданием. Тон от скорости машины, выше в повороте, в заносе хрип и открытый фильтр
+let engOsc: OscillatorNode | null = null, engSub: OscillatorNode | null = null, engSq: OscillatorNode | null = null;
+let engGain: GainNode | null = null, engFilter: BiquadFilterNode | null = null, engFire: OscillatorNode | null = null;
+let exhaust: GainNode | null = null, exhaustFilter: BiquadFilterNode | null = null;
+let wobble = 0;
+function softClip(drive: number): Float32Array<ArrayBuffer> {
+  const n = 1024, c = new Float32Array(new ArrayBuffer(n * 4));
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * drive) / Math.tanh(drive); }
+  return c;
+}
 // сирена: два тона, частота качается прямоугольным LFO; громкость — от близости копа
 let sirOsc: OscillatorNode | null = null, sirGain: GainNode | null = null;
 
@@ -26,15 +35,26 @@ export function unlockAudio(): void {
   // буфер шума на 2 с
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  // мотор
-  engOsc = ctx.createOscillator(); engOsc.type = 'sawtooth'; engOsc.frequency.value = 70;
-  engFilter = ctx.createBiquadFilter(); engFilter.type = 'lowpass'; engFilter.frequency.value = 500; engFilter.Q.value = 2;
+  // мотор: голоса → перегрузка → фильтр → пульсация → громкость
+  engOsc = ctx.createOscillator(); engOsc.type = 'sawtooth'; engOsc.frequency.value = 90;
+  engSub = ctx.createOscillator(); engSub.type = 'sawtooth'; engSub.frequency.value = 45; engSub.detune.value = 6;
+  engSq = ctx.createOscillator(); engSq.type = 'square'; engSq.frequency.value = 90; engSq.detune.value = -9;
+  const mix = ctx.createGain(); mix.gain.value = 0.5;
+  const subG = ctx.createGain(); subG.gain.value = 0.7; const sqG = ctx.createGain(); sqG.gain.value = 0.25;
+  engOsc.connect(mix); engSub.connect(subG); subG.connect(mix); engSq.connect(sqG); sqG.connect(mix);
+  const shaper = ctx.createWaveShaper(); shaper.curve = softClip(3.5); shaper.oversample = '2x';
+  engFilter = ctx.createBiquadFilter(); engFilter.type = 'lowpass'; engFilter.frequency.value = 500; engFilter.Q.value = 1.4;
+  const fire = ctx.createGain(); fire.gain.value = 0.75;
+  engFire = ctx.createOscillator(); engFire.type = 'sine'; engFire.frequency.value = 45;
+  const fireDepth = ctx.createGain(); fireDepth.gain.value = 0.25; engFire.connect(fireDepth); fireDepth.connect(fire.gain); engFire.start();
   engGain = ctx.createGain(); engGain.gain.value = 0;
-  // тарахтение: амплитуда модулируется низким прямоугольником
-  rough = ctx.createGain(); rough.gain.value = 0.7;
-  const lfo = ctx.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 28;
-  const lfoDepth = ctx.createGain(); lfoDepth.gain.value = 0.3; lfo.connect(lfoDepth); lfoDepth.connect(rough.gain); lfo.start();
-  engOsc.connect(engFilter); engFilter.connect(rough); rough.connect(engGain); engGain.connect(master); engOsc.start();
+  mix.connect(shaper); shaper.connect(engFilter); engFilter.connect(fire); fire.connect(engGain); engGain.connect(master);
+  engOsc.start(); engSub.start(); engSq.start();
+  // выхлоп: полосовой шум, громче в заносе
+  const ex = ctx.createBufferSource(); ex.buffer = noiseBuf; ex.loop = true;
+  exhaustFilter = ctx.createBiquadFilter(); exhaustFilter.type = 'bandpass'; exhaustFilter.frequency.value = 600; exhaustFilter.Q.value = 0.8;
+  exhaust = ctx.createGain(); exhaust.gain.value = 0;
+  ex.connect(exhaustFilter); exhaustFilter.connect(exhaust); exhaust.connect(engGain); ex.start();
   // сирена
   sirOsc = ctx.createOscillator(); sirOsc.type = 'triangle'; sirOsc.frequency.value = 700;
   const sirLfo = ctx.createOscillator(); sirLfo.type = 'square'; sirLfo.frequency.value = 1.6;
@@ -47,13 +67,20 @@ export function unlockAudio(): void {
 
 // Мотор каждый кадр: on — мир идёт; speed — скорость машины px/с; turn — |ω|/порог заноса 0..1+; skid — занос; air — в полёте; slow — слоу-мо
 export function engine(on: boolean, speed: number, turn: number, skid: boolean, air: boolean, slow: boolean): void {
-  if (!ctx || !engOsc || !engGain || !engFilter) return;
+  if (!ctx || !engOsc || !engSub || !engSq || !engFire || !engGain || !engFilter || !exhaust || !exhaustFilter) return;
   const t = ctx.currentTime;
+  // медленное блуждание тона ±2 %: мотор не гудит на одной ноте
+  wobble = Math.max(-0.02, Math.min(0.02, wobble * 0.97 + (Math.random() - 0.5) * 0.004));
   const base = 55 + speed * 0.14;                          // 240 → 89 Гц, 420 → 114 Гц
-  const f = base * (air ? 1.6 : skid ? 1.35 : 1 + Math.min(1, turn) * 0.12) * (slow ? 0.6 : 1);
+  const f = base * (air ? 1.6 : skid ? 1.35 : 1 + Math.min(1, turn) * 0.12) * (slow ? 0.6 : 1) * (1 + wobble);
   engOsc.frequency.setTargetAtTime(f, t, 0.08);
-  engFilter.frequency.setTargetAtTime(skid ? 1400 : air ? 900 : 420 + speed * 0.6, t, 0.1);
-  engGain.gain.setTargetAtTime(on ? (skid ? 0.16 : 0.11) : 0, t, on ? 0.05 : 0.15);
+  engSub.frequency.setTargetAtTime(f / 2, t, 0.08);
+  engSq.frequency.setTargetAtTime(f, t, 0.08);
+  engFire.frequency.setTargetAtTime(f / 2, t, 0.08);
+  engFilter.frequency.setTargetAtTime(skid ? 1600 : air ? 1000 : 380 + speed * 0.55 + Math.min(1, turn) * 150, t, 0.1);
+  exhaust.gain.setTargetAtTime(skid ? 0.5 : 0.18, t, 0.1);
+  exhaustFilter.frequency.setTargetAtTime(skid ? 1200 : 600, t, 0.1);
+  engGain.gain.setTargetAtTime(on ? (skid ? 0.15 : 0.1) : 0, t, on ? 0.05 : 0.15);
 }
 
 // Сирена: level 0 — копа нет; 0..1 — близость (danger)
