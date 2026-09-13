@@ -1,6 +1,8 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
 import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CARD_HOLD, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, RAMP, SCORE, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
-import { layoutRails, trainObb, type Rail } from './rails';
+import { layoutRails, trainObb, untilTrain, type Rail } from './rails';
+import { RAIL } from './config';
+import { engine as sfxEngine, play as sfx, siren as sfxSiren } from './audio';
 import { crossCars, layoutCrossings, lightAt, type Crossing } from './crossings';
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
@@ -89,6 +91,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let buzzedPosts: Set<string>; // «дорога:индекс» полицейских машин постов, к которым уже прижимались
   // Прыжок с рампы (M8): t — прошло, over — что пролетели (объекты считаем один раз)
   let jump: { t: number; over: Set<object> } | null = null;
+  const horned = new Set<Rail>();        // гудок поезда прозвучал для этого прохода состава
+  let introN = 0;                        // последняя показанная цифра отсчёта (для бипов)
   // Сценарий (docs/progression.md): отсчёт при первом старте уровня, карточки по ходу, контрольные точки, коп по событию
   let firstStart = true;                 // отсчёт 3-2-1 только при первом старте уровня, рестарт после BUSTED мгновенный
   let intro: number | null = null;       // остаток отсчёта, с
@@ -151,7 +155,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     flat = false;
     slow = 0; zoom = 1; flash = null;
     score = 0; fx = []; buzzedPosts = new Set(); jump = null;
-    cardIdx = 0; card = null;
+    cardIdx = 0; card = null; horned.clear(); introN = 0;
     for (const r of roads) { for (const rl of r.rails) rl.t0 = undefined; for (const c of r.crossings) c.t0 = undefined; } // сценарные поезда и светофоры ждут игрока заново
     ui.overlay.className = '';
     // контрольная точка: после BUSTED продолжаем с неё — машина на оси, время как при прибытии с постоянной скоростью,
@@ -168,11 +172,13 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
 
   function busted(why: string): void {
+    sfx(why === 'догнали' ? 'caught' : why === 'поезд' ? 'train' : why === 'вылет с дороги' || why === 'съехал с маршрута' || why === 'ежи' ? 'off' : 'crash');
     state = 'busted'; ui.overlay.className = 'show busted';
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = why + '\n' + holdText() + `\nочки ${fmtScore(score)}`;
     ui.ovHint.textContent = cpS > 0 ? 'нажми — продолжить с контрольной точки' : 'нажми, чтобы повторить';
   }
   function finish(): void {
+    sfx('delivered');
     state = 'done'; cpS = 0; ui.overlay.className = 'show'; // уровень пройден: повтор — с начала, а не с контрольной точки
     ui.ovTitle.textContent = 'DELIVERED';
     const total = scoreHook ? scoreHook(score * SCORE.finishMul) : null;
@@ -181,6 +187,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
   // Ловушка по сценарию: BUSTED с текстом уровня, но это «пройдено» — дальше следующий уровень
   function trap(text: string): void {
+    sfx('trap');
     state = 'trap'; cpS = 0; ui.overlay.className = 'show busted trap';
     const total = scoreHook ? scoreHook(score) : null;
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = text + `\nочки ${fmtScore(score)}` + (total !== null ? ` · слава ${fmtScore(total)}` : '');
@@ -190,6 +197,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   // Начислить очки с надписью и искрами у борта машины (side: с какой стороны событие)
   function addScore(pts: number, label: string, side: 1 | -1): void {
     score += pts;
+    sfx(label === 'NEAR MISS' ? 'near' : label === 'КОП ВЫБЫЛ' ? 'copOut' : label === 'ТРЮК' ? 'jump' : label === 'ПРОВОКАЦИЯ' ? 'big' : 'score');
     const rx = Math.cos(car.h), ry = Math.sin(car.h);
     const x = car.x + rx * side * (car.W / 2 + 10), y = car.y + ry * side * (car.W / 2 + 10);
     fx.push({ x, y: y - 20, t: 1.1, text: `+${pts} ${label}` });
@@ -273,7 +281,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (jump) {
       jump.t += dt;
       if (jump.t >= RAMP.air) {
-        const n = jump.over.size; jump = null;
+        const n = jump.over.size; jump = null; sfx('land');
         // приземление: искры из-под обоих бортов, потом очки за перелёт
         const rx = Math.cos(car.h), ry = Math.sin(car.h);
         for (const side of [-1, 1]) for (let k = 0; k < 7; k++) {
@@ -299,7 +307,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const ms = mainS(car.road, car.s);
     for (const c of level.checkpoints ?? []) if (ms >= c && c > cpS) cpS = c;
     if (level.cards && cardIdx < level.cards.length && ms >= level.cards[cardIdx].s) {
-      card = CARD_HOLD; ui.overlay.className = 'show card'; ui.ovTitle.textContent = level.cards[cardIdx].text; ui.ovSub.textContent = ''; ui.ovHint.textContent = ''; cardIdx++;
+      card = CARD_HOLD; sfx('card'); ui.overlay.className = 'show card'; ui.ovTitle.textContent = level.cards[cardIdx].text; ui.ovSub.textContent = ''; ui.ovHint.textContent = ''; cardIdx++;
     }
     if (level.trap && ms >= level.trap.s) return trap(level.trap.text);
     for (const rl of roads[car.road].rails) {
@@ -361,6 +369,12 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       for (const r of rd.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - car.s) < 200 && hit(me, t)) return busted('поезд'); }
       for (const r of roads) for (const c of r.crossings) if (r === rd ? Math.abs(c.s - car.s) < 200 : (c.x - car.x) ** 2 + (c.y - car.y) ** 2 < 400 * 400) for (const cc of crossCars(c, timeAlive)) if (hit(me, cc.obb)) return busted('перекрёсток');
     }
+    // Гудок поезда за RAIL.warn с до переезда, раз на проход состава, если переезд недалеко
+    for (const r of rd.rails) {
+      const u = untilTrain(r, timeAlive);
+      if (u < RAIL.warn && Math.abs(r.s - car.s) < 1000) { if (!horned.has(r)) { horned.add(r); sfx('horn'); } }
+      else if (u === Infinity || u > RAIL.warn + 1) horned.delete(r);
+    }
     // Поезд сносит трафик на переезде
     for (const r of rd.rails) {
       const t = trainObb(r, timeAlive); if (!t) continue;
@@ -375,7 +389,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       addScore(SCORE.nearMiss, 'NEAR MISS', side);
       if (!level.panic || P.speed.v - c.v < PANIC.minRel) continue;
       const coin = ((Math.sin(c.pick * 91.7 + level.seed) * 10000) % 1 + 1) % 1;
-      if (coin < level.panic) { c.panic = { side }; slow = PANIC.slow; }
+      if (coin < level.panic) { c.panic = { side }; slow = PANIC.slow; sfx('panic'); }
     }
     // Впритирку к полицейской машине поста — дороже: она стоит поперёк, её длина — вдоль ширины дороги
     rd.blocks.police.forEach((p, i) => {
@@ -391,7 +405,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (!jump && !flat) for (const sp of rd.blocks.spikes) {
       if (Math.abs(sp.s - car.s) > 120 || !hit(me, obb(sp.x, sp.y, sp.h, sp.w, sp.l))) continue;
       // Ежи: сцепления больше нет, машину сносит к ближайшему кювету
-      flat = true; car.skid = true;
+      flat = true; car.skid = true; sfx('spikes');
       const side = car.off >= 0 ? 1 : -1;
       car.vx += nr.p.nx * side * BLOCK.flatKick; car.vy += nr.p.ny * side * BLOCK.flatKick;
     }
@@ -455,11 +469,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     zoom += ((slow > 0 ? PANIC.zoom : 1) - zoom) * Math.min(1, 8 * dt);
     if (flash) { flash.t -= dt; if (flash.t <= 0) flash = null; }
     // отсчёт и карточка: мир стоит
-    if (intro !== null && !paused) { intro -= dt; const n = Math.ceil(intro); ui.ovTitle.textContent = n > 0 ? String(n) : 'GO'; if (intro <= 0) { intro = null; state = 'play'; ui.overlay.className = ''; } }
+    if (intro !== null && !paused) { intro -= dt; const n = Math.ceil(intro); if (n !== introN) { introN = n; sfx(n > 0 ? 'beep' : 'go'); } ui.ovTitle.textContent = n > 0 ? String(n) : 'GO'; if (intro <= 0) { intro = null; state = 'play'; ui.overlay.className = ''; } }
     else if (card !== null && !paused) { card -= dt; if (card <= 0) { card = null; ui.overlay.className = ''; } }
     else if (!paused) update(slow > 0 ? dt * PANIC.slowScale : dt);
     // Хвост считаем по главной дороге, чтобы сравнивать положение на разных ветках
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
+    // звук: мотор, пока мир идёт; сирена — пока коп на хвосте, громче с близостью
+    sfxEngine(state === 'play' && !paused && intro === null && card === null, P.speed.v, Math.abs(car.w) / P.spin.v, car.skid, !!jump, slow > 0);
+    sfxSiren(chaser && state === 'play' ? Math.max(0, 1 - tail! / level.chaser!.gap) : 0);
     const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings, oncoming: r.oncoming, from: r.def?.from, parent: r.def ? r.parent : undefined }));
     render(ctx, view, {
       roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props, nav: level.nav,

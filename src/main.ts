@@ -2,9 +2,11 @@ import './style.css';
 import { createGame } from './game';
 import { setTheme } from './render';
 import { loadArt } from './art';
+import { setAudioEnabled, unlockAudio } from './audio';
 const query = new URLSearchParams(location.search);
 setTheme(query.get('theme')); // ?theme=night|comic|dark|bright|sprites|pixel — эксперименты; без параметра pixelnight
 loadArt();
+if (query.get('mute')) setAudioEnabled(false); // ?mute=1 — без звука (настройки — позже)
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';
 import { CARS, type CarKey, type CarSpec } from './cars';
@@ -73,7 +75,7 @@ function showPanel(key: string): void {
 // Загрузочный экран с ключевым артом: мир стоит (отсчёт не идёт), тап убирает экран
 const splash = $('splash');
 splash.style.backgroundImage = `url(${import.meta.env.BASE_URL}art/hero.jpg)`;
-splash.addEventListener('pointerdown', e => { e.preventDefault(); splash.classList.add('hide'); syncPause(); });
+splash.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); splash.classList.add('hide'); syncPause(); }); // первый жест — можно включать звук
 // Пока открыто меню или загрузочный экран, мир стоит; тап по игровому полю закрывает меню и продолжает попытку
 const menus = [panel, carPanel];
 const syncPause = () => game.pause(!splash.classList.contains('hide') || menus.some(m => m.classList.contains('open')));
