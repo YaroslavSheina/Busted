@@ -26,11 +26,13 @@ export interface GameUI {
 }
 // Конец уровня: done — доставил, trap — ловушка по сценарию (тоже «пройдено»). Вернуть true, если следующий уровень уже загружен
 export type EndHook = (how: 'done' | 'trap') => boolean;
+export type ScoreHook = (points: number) => number; // уровень пройден: очки в славу, возвращает её сумму (для экрана DELIVERED)
 
 export interface Game {
   load(level: LevelData): void;
   reset(): void;
   onEnd(hook: EndHook | null): void;
+  onScore(hook: ScoreHook | null): void;
   pause(on: boolean): void; // меню открыто — мир стоит, кадр рисуется
   stop(): void;
 }
@@ -95,6 +97,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let copIdx = 0;                        // сколько точек появления копа (chaser.at) уже пройдено; новый коп — только если прежний выбыл
   const copAts = () => !level.chaser ? [] : Array.isArray(level.chaser.at) ? level.chaser.at : [level.chaser.at ?? 0];
   let endHook: EndHook | null = null;
+  let scoreHook: ScoreHook | null = null;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
     const r: Road = { path, def, parent: -1, width: P.width.v, narrows, blockDefs: blocks, rails: [], crossings: [], oncoming: 0, blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
@@ -172,13 +175,15 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   function finish(): void {
     state = 'done'; cpS = 0; ui.overlay.className = 'show'; // уровень пройден: повтор — с начала, а не с контрольной точки
     ui.ovTitle.textContent = 'DELIVERED';
-    ui.ovSub.textContent = `${timeAlive.toFixed(1)} с · очки ${fmtScore(score)} × ${SCORE.finishMul} = ${fmtScore(score * SCORE.finishMul)}`;
+    const total = scoreHook ? scoreHook(score * SCORE.finishMul) : null;
+    ui.ovSub.textContent = `${timeAlive.toFixed(1)} с · очки ${fmtScore(score)} × ${SCORE.finishMul} = ${fmtScore(score * SCORE.finishMul)}` + (total !== null ? `\nслава ${fmtScore(total)}` : '');
     ui.ovHint.textContent = endHook ? 'нажми — дальше' : 'нажми, чтобы повторить';
   }
   // Ловушка по сценарию: BUSTED с текстом уровня, но это «пройдено» — дальше следующий уровень
   function trap(text: string): void {
     state = 'trap'; cpS = 0; ui.overlay.className = 'show busted trap';
-    ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = text + `\nочки ${fmtScore(score)}`;
+    const total = scoreHook ? scoreHook(score) : null;
+    ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = text + `\nочки ${fmtScore(score)}` + (total !== null ? ` · слава ${fmtScore(total)}` : '');
     ui.ovHint.textContent = 'нажми — дальше';
   }
 
@@ -470,6 +475,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   return {
     load, reset,
     onEnd(hook) { endHook = hook; },
+    onScore(hook) { scoreHook = hook; },
     pause(on) { paused = on; },
     stop() {
       cancelAnimationFrame(raf);

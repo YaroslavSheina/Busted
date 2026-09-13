@@ -204,14 +204,16 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, 
   const { W: w, L: l } = spec;
   const glass = 'rgba(20,22,28,.6)', trim = 'rgba(20,22,28,.35)', lamp = '#fff3c4';
   const wedge = () => { ctx.moveTo(-w / 2 + 6, -l / 2); ctx.lineTo(w / 2 - 6, -l / 2); ctx.lineTo(w / 2, -l / 2 + 16); ctx.lineTo(w / 2, l / 2 - 4); ctx.lineTo(-w / 2, l / 2 - 4); ctx.lineTo(-w / 2, -l / 2 + 16); ctx.closePath(); };
-  const round = { sedan: 6, minivan: 9, supercar: 0, bus: 5 }[spec.body];
+  const round = { sedan: 6, minivan: 9, supercar: 0, bus: 5, muscle: 5, sport: 3 }[spec.body];
   ctx.save(); ctx.translate(x, y); ctx.rotate(h);
   // pixel: кузов игрока — свой референс, подкрашенный в жёлтый (школьный автобус и так жёлтый)
-  const PX: Record<string, [string, string | undefined]> = { sedan: ['px_white_sedan', '#f4b942'], minivan: ['px_happy_bus', '#f4b942'], supercar: ['px_super_car', '#f4b942'], bus: ['px_schoolbus', undefined] };
+  const PX: Record<string, [string, string | undefined]> = { sedan: ['px_white_sedan', '#f4b942'], minivan: ['px_happy_bus', '#f4b942'], supercar: ['px_super_car', '#f4b942'], bus: ['px_schoolbus', undefined],
+    muscle: ['px_muscle_car', '#f4b942'], sport: ['px_sport_car', '#f4b942'] };
   const tint = spec.tint === undefined ? PX[spec.body][1] : spec.tint ?? undefined; // машина может просить родной цвет спрайта (спорткар пролога — красный)
   if (T.sprites === 'pixel' ? carSprite(ctx, PX[spec.body][0], w, l, tint, 0.7) : spec.body === 'sedan' && carSprite(ctx, 'sedan', w, l)) { ctx.restore(); return; }
   carUnder(ctx, w, l, round);
   switch (spec.body) {
+    case 'muscle': case 'sport': // векторная заглушка до загрузки спрайта — как седан
     case 'sedan':
       ctx.fillStyle = '#f4b942'; ctx.beginPath(); ctx.roundRect(-w / 2, -l / 2, w, l, 6); ctx.fill();
       ctx.fillStyle = glass; ctx.fillRect(-w / 2 + 4, -l / 2 + 12, w - 8, 11); ctx.fillRect(-w / 2 + 4, l / 2 - 14, w - 8, 7);
@@ -245,7 +247,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, 
       ctx.fillStyle = lamp; ctx.fillRect(-w / 2 + 3, -l / 2 - 1, 7, 3); ctx.fillRect(w / 2 - 10, -l / 2 - 1, 7, 3);
       break;
   }
-  carOutline(ctx, spec.body === 'supercar' ? wedge : () => ctx.roundRect(-w / 2, -l / 2, w, l, round));
+  carOutline(ctx, spec.body === 'supercar' ? wedge : () => ctx.roundRect(-w / 2, -l / 2, w, l, round ?? 6));
   ctx.restore();
 }
 

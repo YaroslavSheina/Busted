@@ -8,7 +8,7 @@ loadArt();
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';
 import { CARS, type CarKey, type CarSpec } from './cars';
-import { campaign } from './campaign';
+import { addFame, campaign } from './campaign';
 
 const $ = (id: string) => document.getElementById(id)!;
 const panel = $('panel'), carPanel = $('carPanel');
@@ -22,6 +22,8 @@ const game = createGame({
   hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), ovHint: $('ovHint'), ovName: $('ovName'),
   left: $('left'), right: $('right'),
 }, levelByName(FIRST));
+// Очки пройденного уровня — в славу (только уровни кампании)
+game.onScore(points => addFame(campaign.has(levelKey) ? points : 0));
 // Пройденный уровень кампании (в том числе открытый из меню) ведёт к следующему по списку; уровень не из кампании — повтор
 game.onEnd(() => {
   const next = campaign.advance(levelKey);

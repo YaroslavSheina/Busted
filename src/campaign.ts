@@ -2,7 +2,10 @@
 import { LEVEL_KEYS } from './levels';
 
 // Порядок пока из того, что есть; по мере сборки пролога и обучения список заменяется
-export const CAMPAIGN: string[] = ['prologue', 'tut01', 'tut02', 'tut03', 'tut04', 'tut05', 'tut06', 'tut07', 'tut08', 'tut09', 'tut10', 'district2', 'district2b', 'district2c'].filter(k => LEVEL_KEYS.includes(k));
+// Пролог → обучение → карьера (docs/career.md): Окраина (минивэн) → Центр (седан, бывший «Район 2») → Промзона (масл-кар) →
+// Ночной город (спорт) → Финал (спорткар пролога)
+export const CAMPAIGN: string[] = ['prologue', 'tut01', 'tut02', 'tut03', 'tut04', 'tut05', 'tut06', 'tut07', 'tut08', 'tut09', 'tut10',
+  'okr1', 'okr2', 'okr3', 'district2', 'district2b', 'district2c', 'ind1', 'ind2', 'ind3', 'night1', 'night2', 'night3', 'final'].filter(k => LEVEL_KEYS.includes(k));
 
 // Меню «уровень» показывает кампанию по порядку и полигон для тестов; остальные файлы levels/ (старые полигоны механик,
 // «Район 1», «Графика») скрыты, но открываются по ?level= и в редакторе (решение 2026-09-10). В харнессе меню — все уровни (bundle.py)
@@ -19,8 +22,14 @@ function index(): number {
 }
 function save(i: number): void { try { localStorage.setItem(KEY, JSON.stringify({ key: CAMPAIGN[i] } satisfies Progress)); } catch { /* приватный режим */ } }
 
+// Слава — сумма очков за доставки и ловушки по сценарию (docs/career.md); ничего не запирает, показывается на DELIVERED
+const FAME = 'lr.fame';
+export function fame(): number { try { const n = Number(localStorage.getItem(FAME)); return Number.isFinite(n) ? n : 0; } catch { return 0; } }
+export function addFame(points: number): number { const n = fame() + Math.round(points); try { localStorage.setItem(FAME, String(n)); } catch { /* приватный режим */ } return n; }
+
 export const campaign = {
   current(): string { return CAMPAIGN[index()]; },
+  has(key: string): boolean { return CAMPAIGN.includes(key); },
   index,
   // Уровень from пройден (доставка или ловушка по сценарию) — следующий по списку, прогресс не откатывается назад;
   // null — уровень не из кампании или последний. Уровень из меню тоже ведёт дальше по списку: так и ждёт игрок
