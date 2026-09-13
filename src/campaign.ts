@@ -5,7 +5,11 @@ import { LEVEL_KEYS } from './levels';
 // Пролог → обучение → карьера (docs/career.md): Окраина (минивэн) → Центр (седан, бывший «Район 2») → Промзона (масл-кар) →
 // Ночной город (спорт) → Финал (спорткар пролога)
 export const CAMPAIGN: string[] = ['prologue', 'tut01', 'tut02', 'tut03', 'tut04', 'tut05', 'tut06', 'tut07', 'tut08', 'tut09', 'tut10',
-  'okr1', 'okr2', 'okr3', 'district2', 'district2b', 'district2c', 'ind1', 'ind2', 'ind3', 'night1', 'night2', 'night3', 'final'].filter(k => LEVEL_KEYS.includes(k));
+  // концептуальные уровни (docs/career.md, §4) — между обычными маршрутами района
+  'okr1', 'okr_works', 'okr2', 'okr_convoy', 'okr3',
+  'district2', 'ctr_red', 'district2b', 'ctr_jam', 'district2c',
+  'ind_serp', 'ind1', 'ind_train', 'ind2', 'ind_ramps', 'ind3',
+  'night1', 'night_tunnel', 'night2', 'night_wet', 'night3', 'final'].filter(k => LEVEL_KEYS.includes(k));
 
 // Меню «уровень» показывает кампанию по порядку и полигон для тестов; остальные файлы levels/ (старые полигоны механик,
 // «Район 1», «Графика») скрыты, но открываются по ?level= и в редакторе (решение 2026-09-10). В харнессе меню — все уровни (bundle.py)

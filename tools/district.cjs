@@ -130,7 +130,9 @@ function build(district, route) {
     // прибытии красный горит 2.0 с и средняя полоса проходит между тронувшимися поперечными (по развёртке crosslanes)
     r.crossings = r.noCross ? [] : r.straight.filter(p => !junctions.has(p.join(','))).map(([x, y], k) => {
       const s = sAt(r.sm, x, y), arrive = s / SPEED, m = mode(k, x, y);
-      if (m === 'red') return { s, period: 12, offset: 0, before: Math.round(3.05 * SPEED), arrive: +arrive.toFixed(1) };
+      if (m === 'red' && s < 3.05 * SPEED + 60) console.log(`   ! ${spec.name}: перекрёсток s${s} ближе ${Math.round(3.05 * SPEED)} px к старту — сценарный красный не успеет, оставлен зелёный`);
+      if (m === 'red' && s >= 3.05 * SPEED + 60) return { s, period: 12, offset: 0, before: Math.round(3.05 * SPEED), arrive: +arrive.toFixed(1) };
+      if (m === 'red') return { s, period: 12, offset: +(((arrive + 2) % 12).toFixed(1)), arrive: +arrive.toFixed(1) };
       const offset = m === 'green' ? +(((arrive + 2) % 12).toFixed(1)) : m;
       return { s, period: 12, offset, arrive: +arrive.toFixed(1) };
     });
@@ -155,7 +157,9 @@ function build(district, route) {
         else if (e.offset === 'ahead') {
           // сценарный «перед носом» (2026-09-10, вместо расчёта по циклу): старт за before px до рельсов, хвост сходит с дороги
           // за 0.6 с до прибытия; при старте голова должна быть ещё далеко от дороги (иначе состав возникает на переезде)
-          const before = Math.min(Math.round(4.6 * SPEED), s - 60), clear = +(before / SPEED - 0.6).toFixed(2), h0 = length + 130 - speed * clear;
+          // длинному составу нужен ранний старт: голова при старте за 200 px до дороги — clear ≥ (length + 330)/speed («Товарняк»)
+          const lead = Math.max(4.6, (length + 400) / speed + 0.6);
+          const before = Math.min(Math.round(lead * SPEED), s - 60), clear = +(before / SPEED - 0.6).toFixed(2), h0 = length + 130 - speed * clear;
           if (h0 > -200) throw new Error(`${spec.name}: rails 'ahead' @s${s} слишком близко к старту (голова при старте ${Math.round(h0)})`);
           rails.push({ s, period, speed, length, offset: 0, before, clear });
         } else rails.push({ s, period, speed, length, offset: e.offset ?? 0 });
@@ -165,7 +169,7 @@ function build(district, route) {
       }
       case 'ramp': mainCars.push({ s, lane: e.lane ?? 1, speed: e.speed ?? 120, type: 'ramp' }); break;
       case 'parked': mainCars.push({ s, lane: e.lane ?? 2, speed: 0 }); break;
-      case 'slow': mainCars.push({ s, lane: e.lane ?? 1, speed: e.speed ?? 60 }); break;          // медленная машина — есть кого обойти впритирку
+      case 'slow': mainCars.push({ s, lane: e.lane ?? 1, speed: e.speed ?? 60, ...(e.model ? { model: e.model } : {}) }); break; // медленная машина (model — длинная: «Колонна»)
       default: throw new Error(`${spec.name}: неизвестное событие ${e.type}`);
     }
   }
@@ -219,7 +223,7 @@ ${main.pts.map(p => `    [${p[0]}, ${p[1]}]`).join(',\n')}
   "car": "${spec.car}",
   "panic": ${spec.panic},
   "nav": true,
-  "mix": ${spec.mix ?? 0.15},
+  "mix": ${spec.mix ?? 0.15},${route.pace ? `\n  "pace": ${JSON.stringify(route.pace)},` : ''}${route.grip ? `\n  "grip": ${route.grip},` : ''}
   "oncoming": ${main.oncoming},
   "chaser": ${JSON.stringify(chaser)},${route.intro ? `\n  "intro": ${JSON.stringify(route.intro)},` : ''}${cards.length ? `\n  "cards": [\n${cards.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ],` : ''}${trap ? `\n  "trap": ${JSON.stringify(trap)},` : ''}${checkpoints.length ? `\n  "checkpoints": ${JSON.stringify(checkpoints)},` : ''}
   "cars": [
@@ -368,18 +372,47 @@ const DISTRICTS = [
         events: [{ type: 'works', at: [3, -1.4], lanes: [0, 1], len: 300 }, { type: 'post', at: [1.7, -3] }, { type: 'spikes', at: [1, -4.6] },
           { type: 'narrow', at: [1, -5.0], to: [1, -5.4], width: 130 }, { type: 'works', at: [2.2, -6], lanes: [2], len: 200 }, { type: 'post', at: [3, -7.6], lanes: [1, 2] }],
         roads: [{ nodes: [[3, 0], [3, -3], [1, -3], [1, -6], [3, -6], [3, -9]], oncoming: 0, offsets: 'green' }] },
+      // концептуальные (docs/career.md, §4): «Стройка» — ремонт на каждом квартале, свободная полоса каждый раз другая
+      { file: 'okr_works', name: 'Окраина · Стройка', traffic: 0.15, intro: 'Стройка. Ремонт на каждом квартале, свободная полоса каждый раз другая. Читай на два квартала вперёд.',
+        // свободная полоса каждый раз соседняя (0→1→2→1→0→1), между ремонтами 530 px: перестроение минивэна ~1.5 с = 360 px
+        events: [{ type: 'works', at: [2, -1.3], lanes: [1, 2], len: 200 }, { type: 'works', at: [2, -2.7], lanes: [0, 2], len: 200 }, { type: 'works', at: [2, -4.1], lanes: [0, 1], len: 200 },
+          { type: 'works', at: [2, -5.5], lanes: [0, 2], len: 200 }, { type: 'works', at: [2, -6.9], lanes: [1, 2], len: 200 }, { type: 'works', at: [2, -8.3], lanes: [0, 2], len: 200 }],
+        roads: [{ nodes: [[2, 0], [2, -9]], oncoming: 0, offsets: 'green' }] },
+      // «Колонна» — грузовики парами занимают две полосы, свободная каждый раз другая; дальние пары медленнее, чтобы догнать до гаража
+      { file: 'okr_convoy', name: 'Окраина · Колонна', traffic: 0, intro: 'Колонна. Грузовики идут парами и занимают две полосы. Свободная — каждый раз другая, ищи её заранее.',
+        // свободная полоса: 0 → 1 → 2 → 1 (соседняя каждый раз); пары идут на 60, игрок догоняет их у s≈1100, 2100, 3050; последняя стоит.
+        // Случайного трафика нет: медленная машина в свободной полосе — ловушка без выхода на 240 без тормозов
+        events: [{ type: 'slow', at: [4, -1.6], lane: 1, speed: 60, model: 'truck' }, { type: 'slow', at: [4, -1.6], lane: 2, speed: 60, model: 'truck' },
+          { type: 'slow', at: [4, -3.0], lane: 0, speed: 60, model: 'bus' }, { type: 'slow', at: [4, -3.0], lane: 2, speed: 60, model: 'bus' },
+          { type: 'slow', at: [4, -4.4], lane: 0, speed: 60, model: 'truck' }, { type: 'slow', at: [4, -4.4], lane: 1, speed: 60, model: 'truck' },
+          { type: 'slow', at: [2, -6.3], lane: 0, speed: 0, model: 'truck' }, { type: 'slow', at: [2, -6.3], lane: 2, speed: 0, model: 'truck' }],
+        roads: [{ nodes: [[4, 0], [4, -5], [2, -5], [2, -9]], oncoming: 0, offsets: 'green' }] },
       { file: 'okr3', name: 'Окраина · 3', traffic: 0.3, mix: 0.1, intro: 'Окраина · 3. Длинный маршрут, два красных, всё вместе.',
         events: [{ type: 'post', at: [1, -1.3] }, { type: 'works', at: [2.4, -2], lanes: [1, 2], len: 300 }, { type: 'spikes', at: [4, -3.5] },
           { type: 'post', at: [2.5, -5], lanes: [0, 2] }, { type: 'narrow', at: [0, -6.35], to: [0, -6.65], width: 130 }, { type: 'post', at: [0, -7.6], lanes: [1, 2] }],
         roads: [{ nodes: [[1, 0], [1, -2], [4, -2], [4, -5], [0, -5], [0, -8]], oncoming: 0, reds: [[3, -5], [0, -6]] }] },
     ] },
   // «Промзона»: масл-кар, широкие кварталы под его радиус, рельсы и автовозы; коп со второго маршрута
-  { seed: 5202, car: 'muscle', speed: 330, traffic: 0.25, panic: 0.2, mix: 0.3, chaser: { gap: 200, speed: 1 }, grid: { bx: 700, by: 600, road: 200, r: 260 }, blocks: { i: [-1, 6], j: [-10, 0] },
+  { seed: 5202, car: 'muscle', speed: 330, traffic: 0.25, panic: 0.2, mix: 0.3, chaser: { gap: 200, speed: 1 }, grid: { bx: 700, by: 600, road: 200, r: 260 }, blocks: { i: [-1, 6], j: [-11, 0] },
     routes: [
       { file: 'ind1', name: 'Промзона · 1', chaser: null, intro: 'Промзона. Масл-кар: быстрый на прямой, в заносе широкий. Рельсы режут район, автовозы ходят колоннами.',
         events: [{ type: 'rails', at: [0, -2.5], offset: 'behind', length: 600 }, { type: 'works', at: [0, -3.3], lanes: [2], len: 200 },
           { type: 'ramp', at: [2, -6.3], lane: 1, speed: 110 }, { type: 'post', at: [2, -6.6] }, { type: 'narrow', at: [3.4, -9], to: [3.7, -9], width: 140 }],
         roads: [{ nodes: [[0, 0], [0, -5], [2, -5], [2, -9], [5, -9]], oncoming: 0, offsets: 'green' }] },
+      // «Серпантин» — только геометрия: S-повороты через квартал, без трафика — знакомство с масл-каром в чистом виде
+      { file: 'ind_serp', name: 'Промзона · Серпантин', traffic: 0, chaser: null, intro: 'Серпантин. Только руль и масл-кар. Держи кнопку коротко — длинное удержание срывает в занос.',
+        roads: [{ nodes: [[0, 0], [0, -2], [1, -2], [1, -4], [0, -4], [0, -6], [1, -6], [1, -8], [0, -8], [0, -10]], oncoming: 0, crossings: false }] },
+      // «Товарняк» — два длинных состава: первый проходит перед носом (сценарный по дистанции), второй сразу за спиной и снимает копа
+      { file: 'ind_train', name: 'Промзона · Товарняк', traffic: 0.2, chaserAt: [3, -0.5], intro: 'Товарняк. Составы длинные. Первый пройдёт перед носом, второй — сразу за спиной. Не сбавляй.',
+        events: [{ type: 'post', at: [3, -2.2] }, { type: 'rails', at: [5, -6], offset: 'ahead', length: 1200 }, { type: 'rails', at: [5, -8], offset: 'behind', length: 1200 }],
+        roads: [{ nodes: [[3, 0], [3, -4], [5, -4], [5, -9]], oncoming: 0, crossings: false }] },
+      // «Автовозы» — четыре рампы подряд, за каждой преграда: уровень-трюк
+      { file: 'ind_ramps', name: 'Промзона · Автовозы', traffic: 0.1, chaser: null, intro: 'Автовозы. Четыре рампы подряд, за каждой преграда. Заезжай сзади ровно — и лети.',
+        events: [{ type: 'ramp', at: [1, -1.3], lane: 1, speed: 110 }, { type: 'post', at: [1, -1.6] },
+          { type: 'ramp', at: [1, -2.9], lane: 1, speed: 110 }, { type: 'works', at: [1, -3.25], lanes: [0, 1, 2], len: 100 },
+          { type: 'ramp', at: [1, -4.5], lane: 1, speed: 110 }, { type: 'closure', at: [1, -4.8] },
+          { type: 'ramp', at: [3, -7.5], lane: 1, speed: 110 }, { type: 'closure', at: [3, -7.8] }, { type: 'narrow', at: [3, -8.8], to: [3, -9.2], width: 140 }],
+        roads: [{ nodes: [[1, 0], [1, -6], [3, -6], [3, -10]], oncoming: 0, crossings: false }] },
       { file: 'ind2', name: 'Промзона · 2', traffic: 0.25, chaserAt: [3, -3.3], intro: 'Промзона · 2. Коп появится в середине. Поезд в спину его снимет — держи темп после переезда.',
         events: [{ type: 'post', at: [3, -1.5] }, { type: 'works', at: [1.75, -3], lanes: [0, 1], len: 200 }, { type: 'spikes', at: [1, -4.3] }, // ежи ≥400 px после дуги: ремонт выгоняет в крайнюю, обратно после угла
           { type: 'rails', at: [1, -4.9], offset: 'behind', length: 600 }, { type: 'ramp', at: [1, -5.6], lane: 1, speed: 110 }, { type: 'closure', at: [1, -5.9] },
@@ -397,6 +430,15 @@ const DISTRICTS = [
       { file: 'night1', name: 'Ночной город · 1', chaser: null, traffic: 0.35, intro: 'Ночной город. Спорт: острый руль, быстро гасит вираж. Улицы тесные, слева встречка.',
         events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [2, -6.4], lanes: [2], len: 200 }, { type: 'narrow', at: [5, -9.4], to: [5, -9.7], width: 120 }],
         roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -8], [5, -8], [5, -12]], oncoming: 1, reds: [[0, -3], [2, -6]] }] },
+      // «Тоннель» — шесть кварталов в две полосы без единого поворота: коп не отстаёт, спасение — переезд в конце
+      { file: 'night_tunnel', name: 'Ночной город · Тоннель', traffic: 0.3, chaser: { gap: 240, speed: 1.02 }, chaserAt: [1, -0.5], // 1.04 догонял в тоннеле; 1.02 к переезду подтягивается до ~150 px
+        intro: 'Тоннель. Две полосы и ни одного поворота — коп не отстанет. Спасение в конце.',
+        events: [{ type: 'narrow', at: [3, -4.5], to: [3, -10.5], width: 120 }, { type: 'rails', at: [3, -11.2], offset: 'behind', after: 0.2, length: 500 }],
+        roads: [{ nodes: [[1, 0], [1, -3], [3, -3], [3, -12]], oncoming: 0, crossings: false }] },
+      // «Дождь» — сцепление 0.7: машину несёт дольше, поворачивать раньше; та же механика, другой ритм
+      { file: 'night_wet', name: 'Ночной город · Дождь', traffic: 0.3, chaser: null, grip: 0.7, intro: 'Дождь. Сцепление ниже — машину несёт дольше. Поворачивай раньше, чем привык.',
+        events: [{ type: 'post', at: [4, -2.5] }, { type: 'works', at: [2, -6.4], lanes: [2], len: 200 }, { type: 'narrow', at: [5, -10.4], to: [5, -10.7], width: 120 }],
+        roads: [{ nodes: [[4, 0], [4, -4], [2, -4], [2, -9], [5, -9], [5, -12]], oncoming: 1, reds: [[4, -2], [2, -7]] }] },
       { file: 'night2', name: 'Ночной город · 2', chaserAt: [[3, -0.5], [1, -3.6]], intro: 'Ночной город · 2. Коп с самого старта и второй после первого. Переезды — твоё оружие.',
         events: [{ type: 'rails', at: [3, -1.6], offset: 'behind', length: 500 }, { type: 'spikes', at: [1, -4.5] }, { type: 'works', at: [1, -5.35], lanes: [2], len: 180 },
           { type: 'rails', at: [3, -8.5], offset: 'behind', length: 500 }, { type: 'narrow', at: [5, -10.9], to: [5, -11.2], width: 120 }],
@@ -409,7 +451,7 @@ const DISTRICTS = [
         roads: [{ nodes: [[2, 0], [2, -3], [4, -3], [4, -8], [6, -8], [6, -13]], oncoming: 1, reds: [[2, -2], [4, -5], [4, -7], [6, -9], [6, -12]] }] },
     ] },
   // «Район 2» → «Центр»: гараж у (3,−4), три старта — три уровня в одном городе
-  { seed: 777, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 3], j: [-5, 0] },
+  { seed: 777, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 4], j: [-9, 0] },
     routes: [
       // маршрут 1: старт (0,0), север 3, восток 3, север 1. Ветка А: направо у (0,−1), прямо через (1,−1), налево у (2,−1),
       // прямо через (2,−2), вливается в главную у (2,−3). Ветка Б от А: налево у (1,−1), направо у (1,−2), вливается в А у (2,−2)
@@ -422,6 +464,12 @@ const DISTRICTS = [
         { nodes: [[0, -1], [1, -1], [2, -1], [2, -2], [2, -3]], oncoming: 1 }, // её прямые узлы — примыкания ветки Б, перекрёстков нет
         { nodes: [[1, -1], [1, -2], [2, -2]], parent: 0, oncoming: 1 },
       ] },
+      // концептуальные: «Красная волна» — красный на каждом перекрёстке, средняя полоса проходит между поперечными (ритм)
+      { file: 'ctr_red', name: 'Центр · Красная волна', traffic: 0.1, intro: 'Красная волна. Красный на каждом перекрёстке. Средняя полоса проходит между поперечными — держи ритм.',
+        roads: [{ nodes: [[0, 0], [0, -8]], oncoming: 1, reds: [[0, -1], [0, -2], [0, -3], [0, -4], [0, -5], [0, -6], [0, -7]] }] },
+      // «Пробка» — все ползут на 35–45 %, три полосы забиты; окна открываются и закрываются
+      { file: 'ctr_jam', name: 'Центр · Пробка', traffic: 1.5, mix: 0.2, pace: [0.35, 0.45], intro: 'Пробка. Все ползут. Лавируй между рядами — окна открываются и закрываются.',
+        roads: [{ nodes: [[3, 0], [3, -4], [1, -4], [1, -8]], oncoming: 0, crossings: false }] }, // три полосы попутные: плотность 1.5 — ~33 машины на маршрут
       // маршрут 2: старт (3,0), север 1, запад 2, север 2, восток 2, север 1. Ветка: направо у (1,−2), налево у (2,−2), вливается у (2,−3)
       { file: 'district2b', name: 'Центр · 2', traffic: 0.35, intro: 'Центр · 2. Перекрытие впереди — объезд по боковой улице, стрелка покажет.',
         // ремонт правой полосы на западном отрезке, полное перекрытие северного отрезка за (1,−2) — объезд по ветке
