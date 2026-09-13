@@ -115,7 +115,7 @@ function build(district, route) {
     }
     const helpers = { sAt: (x, y) => sAt(sm, x, y), node, L: Math.round(sm.at(-1).s) };
     const cars = typeof rd.cars === 'function' ? rd.cars(helpers) : rd.cars;
-    roads.push({ legs, pts, sm, def, straight: straightNodes(legs), offsets: rd.offsets ?? [], noCross: rd.crossings === false, cars, oncoming: rd.oncoming ?? 0, L: helpers.L,
+    roads.push({ legs, pts, sm, def, straight: straightNodes(legs), offsets: rd.offsets ?? [], reds: rd.reds, noCross: rd.crossings === false, cars, oncoming: rd.oncoming ?? 0, L: helpers.L,
       parentIdx: idx ? (rd.parent === undefined ? 0 : rd.parent + 1) : -1, ends: idx ? [node(rd.nodes[0]), node(rd.nodes.at(-1))] : [] });
   });
   // Перекрёстки — на прямых узлах, кроме примыканий: где отходит или вливается ветка, светофора и поперечных нет
@@ -124,11 +124,12 @@ function build(district, route) {
     const junctions = new Set(roads.filter(o => o.parentIdx === i).flatMap(o => o.ends.map(p => p.join(','))));
     // offsets — 'green' для всех или массив по перекрёсткам: число, 'green' (красный через 2 с после прибытия, очередь
     // видна, но не мешает) или 'red' (красный за 0.8 с до прибытия — поперечные тронулись, средняя полоса проходит между ними)
-    const mode = k => (r.offsets === 'green' ? 'green' : r.offsets[k] ?? 0);
+    // reds: [[x, y]…] — красный при прибытии только на этих узлах, остальные зелёные (не нужно считать номера светофоров)
+    const mode = (k, x, y) => r.reds ? (r.reds.some(p => p[0] * BX === x && p[1] * BY === y) ? 'red' : 'green') : (r.offsets === 'green' ? 'green' : r.offsets[k] ?? 0);
     // 'red' — сценарный: красный включается через 1.05 с после того, как игрок за before px до перекрёстка, так что при
     // прибытии красный горит 2.0 с и средняя полоса проходит между тронувшимися поперечными (по развёртке crosslanes)
     r.crossings = r.noCross ? [] : r.straight.filter(p => !junctions.has(p.join(','))).map(([x, y], k) => {
-      const s = sAt(r.sm, x, y), arrive = s / SPEED, m = mode(k);
+      const s = sAt(r.sm, x, y), arrive = s / SPEED, m = mode(k, x, y);
       if (m === 'red') return { s, period: 12, offset: 0, before: Math.round(3.05 * SPEED), arrive: +arrive.toFixed(1) };
       const offset = m === 'green' ? +(((arrive + 2) % 12).toFixed(1)) : m;
       return { s, period: 12, offset, arrive: +arrive.toFixed(1) };
@@ -321,9 +322,30 @@ const DISTRICTS = [
           { type: 'closure', at: [7, -9.6] },
         ],
         roads: [
-          // север 6, восток 2, юг 2 (переезд был на севере), восток 2, север 2, ... — змейка по сетке, ~25 000 px
+          // север 6, восток 2, юг 2 (переезд был на севере), восток 2, север 2, ... — змейка по сетке, ~20 000 px
           { nodes: [[0, 0], [0, -6], [2, -6], [2, -3], [4, -3], [4, -1], [6, -1], [6, -6], [4, -6], [4, -8], [7, -8], [7, -10]], oncoming: 0, offsets: 'green',
             cars: () => [] },
+        ] },
+      // Финал (docs/career.md): тот же красный спорткар на полной скорости, тот же гараж — с другого конца района, 22 000 px, без контрольных точек
+      { file: 'final', name: 'Финал', car: 'finale', speed: 420, traffic: 0.2, mix: 0.1, panic: 0.4, chaser: { gap: 260, speed: 1.02 }, chaserAt: [[7, -1.5], [3, -2.0], [3, -10.5]], // gap 260: к первому переезду коп подтягивается до ~0.48 с и попадает под поезд (after 0.3)
+        intro: 'Финал. Тот самый спорткар — на полной скорости. Тот самый гараж. Доедь.',
+        cards: [{ at: [7, -1.4], text: 'Он вернулся. И полиция тоже' }, { at: [7, -11.6], text: 'Гараж. В этот раз — доедем' }],
+        events: [
+          { type: 'parked', at: [7, -0.4] }, { type: 'parked', at: [7, -0.8] },
+          { type: 'post', at: [7, -2.6] },
+          { type: 'rails', at: [6.4, -4], offset: 'behind', after: 0.3, length: 600 },
+          { type: 'works', at: [5, -2.4], lanes: [2], len: 300 },
+          { type: 'spikes', at: [3, -2.5] },
+          { type: 'ramp', at: [3, -3.35], lane: 1, speed: 120 }, { type: 'closure', at: [3, -3.65] }, // между перекрёстками (3,−3) и (3,−4): посадка на зелёный узел
+          { type: 'rails', at: [3, -4.5], offset: 'behind', after: 0.3, length: 600 },
+          { type: 'narrow', at: [1, -7.6], to: [1, -8.1], width: 140 },
+          { type: 'post', at: [3, -10.4], lanes: [1, 2] },
+          { type: 'rails', at: [4.6, -12], offset: 'behind', after: 0.3, length: 600 },
+          { type: 'post', at: [7, -10.8], lanes: [0, 2] }, // отрезок на юг: −10.8 в 450 px после дуги угла (7,−12) и в 500 px до гаража
+        ],
+        roads: [
+          // север 4, запад 2, юг 3, запад 2, север 5, запад 2, север 3, восток 2, север 3, восток 4, юг 2 — к гаражу (7,−10) с севера
+          { nodes: [[7, 0], [7, -4], [5, -4], [5, -1], [3, -1], [3, -6], [1, -6], [1, -9], [3, -9], [3, -12], [7, -12], [7, -10]], oncoming: 0, offsets: 'green', cars: () => [] },
         ] },
     ] },
   // «Район 1»: север 2 квартала, восток 2, север 2, восток 1 — гараж; квартальный объезд веткой через (1,−1)
@@ -335,12 +357,63 @@ const DISTRICTS = [
         { nodes: [[0, -1], [1, -1], [1, -2]], oncoming: 1 },
       ] },
     ] },
-  // «Район 2»: гараж у (3,−4), три старта — три уровня в одном городе
+  // ---------- Карьера (docs/career.md): районы по нарастающей, машина на район, все уровни линейные ----------
+  // «Окраина»: минивэн, посты и ремонт, светофоры все зелёные — игрок учится читать дорогу впереди
+  { seed: 4101, car: 'minivan', speed: 240, traffic: 0.2, panic: 0, mix: 0, chaser: null, blocks: { i: [-1, 5], j: [-10, 0] },
+    routes: [
+      { file: 'okr1', name: 'Окраина · 1', intro: 'Окраина. Минивэн: тяжёлый, несёт широко. Посты и ремонт — читай дорогу заранее.',
+        events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [2, -5.6], lanes: [2], len: 300 }, { type: 'post', at: [4, -8.2], lanes: [0, 1] }],
+        roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -7], [4, -7], [4, -9]], oncoming: 0, offsets: 'green' }] },
+      { file: 'okr2', name: 'Окраина · 2', traffic: 0.25, intro: 'Окраина · 2. Ежи, сужение, просветы у постов с краю.',
+        events: [{ type: 'works', at: [3, -1.4], lanes: [0, 1], len: 300 }, { type: 'post', at: [1.7, -3] }, { type: 'spikes', at: [1, -4.6] },
+          { type: 'narrow', at: [1, -5.0], to: [1, -5.4], width: 130 }, { type: 'works', at: [2.2, -6], lanes: [2], len: 200 }, { type: 'post', at: [3, -7.6], lanes: [1, 2] }],
+        roads: [{ nodes: [[3, 0], [3, -3], [1, -3], [1, -6], [3, -6], [3, -9]], oncoming: 0, offsets: 'green' }] },
+      { file: 'okr3', name: 'Окраина · 3', traffic: 0.3, mix: 0.1, intro: 'Окраина · 3. Длинный маршрут, два красных, всё вместе.',
+        events: [{ type: 'post', at: [1, -1.3] }, { type: 'works', at: [2.4, -2], lanes: [1, 2], len: 300 }, { type: 'spikes', at: [4, -3.5] },
+          { type: 'post', at: [2.5, -5], lanes: [0, 2] }, { type: 'narrow', at: [0, -6.35], to: [0, -6.65], width: 130 }, { type: 'post', at: [0, -7.6], lanes: [1, 2] }],
+        roads: [{ nodes: [[1, 0], [1, -2], [4, -2], [4, -5], [0, -5], [0, -8]], oncoming: 0, reds: [[3, -5], [0, -6]] }] },
+    ] },
+  // «Промзона»: масл-кар, широкие кварталы под его радиус, рельсы и автовозы; коп со второго маршрута
+  { seed: 5202, car: 'muscle', speed: 330, traffic: 0.25, panic: 0.2, mix: 0.3, chaser: { gap: 200, speed: 1 }, grid: { bx: 700, by: 600, road: 200, r: 260 }, blocks: { i: [-1, 6], j: [-10, 0] },
+    routes: [
+      { file: 'ind1', name: 'Промзона · 1', chaser: null, intro: 'Промзона. Масл-кар: быстрый на прямой, в заносе широкий. Рельсы режут район, автовозы ходят колоннами.',
+        events: [{ type: 'rails', at: [0, -2.5], offset: 'behind', length: 600 }, { type: 'works', at: [0, -3.3], lanes: [2], len: 200 },
+          { type: 'ramp', at: [2, -6.3], lane: 1, speed: 110 }, { type: 'post', at: [2, -6.6] }, { type: 'narrow', at: [3.4, -9], to: [3.7, -9], width: 140 }],
+        roads: [{ nodes: [[0, 0], [0, -5], [2, -5], [2, -9], [5, -9]], oncoming: 0, offsets: 'green' }] },
+      { file: 'ind2', name: 'Промзона · 2', traffic: 0.25, chaserAt: [3, -3.3], intro: 'Промзона · 2. Коп появится в середине. Поезд в спину его снимет — держи темп после переезда.',
+        events: [{ type: 'post', at: [3, -1.5] }, { type: 'works', at: [1.75, -3], lanes: [0, 1], len: 200 }, { type: 'spikes', at: [1, -4.3] }, // ежи ≥400 px после дуги: ремонт выгоняет в крайнюю, обратно после угла
+          { type: 'rails', at: [1, -4.9], offset: 'behind', length: 600 }, { type: 'ramp', at: [1, -5.6], lane: 1, speed: 110 }, { type: 'closure', at: [1, -5.9] },
+          { type: 'post', at: [2.2, -7], lanes: [1, 2] }, { type: 'narrow', at: [4, -7.9], to: [4, -8.3], width: 140 }],
+        roads: [{ nodes: [[3, 0], [3, -3], [1, -3], [1, -7], [4, -7], [4, -9]], oncoming: 0, crossings: false }] },
+      { file: 'ind3', name: 'Промзона · 3', traffic: 0.3, chaserAt: [[1, -0.5], [2, -6.5]], intro: 'Промзона · 3. Два копа за маршрут: обоих снимают поезда. Между ними — всё остальное.',
+        events: [{ type: 'post', at: [2.3, -2], lanes: [0, 2] }, { type: 'works', at: [3.2, -2], lanes: [2], len: 250 }, { type: 'spikes', at: [4, -3.5] },
+          { type: 'rails', at: [4, -4.5], offset: 'behind', length: 600 }, { type: 'narrow', at: [2, -7.35], to: [2, -7.65], width: 140 }, { type: 'post', at: [2, -8.35], lanes: [1, 2] },
+          { type: 'rails', at: [3.5, -9], offset: 'behind', length: 600 }],
+        roads: [{ nodes: [[1, 0], [1, -2], [4, -2], [4, -6], [2, -6], [2, -9], [5, -9]], oncoming: 0, reds: [[4, -5], [2, -8]] }] },
+    ] },
+  // «Ночной город»: спорт, кварталы мельче и углы теснее (R 200 при радиусе спорта ~150), встречка, плотный трафик, повторные погони
+  { seed: 6303, car: 'sport', speed: 350, traffic: 0.4, panic: 0.3, mix: 0.15, chaser: { gap: 200, speed: 1.02 }, grid: { bx: 600, by: 520, road: 180, r: 200 }, blocks: { i: [-1, 7], j: [-13, 0] },
+    routes: [
+      { file: 'night1', name: 'Ночной город · 1', chaser: null, traffic: 0.35, intro: 'Ночной город. Спорт: острый руль, быстро гасит вираж. Улицы тесные, слева встречка.',
+        events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [2, -6.4], lanes: [2], len: 200 }, { type: 'narrow', at: [5, -9.4], to: [5, -9.7], width: 120 }],
+        roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -8], [5, -8], [5, -12]], oncoming: 1, reds: [[0, -3], [2, -6]] }] },
+      { file: 'night2', name: 'Ночной город · 2', chaserAt: [[3, -0.5], [1, -3.6]], intro: 'Ночной город · 2. Коп с самого старта и второй после первого. Переезды — твоё оружие.',
+        events: [{ type: 'rails', at: [3, -1.6], offset: 'behind', length: 500 }, { type: 'spikes', at: [1, -4.5] }, { type: 'works', at: [1, -5.35], lanes: [2], len: 180 },
+          { type: 'rails', at: [3, -8.5], offset: 'behind', length: 500 }, { type: 'narrow', at: [5, -10.9], to: [5, -11.2], width: 120 }],
+        roads: [{ nodes: [[3, 0], [3, -3], [1, -3], [1, -7], [3, -7], [3, -10], [5, -10], [5, -12]], oncoming: 1, reds: [[1, -5], [3, -9]] }] },
+      { file: 'night3', name: 'Ночной город · 3', traffic: 0.45, chaser: { gap: 200, speed: 1.03 }, chaserAt: [[2, -0.5], [4, -5.5], [6, -9.5]],
+        intro: 'Ночной город · 3. Три копа. Снять их можно на переездах и на красном — поперечные бьют и копа.',
+        events: [{ type: 'post', at: [2, -1.5], lanes: [0, 2] }, { type: 'rails', at: [2, -2.5], offset: 'behind', length: 500 }, { type: 'works', at: [3.4, -3], lanes: [2], len: 200 },
+          { type: 'spikes', at: [4, -4.5] }, { type: 'rails', at: [4, -6.5], offset: 'behind', length: 500 }, { type: 'post', at: [5.4, -8], lanes: [1, 2] },
+          { type: 'narrow', at: [6, -10.4], to: [6, -10.7], width: 120 }, { type: 'rails', at: [6, -11.5], offset: 'behind', length: 500 }],
+        roads: [{ nodes: [[2, 0], [2, -3], [4, -3], [4, -8], [6, -8], [6, -13]], oncoming: 1, reds: [[2, -2], [4, -5], [4, -7], [6, -9], [6, -12]] }] },
+    ] },
+  // «Район 2» → «Центр»: гараж у (3,−4), три старта — три уровня в одном городе
   { seed: 777, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 3], j: [-5, 0] },
     routes: [
       // маршрут 1: старт (0,0), север 3, восток 3, север 1. Ветка А: направо у (0,−1), прямо через (1,−1), налево у (2,−1),
       // прямо через (2,−2), вливается в главную у (2,−3). Ветка Б от А: налево у (1,−1), направо у (1,−2), вливается в А у (2,−2)
-      { file: 'district2', name: 'Район 2 · маршрут 1', traffic: 0.3,
+      { file: 'district2', name: 'Центр · 1', traffic: 0.3, intro: 'Центр. Седан. Перекрёстки на красный, поперечные идут — проскакивай между ними.',
         // вводный: пост с просветом после первого перекрёстка, ремонт правой полосы на восточном отрезке
         events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [1.6, -3], lanes: [2], len: 400 }],
         roads: [
@@ -350,7 +423,7 @@ const DISTRICTS = [
         { nodes: [[1, -1], [1, -2], [2, -2]], parent: 0, oncoming: 1 },
       ] },
       // маршрут 2: старт (3,0), север 1, запад 2, север 2, восток 2, север 1. Ветка: направо у (1,−2), налево у (2,−2), вливается у (2,−3)
-      { file: 'district2b', name: 'Район 2 · маршрут 2', traffic: 0.35,
+      { file: 'district2b', name: 'Центр · 2', traffic: 0.35, intro: 'Центр · 2. Перекрытие впереди — объезд по боковой улице, стрелка покажет.',
         // ремонт правой полосы на западном отрезке, полное перекрытие северного отрезка за (1,−2) — объезд по ветке
         events: [{ type: 'works', at: [1.85, -1], lanes: [2], len: 220 }, { type: 'closure', at: [1, -2.55] }],
         roads: [
@@ -359,7 +432,7 @@ const DISTRICTS = [
         { nodes: [[1, -2], [2, -2], [2, -3]], oncoming: 1 },
       ] },
       // маршрут 3: старт (1,0), север 2, восток 2, север 2. Ветка: направо у (1,−1), налево у (2,−1), вливается у (2,−2)
-      { file: 'district2c', name: 'Район 2 · маршрут 3', traffic: 0.4,
+      { file: 'district2c', name: 'Центр · 3', traffic: 0.4, intro: 'Центр · 3. Коп на хвосте. Переезд его снимет, если держать темп.',
         // переезд на первом отрезке (поезд проходит сразу за игроком — коп под поездом), сужение и пост на последнем
         events: [{ type: 'rails', at: [1, -0.6], period: 14, length: 500, offset: 2.9 }, { type: 'narrow', at: [3, -2.25], to: [3, -2.65], width: 110 },
           { type: 'post', at: [3, -3.5] }],
