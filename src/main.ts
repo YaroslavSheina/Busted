@@ -10,7 +10,7 @@ if (query.get('mute')) setAudioEnabled(false); // ?mute=1 — без звука 
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';
 import { CARS, type CarKey, type CarSpec } from './cars';
-import { addFame, campaign, fame, recordLevel } from './campaign';
+import { CAMPAIGN, DISTRICTS, addFame, campaign, fame, progressOf, recordLevel } from './campaign';
 import { renderMap } from './map';
 import { icon } from './icons';
 
@@ -25,11 +25,21 @@ let carOverride: CarKey | null = null; // выбор в меню «авто» д
 const game = createGame({
   canvas: $('c') as HTMLCanvasElement,
   hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), ovHint: $('ovHint'), ovName: $('ovName'),
-  gscore: $('gscore'), barFill: $('barFill'), barCar: $('barCar'), cop: $('cop'), copFill: $('copFill'), gflash: $('gflash'),
+  gscore: $('gscore'), barFill: $('barFill'), barCar: $('barCar'), cop: $('cop'), copFill: $('copFill'), gflash: $('gflash'), ovBody: $('ovBody'),
   left: $('left'), right: $('right'),
 }, levelByName(FIRST));
 // Очки пройденного уровня — в славу (только уровни кампании)
-game.onScore((points, meta) => { if (campaign.has(levelKey)) recordLevel(levelKey, points, meta.clean, meta.target); return addFame(campaign.has(levelKey) ? points : 0); });
+game.onScore((points, meta) => {
+  const inCamp = campaign.has(levelKey), prev = progressOf(levelKey).best;
+  if (inCamp) recordLevel(levelKey, points, meta.clean, meta.target);
+  const total = addFame(inCamp ? points : 0);
+  // что открылось: следующий уровень в другом районе — его название и машина
+  const idx = CAMPAIGN.indexOf(levelKey), next = idx >= 0 ? CAMPAIGN[idx + 1] : undefined;
+  const dHere = DISTRICTS.find(d => d.levels.includes(levelKey)), dNext = next ? DISTRICTS.find(d => d.levels.includes(next)) : undefined;
+  const unlock = dNext && dNext !== dHere && !progressOf(next!).done ? `${dNext.name} · ${CARS[dNext.car as CarKey].name}` : undefined;
+  return { fame: total, best: prev, record: inCamp && points > prev && prev > 0, unlock };
+});
+game.onBest(() => progressOf(levelKey).best);
 // Пройденный уровень кампании (в том числе открытый из меню) ведёт к следующему по списку; последний — на карту
 game.onEnd(how => {
   const next = campaign.advance(levelKey);

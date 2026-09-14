@@ -13,6 +13,7 @@ import { makeWidthFn, widthAt, type Narrow, type WidthFn } from './narrow';
 import { NEAR, brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, vehiclePose, type Obb, type TrafficCar, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { fmtScore, hudHtml, levelTheme, render, type Blast, type Cam, type Fx, type Mark, type RoadScene } from './render';
+import { icon } from './icons';
 import type { LevelData } from './levels';
 
 export interface GameUI {
@@ -25,6 +26,7 @@ export interface GameUI {
   ovName?: HTMLElement;   // полоса с именем уровня в интро (в редакторе нет)
   // игровой HUD (в редакторе и харнессе нет): очки, полоса маршрута с меткой машины, шкала копа, событие
   gscore?: HTMLElement; barFill?: HTMLElement; barCar?: HTMLElement; cop?: HTMLElement; copFill?: HTMLElement; gflash?: HTMLElement;
+  ovBody?: HTMLElement;   // экран результата (BUSTED/DELIVERED): причина, очки, звёзды, кнопка — docs/ui.md
   left: HTMLElement;
   right: HTMLElement;
 }
@@ -33,13 +35,17 @@ export type EndHook = (how: 'done' | 'trap') => boolean;
 // Уровень пройден: очки в славу, возвращает её сумму (для экрана DELIVERED). meta — цели уровня (docs/career.md): без аварий за этот
 // заход и цель по очкам (полтора «чистых» проезда: длина × perPx × множитель × 1.5, округлено до сотен)
 export interface LevelResult { clean: boolean; target: number; time: number }
-export type ScoreHook = (points: number, meta: LevelResult) => number;
+// Ответ оболочки на пройденный уровень: слава всего, лучший до этого, побит ли рекорд, что открылось («Промзона · Масл-кар»)
+export interface ScoreReply { fame: number; best: number; record: boolean; unlock?: string }
+export type ScoreHook = (points: number, meta: LevelResult) => ScoreReply | number;
+export type BestHook = () => number; // лучший результат уровня — для экрана BUSTED
 
 export interface Game {
   load(level: LevelData): void;
   reset(): void;
   onEnd(hook: EndHook | null): void;
   onScore(hook: ScoreHook | null): void;
+  onBest(hook: BestHook | null): void;
   pause(on: boolean): void; // меню открыто — мир стоит, кадр рисуется
   stop(): void;
 }
@@ -100,6 +106,19 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let wrecked = false;
   let reveal: { lines: string[]; at: number; t: number } | null = null;
   let busts = 0; // BUSTED с момента загрузки уровня — цель «без аварий»
+  let result: { t: number; stars: boolean[]; played: number } | null = null; // таймлайн экрана DELIVERED: звёзды со звуком, тики чисел
+  // Подсказка по причине BUSTED — одна фраза, что делать иначе
+  const REASONS: Record<string, { icon: string; hint: string }> = {
+    'столкновение': { icon: 'crash', hint: 'Медленных объезжай заранее: смотри на два квартала вперёд' },
+    'врезался в пост': { icon: 'post', hint: 'Перед постом ищи просвет и перестраивайся заранее' },
+    'заграждение': { icon: 'cone', hint: 'Ремонт закрывает полосу — уходи из неё до конусов' },
+    'поезд': { icon: 'train', hint: 'Огни на переезде мигают — не успеешь. Держи темп, если уже близко' },
+    'догнали': { icon: 'siren', hint: 'В поворотах коп отстаёт — не виляй на прямой' },
+    'вылет с дороги': { icon: 'offroad', hint: 'Жми заранее и отпускай — машину несёт' },
+    'съехал с маршрута': { icon: 'offroad', hint: 'Держись своей улицы: на чужую съезжать нельзя' },
+    'ежи': { icon: 'spikes', hint: 'Ежи в крайней полосе — держись середины' },
+    'перекрёсток': { icon: 'light', hint: 'На красный поперечные идут друг за другом — проскакивай между ними' },
+  };
   const targetScore = () => Math.round(roads[0].path.L * SCORE.perPx * SCORE.finishMul * 1.5 / 100) * 100;
   const boom = (x: number, y: number, size: number, dur = 0.9) => { blasts.push({ kind: 'boom', x, y, age: 0, size, dur }); };
   const puff = (x: number, y: number, size: number, dur = 0.8, delay = 0) => { blasts.push({ kind: 'smoke', x, y, age: -delay, size, dur }); };
@@ -117,6 +136,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   const copAts = () => !level.chaser ? [] : Array.isArray(level.chaser.at) ? level.chaser.at : [level.chaser.at ?? 0];
   let endHook: EndHook | null = null;
   let scoreHook: ScoreHook | null = null;
+  let bestHook: BestHook | null = null;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
     const r: Road = { path, def, parent: -1, width: P.width.v, narrows, blockDefs: blocks, rails: [], crossings: [], oncoming: 0, blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
@@ -171,7 +191,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     flat = false;
     slow = 0; zoom = 1; flash = null;
     score = 0; fx = []; buzzedPosts = new Set(); jump = null;
-    blasts = []; shake = 0; wrecked = false; reveal = null;
+    blasts = []; shake = 0; wrecked = false; reveal = null; result = null;
+    if (ui.ovBody) ui.ovBody.innerHTML = '';
     cardIdx = 0; card = null; horned.clear(); introN = 0;
     for (const r of roads) { for (const rl of r.rails) rl.t0 = undefined; for (const c of r.crossings) c.t0 = undefined; } // сценарные поезда и светофоры ждут игрока заново
     ui.overlay.className = '';
@@ -197,24 +218,48 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     busts++; state = 'busted'; ui.overlay.className = 'show busted';
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = why + '\n' + holdText() + `\nочки ${fmtScore(score)}`;
     ui.ovHint.textContent = cpS > 0 ? 'нажми — продолжить с контрольной точки' : 'нажми, чтобы повторить';
+    // экран результата: причина с иконкой, очки попытки и лучший, подсказка по причине, кнопка
+    if (ui.ovBody) {
+      const r = REASONS[why] ?? { icon: 'crash', hint: 'Смотри на два квартала вперёд' };
+      const best = bestHook ? bestHook() : 0;
+      ui.ovBody.innerHTML = `<div class="res"><div class="reason">${icon(r.icon, 20)}<span>${why}</span></div>
+        <div class="rows"><div><small>очки</small><b>${fmtScore(score)}</b></div>${best ? `<div><small>лучший</small><b>${fmtScore(best)}</b></div>` : ''}</div>
+        <div class="hint">${r.hint}</div><button class="rbtn">${icon('retry', 16)} ${cpS > 0 ? 'с контрольной' : 'ещё раз'}</button></div>`;
+    }
   }
   function finish(): void {
     sfx('delivered');
     state = 'done'; cpS = 0; ui.overlay.className = 'show done'; // уровень пройден: повтор — с начала, а не с контрольной точки
     ui.ovTitle.textContent = 'DELIVERED';
     const pts = score * SCORE.finishMul, target = targetScore(), clean = busts === 0;
-    const total = scoreHook ? scoreHook(pts, { clean, target, time: timeAlive }) : null;
-    // результат раскрывается по строчкам: время, очки, цели, слава — последней
+    const raw = scoreHook ? scoreHook(pts, { clean, target, time: timeAlive }) : null;
+    const reply: ScoreReply | null = raw === null ? null : typeof raw === 'number' ? { fame: raw, best: 0, record: false } : raw;
+    // результат раскрывается по строчкам: время, очки, цели, слава — последней (текстовая версия, её видит харнесс)
     reveal = { lines: [`${timeAlive.toFixed(1)} с`, `очки ${fmtScore(score)} × ${SCORE.finishMul} = ${fmtScore(pts)}`,
-      `${clean ? '★' : '☆'} без аварий`, `${pts >= target ? '★' : '☆'} цель ${fmtScore(target)}`, ...(total !== null ? [`слава ${fmtScore(total)}`] : [])], at: 1, t: 0.45 };
+      `${clean ? '★' : '☆'} без аварий`, `${pts >= target ? '★' : '☆'} цель ${fmtScore(target)}`, ...(reply ? [`слава ${fmtScore(reply.fame)}`] : [])], at: 1, t: 0.45 };
     ui.ovSub.textContent = reveal.lines[0]; // время сразу (харнесс сравнивает первую строку), очки и слава — по строчке
     ui.ovHint.textContent = endHook ? 'нажми — дальше' : 'нажми, чтобы повторить';
+    // экран результата: звёзды по одной, очки тикают, слава дорастает, рекорд штампом, что открылось
+    if (ui.ovBody) {
+      const earned = [true, clean, pts >= target], labels = ['доставил', 'без аварий', `цель ${fmtScore(target)}`];
+      const fameFrom = reply ? Math.max(0, reply.fame - pts) : 0;
+      ui.ovBody.innerHTML = `<div class="res">
+        <div class="stars">${earned.map((e, i) => `<span class="st${e ? ' got' : ''}" style="animation-delay:${0.25 + i * 0.3}s">${icon(e ? 'star' : 'starEmpty', 40)}</span>`).join('')}</div>
+        <div class="goals">${labels.map((l, i) => `<span class="${earned[i] ? 'got' : ''}">${l}</span>`).join('')}</div>
+        <div class="rows"><div><small>время</small><b>${timeAlive.toFixed(1)} с</b></div><div><small>очки × ${SCORE.finishMul}</small><b class="tick" data-to="${Math.round(pts)}">0</b></div></div>
+        ${reply ? `<div class="famebar"><small>${icon('crown', 12)} слава</small><div class="bar"><i style="width:${reply.fame ? Math.round(fameFrom / reply.fame * 100) : 0}%" data-to="100"></i></div><b class="tick" data-to="${reply.fame}" data-from="${fameFrom}">${fmtScore(fameFrom)}</b></div>` : ''}
+        ${reply?.record ? `<div class="record">${icon('trophy', 16)} новый рекорд</div>` : ''}
+        ${reply?.unlock ? `<div class="unlock">открыто: ${reply.unlock}</div>` : ''}
+        <button class="rbtn">${endHook ? `дальше ${icon('next', 14)}` : `${icon('retry', 16)} ещё раз`}</button></div>`;
+      result = { t: 0, stars: earned, played: 0 };
+    }
   }
   // Ловушка по сценарию: BUSTED с текстом уровня, но это «пройдено» — дальше следующий уровень
   function trap(text: string): void {
     sfx('trap');
     state = 'trap'; cpS = 0; ui.overlay.className = 'show busted trap';
-    const total = scoreHook ? scoreHook(score, { clean: busts === 0, target: 0, time: timeAlive }) : null;
+    const raw = scoreHook ? scoreHook(score, { clean: busts === 0, target: 0, time: timeAlive }) : null;
+    const total = raw === null ? null : typeof raw === 'number' ? raw : raw.fame;
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = text + `\nочки ${fmtScore(score)}` + (total !== null ? ` · слава ${fmtScore(total)}` : '');
     ui.ovHint.textContent = 'нажми — дальше';
   }
@@ -499,7 +544,16 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     // вспышки и тряска идут всегда (и после BUSTED), строки DELIVERED раскрываются по таймеру
     for (const b of blasts) b.age += dt; blasts = blasts.filter(b => b.age < b.dur);
     if (shake > 0) shake = Math.max(0, shake - dt * 30);
-    if (reveal) { reveal.t -= dt; if (reveal.t <= 0 && reveal.at < reveal.lines.length) { ui.ovSub.textContent = reveal.lines.slice(0, ++reveal.at).join('\n'); reveal.t = 0.4; sfx(reveal.at === reveal.lines.length ? 'big' : 'score'); } }
+    if (reveal && !ui.ovBody) { reveal.t -= dt; if (reveal.t <= 0 && reveal.at < reveal.lines.length) { ui.ovSub.textContent = reveal.lines.slice(0, ++reveal.at).join('\n'); reveal.t = 0.4; sfx(reveal.at === reveal.lines.length ? 'big' : 'score'); } }
+    if (result && ui.ovBody) { // экран DELIVERED: звёзды вылетают через 0.25/0.55/0.85 с со звуком, числа тикают за первую секунду
+      result.t += dt;
+      const n = Math.min(3, Math.floor(Math.max(0, result.t - 0.25) / 0.3) + (result.t >= 0.25 ? 1 : 0));
+      while (result.played < n) { const i = result.played++; sfx(result.stars[i] ? (i === 2 ? 'big' : 'score') : 'beep'); }
+      const k = Math.min(1, result.t / 1.0), ease = 1 - (1 - k) * (1 - k);
+      const body = ui.ovBody as Partial<HTMLElement>; // харнесс: у подделки DOM нет querySelectorAll
+      body.querySelectorAll?.('.tick').forEach(n => { const el = n as HTMLElement; const to = +el.dataset.to!, from = +(el.dataset.from ?? 0); el.textContent = fmtScore(from + (to - from) * ease); });
+      const bar = body.querySelector?.('.famebar i') as HTMLElement | null | undefined; if (bar?.style && k >= 0.3) bar.style.width = '100%';
+    }
     // отсчёт и карточка: мир стоит
     if (intro !== null && !paused) { intro -= dt; const n = Math.ceil(intro); if (n !== introN) { introN = n; sfx(n > 0 ? 'beep' : 'go'); } ui.ovTitle.textContent = n > 0 ? String(n) : 'GO'; if (intro <= 0) { intro = null; state = 'play'; ui.overlay.className = ''; } }
     else if (card !== null && !paused) { card -= dt; if (card <= 0) { card = null; ui.overlay.className = ''; } }
@@ -538,6 +592,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     load, reset,
     onEnd(hook) { endHook = hook; },
     onScore(hook) { scoreHook = hook; },
+    onBest(hook) { bestHook = hook; },
     pause(on) { paused = on; },
     stop() {
       cancelAnimationFrame(raf);
