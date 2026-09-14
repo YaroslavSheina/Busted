@@ -19,6 +19,11 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 #bar i{display:block;height:100%;width:0;background:var(--yellow)}
 #bar b{position:absolute;top:-6px;left:0;width:12px;height:12px;background:var(--yellow);border:2px solid var(--ink);transform:translateX(-50%) rotate(45deg)}
 #bar em{position:absolute;right:-10px;top:-9px;font-style:normal;font-size:13px}
+#barMarks i{position:absolute;top:-14px;margin-left:-5px;line-height:0;background:var(--ink);padding:1px;transition:opacity .3s} #barMarks i.past{opacity:.25}
+/* руки-подсказки над зонами управления: пульсируют, гаснут после первого нажатия */
+.hand{position:absolute;bottom:calc(72px + env(safe-area-inset-bottom));left:50%;margin-left:-20px;line-height:0;animation:tap .9s ease-in-out infinite;pointer-events:none;filter:drop-shadow(3px 3px 0 var(--ink))}
+.hand.hide{display:none}
+@keyframes tap{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(10px) scale(.92)}}
 #gscore{margin-top:10px;font-family:var(--display);font-size:18px;font-weight:400;color:var(--yellow);letter-spacing:0;line-height:1;text-shadow:2px 2px 0 var(--ink)}
 #cop{display:none;margin-top:8px;width:110px;height:8px;background:rgba(0,0,0,.45);border:2px solid var(--ink)}
 #cop.on{display:block} #cop i{display:block;height:100%;width:0;animation:copbar .5s steps(2) infinite}
@@ -71,7 +76,9 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 .mgarage{cursor:pointer} .mgarage>small em{font-style:normal;float:right;color:var(--yellow);opacity:1}
 /* титры: ключевой арт затемнён, текст истории по строкам */
 #ending{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--night) center/cover no-repeat;pointer-events:auto}
-#ending::before{content:'';position:absolute;inset:0;background:rgba(12,24,44,.78)}
+#ending::before{content:'';position:absolute;inset:0;background:rgba(12,24,44,.78);animation:dim 1.2s ease-in 1.6s both}
+@keyframes dim{from{opacity:0}to{opacity:1}}
+#ending .ebox{animation:rise .5s ease-out 2.4s both}
 #ending.hide{display:none}
 #ending .ebox{position:relative;max-width:360px;text-align:center}
 #ending h1{margin:0 0 18px;font-family:var(--display);font-size:28px;letter-spacing:0;font-weight:400;color:var(--yellow);text-shadow:4px 4px 0 var(--ink);transform:var(--skew)}

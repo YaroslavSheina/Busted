@@ -9,7 +9,7 @@
 <canvas id="c"></canvas>
 <div id="ui">
   <div id="top">
-    <div id="ghud"><div id="bar"><i id="barFill"></i><b id="barCar"></b><em>🏁</em></div><div id="gscore">0</div><div id="cop"><i id="copFill"></i></div><div id="gflash"></div><div id="hud"></div></div>
+    <div id="ghud"><div id="bar"><i id="barFill"></i><span id="barMarks"></span><b id="barCar"></b><em>🏁</em></div><div id="gscore">0</div><div id="cop"><i id="copFill"></i></div><div id="gflash"></div><div id="hud"></div></div>
     <div><button id="carBtn" class="pill dbg">🚗 авто</button><button id="levelBtn" class="pill dbg">🏁 уровень</button><button id="mapBtn" class="pill" aria-label="пауза"></button></div>
   </div>
   <div id="map" class="hide"></div>
@@ -21,7 +21,7 @@
   <div id="ending" class="hide"><div class="ebox"><h1>ГАРАЖ</h1><p id="endText"></p><small>нажми — на карту</small></div></div>
   <div id="panel" class="panel"></div>
   <div id="carPanel" class="panel"></div>
-  <div class="zone" id="left">LEFT</div><div class="zone" id="right">RIGHT</div>
+  <div class="zone" id="left">LEFT<span class="hand hide" id="handL"></span></div><div class="zone" id="right">RIGHT<span class="hand hide" id="handR"></span></div>
   <div id="overlay"><div id="ovName"></div><h1 id="ovTitle"></h1><div id="ovBody"></div><p id="ovSub"></p><small id="ovHint">нажми, чтобы повторить</small></div>
 </div>
 <!-- загрузочный экран: ключевой арт (docs/refs/hero-image.jpg), название, полоса загрузки; тап — в игру -->

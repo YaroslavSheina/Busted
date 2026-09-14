@@ -26,7 +26,7 @@ let carOverride: CarKey | null = null; // выбор в меню «авто» д
 const game = createGame({
   canvas: $('c') as HTMLCanvasElement,
   hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), ovHint: $('ovHint'), ovName: $('ovName'),
-  gscore: $('gscore'), barFill: $('barFill'), barCar: $('barCar'), cop: $('cop'), copFill: $('copFill'), gflash: $('gflash'), ovBody: $('ovBody'),
+  gscore: $('gscore'), barFill: $('barFill'), barCar: $('barCar'), cop: $('cop'), copFill: $('copFill'), gflash: $('gflash'), ovBody: $('ovBody'), barMarks: $('barMarks'),
   left: $('left'), right: $('right'),
 }, levelByName(FIRST));
 // Очки пройденного уровня — в славу (только уровни кампании)
@@ -60,6 +60,7 @@ function selectLevel(key: string): void {
   levelKey = key;
   game.load(currentLevel());
   showPanel(key);
+  hands();
   // первый маршрут ещё не начатого района — карточка района поверх интро (мир стоит, отсчёт ждёт)
   const d = districtToIntroduce(key);
   if (d && !query.get('level')) showDistrict($('dcard'), d, shell, () => { /* интро уровня уже на экране */ });
@@ -101,6 +102,14 @@ function showEnding(): void {
   ending.classList.remove('hide'); syncPause();
 }
 ending.addEventListener('pointerdown', e => { e.preventDefault(); ending.classList.add('hide'); openMap(); });
+// Онбординг управления (docs/ui.md): руки над зонами LEFT/RIGHT на первом заезде пролога; каждая гаснет после первого нажатия своей зоны
+for (const [id, zone] of [['handL', 'left'], ['handR', 'right']] as const) {
+  $(id).innerHTML = icon('hand', 40);
+  $(zone).addEventListener('pointerdown', () => $(id).classList.add('hide'));
+}
+addEventListener('keydown', e => { if (e.key === 'ArrowLeft' || e.key === 'a') $('handL').classList.add('hide'); if (e.key === 'ArrowRight' || e.key === 'd') $('handR').classList.add('hide'); });
+function hands(): void { const on = levelKey === 'prologue' && !progressOf('prologue').done; $('handL').classList.toggle('hide', !on); $('handR').classList.toggle('hide', !on); }
+hands();
 // Экраны оболочки: гараж, пауза, настройки, карточка района (shell.ts). Любой открытый экран ставит мир на паузу
 const shellEls = () => [$('dcard'), $('garage'), $('pause'), $('settings')];
 const shell: ShellUi = {

@@ -28,6 +28,7 @@ export interface GameUI {
   // игровой HUD (в редакторе и харнессе нет): очки, полоса маршрута с меткой машины, шкала копа, событие
   gscore?: HTMLElement; barFill?: HTMLElement; barCar?: HTMLElement; cop?: HTMLElement; copFill?: HTMLElement; gflash?: HTMLElement;
   ovBody?: HTMLElement;   // экран результата (BUSTED/DELIVERED): причина, очки, звёзды, кнопка — docs/ui.md
+  barMarks?: HTMLElement; // метки событий маршрута на полосе HUD (пост, ремонт, ежи, переезд, автовоз, сужение) — пройденные гаснут
   left: HTMLElement;
   right: HTMLElement;
 }
@@ -176,6 +177,16 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       r.rails = layoutRails(path, b.rails); r.crossings = layoutCrossings(path, b.crossings, l.width);
       roads.push(r);
     });
+    // метки событий главной дороги на полосе маршрута: что впереди — видно заранее, как на навигаторе
+    if (ui.barMarks) {
+      const L = roads[0].path.L, marks: [number, string][] = [];
+      for (const b of l.blocks ?? []) marks.push([b.s, b.spikes?.length ? 'spikes' : b.works?.length ? 'cone' : 'post']);
+      for (const r of l.rails ?? []) marks.push([r.s, 'train']);
+      for (const c of l.cars ?? []) if (c.type === 'ramp') marks.push([c.s, 'ramp']);
+      for (const n of l.narrows ?? []) marks.push([n.from, 'narrow']);
+      ui.barMarks.innerHTML = marks.filter(([s]) => s > 0 && s < L).sort((a, b) => a[0] - b[0])
+        .map(([s, k]) => `<i data-p="${(s / L).toFixed(3)}" style="left:${(s / L * 100).toFixed(1)}%">${icon(k, 10)}</i>`).join('');
+    }
     reset();
   }
 
@@ -584,6 +595,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       if (ui.cop?.classList) ui.cop.classList.toggle('on', !!chaser && state === 'play');
       if (ui.copFill?.style) ui.copFill.style.width = `${Math.round(Math.max(0, Math.min(1, chaser ? 1 - tail! / level.chaser!.gap : 0)) * 100)}%`;
       if (ui.gflash) ui.gflash.textContent = flash ? flash.text : '';
+      if (ui.barMarks?.children) for (const m of Array.from(ui.barMarks.children) as HTMLElement[]) m.classList?.toggle('past', +(m.dataset?.p ?? 1) < prog);
     }
     raf = requestAnimationFrame(frame);
   }
