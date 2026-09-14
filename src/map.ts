@@ -6,14 +6,13 @@ import { CAMPAIGN, DISTRICTS, GARAGE, campaign, fame, progressOf, starsOf, type 
 import { LEVELS } from './levels';
 import { buildPath, pathAt, type Path, type Pt } from './road';
 import { drawGround, drawProps, drawRoad, fmtScore, setCity, setClip, withTheme } from './render';
-import { audioEnabled, setAudioEnabled } from './audio';
 import { icon, stars as starIcons } from './icons';
 import type { Prop } from './levels';
 
 // спрайт машины района — файл из public/art/pixel (те же, что рисует игра)
 const CAR_SPRITE: Record<string, string> = { prologue: 'super_car', finale: 'super_car', minivan: 'happy_bus', sedan: 'white_sedan', muscle: 'muscle_car', sport: 'sport_car', supercar: 'super_car', bus: 'schoolbus' };
 
-export interface MapUi { root: HTMLElement; onPlay: (key: string) => void; onClose: () => void }
+export interface MapUi { root: HTMLElement; onPlay: (key: string) => void; onClose: () => void; onGarage?: () => void; onSettings?: () => void }
 
 const ROAD_W = 180, MAP_SCALE = 0.55;            // ширина дороги как в игре; масштаб холста: дорога ~100 css px на телефоне
 const HEAD_S = 260, LEVEL_STEP = 170, TAIL_S = 200;  // мировых px на табличку района, на уровень и хвост за гаражом
@@ -30,20 +29,20 @@ export function renderMap(ui: MapUi): void {
   // ---- шапка: название, слава, звук ----
   const head = document.createElement('div'); head.className = 'mhead';
   head.innerHTML = `<h1>BUSTED</h1><div class="fame"><small>слава</small><b>${icon('crown', 16)}${fmtScore(fame())}</b></div>`;
-  const snd = document.createElement('button'); snd.className = 'msnd';
-  const sync = () => { snd.innerHTML = audioEnabled() ? `${icon('sound', 16)} звук` : `${icon('mute', 16)} звук`; };
-  snd.onclick = () => { setAudioEnabled(!audioEnabled()); sync(); };
-  sync(); head.appendChild(snd);
+  const gear = document.createElement('button'); gear.className = 'msnd'; gear.innerHTML = icon('gear', 16); gear.setAttribute('aria-label', 'настройки');
+  gear.onclick = () => ui.onSettings?.();
+  head.appendChild(gear);
   root.appendChild(head);
 
   // ---- гараж: машины по ярусам ----
   const garage = document.createElement('div'); garage.className = 'mgarage';
   const total = CAMPAIGN.reduce((n, k) => n + starsOf(k), 0);
-  garage.innerHTML = `<small>гараж · ${icon('star', 12)} ${total} / ${CAMPAIGN.length * 3}</small><div class="cars">${GARAGE.map(g => {
+  garage.innerHTML = `<small>${icon('flag', 12)} гараж · ${icon('star', 12)} ${total} / ${CAMPAIGN.length * 3} <em>открыть ›</em></small><div class="cars">${GARAGE.map(g => {
     const d = DISTRICTS.find(x => x.name === g.district), spec = CARS[g.car as CarKey];
     const open = !!d && d.levels.some(k => CAMPAIGN.indexOf(k) <= curIdx);
     return `<div class="car${open ? '' : ' locked'}"><img src="${base}art/pixel/${CAR_SPRITE[g.car] ?? 'white_sedan'}.png" alt=""><b>${spec.name}</b><small>${open ? `${spec.speed} px/с` : `${icon('lock', 12)} ${g.district}`}</small></div>`;
   }).join('')}</div>`;
+  garage.onclick = () => ui.onGarage?.();
   root.appendChild(garage);
 
   // ---- раскладка: дорога снизу вверх, район за районом ----

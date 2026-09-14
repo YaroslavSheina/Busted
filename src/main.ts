@@ -10,9 +10,10 @@ if (query.get('mute')) setAudioEnabled(false); // ?mute=1 — без звука 
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';
 import { CARS, type CarKey, type CarSpec } from './cars';
-import { CAMPAIGN, DISTRICTS, addFame, campaign, fame, progressOf, recordLevel } from './campaign';
+import { CAMPAIGN, DISTRICTS, addFame, campaign, fame, progressOf, recordLevel, resetAll } from './campaign';
 import { renderMap } from './map';
 import { icon } from './icons';
+import { chosenCar, districtToIntroduce, renderGarage, renderSettings, showDistrict, showPause, type ShellUi } from './shell';
 
 const $ = (id: string) => document.getElementById(id)!;
 const panel = $('panel'), carPanel = $('carPanel');
@@ -50,12 +51,18 @@ game.onEnd(how => {
 
 function currentLevel() {
   const l = levelByName(levelKey);
-  return carOverride ? { ...l, car: carOverride } : l;
+  // отладочный выбор «авто» сильнее всего; машина из гаража — только для повторов пройденных уровней кампании
+  const replay = campaign.has(levelKey) && progressOf(levelKey).done ? chosenCar() : null;
+  const car = carOverride ?? replay;
+  return car ? { ...l, car } : l;
 }
 function selectLevel(key: string): void {
   levelKey = key;
   game.load(currentLevel());
   showPanel(key);
+  // первый маршрут ещё не начатого района — карточка района поверх интро (мир стоит, отсчёт ждёт)
+  const d = districtToIntroduce(key);
+  if (d && !query.get('level')) showDistrict($('dcard'), d, shell, () => { /* интро уровня уже на экране */ });
 }
 function selectCar(key: CarKey | null): void {
   carOverride = key;
@@ -94,19 +101,35 @@ function showEnding(): void {
   ending.classList.remove('hide'); syncPause();
 }
 ending.addEventListener('pointerdown', e => { e.preventDefault(); ending.classList.add('hide'); openMap(); });
+// Экраны оболочки: гараж, пауза, настройки, карточка района (shell.ts). Любой открытый экран ставит мир на паузу
+const shellEls = () => [$('dcard'), $('garage'), $('pause'), $('settings')];
+const shell: ShellUi = {
+  onChange: () => syncPause(),
+  onMap: () => openMap(),
+  onResume: () => syncPause(),
+  onRestart: () => { game.restartLevel(); syncPause(); },
+  onReset: () => { resetAll(); selectLevel(campaign.current()); },
+  onSettings: () => renderSettings($('settings'), shell),
+};
 // Карта карьеры: районы и уровни, прогресс; открывается после загрузочного экрана (без ?level=) и по кнопке ☰; мир стоит
 const mapEl = $('map');
-function openMap(): void { renderMap({ root: mapEl, onPlay: k => { closeMap(); if (k !== levelKey) selectLevel(k); else game.reset(); }, onClose: closeMap }); mapEl.classList.remove('hide'); syncPause(); }
+function openMap(): void {
+  for (const e of shellEls()) e.classList.add('hide');
+  renderMap({ root: mapEl, onPlay: k => { closeMap(); if (k !== levelKey) selectLevel(k); else { game.restartLevel(); const d = districtToIntroduce(k); if (d) showDistrict($('dcard'), d, shell, () => {}); } },
+    onClose: closeMap, onGarage: () => { mapEl.classList.add('hide'); renderGarage($('garage'), shell); }, onSettings: () => { mapEl.classList.add('hide'); renderSettings($('settings'), shell); } });
+  mapEl.classList.remove('hide'); syncPause();
+}
 function closeMap(): void { mapEl.classList.add('hide'); syncPause(); }
-$('mapBtn').innerHTML = icon('map', 18);
-$('mapBtn').onclick = () => { if (mapEl.classList.contains('hide')) openMap(); else closeMap(); };
+// Кнопка в заезде — пауза (продолжить, заново, карта, звук, настройки)
+$('mapBtn').innerHTML = icon('pause', 18);
+$('mapBtn').onclick = () => { if ($('pause').classList.contains('hide')) showPause($('pause'), shell); };
 // Загрузочный экран с ключевым артом: мир стоит (отсчёт не идёт), тап убирает экран
 const splash = $('splash');
 splash.style.backgroundImage = `url(${import.meta.env.BASE_URL}art/hero.jpg)`;
 splash.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); splash.classList.add('hide'); if (!query.get('level')) openMap(); else syncPause(); }); // первый жест — можно включать звук
 // Пока открыто меню, карта или загрузочный экран, мир стоит; тап по игровому полю закрывает меню и продолжает попытку
 const menus = [panel, carPanel];
-const syncPause = () => game.pause(!splash.classList.contains('hide') || !mapEl.classList.contains('hide') || !ending.classList.contains('hide') || menus.some(m => m.classList.contains('open')));
+const syncPause = () => game.pause(!splash.classList.contains('hide') || !mapEl.classList.contains('hide') || !ending.classList.contains('hide') || shellEls().some(e => !e.classList.contains('hide')) || menus.some(m => m.classList.contains('open')));
 syncPause();
 initToggle($('levelBtn'), panel, [carPanel], syncPause);
 initToggle($('carBtn'), carPanel, [panel], syncPause);

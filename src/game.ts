@@ -14,6 +14,7 @@ import { NEAR, brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawn
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { fmtScore, hudHtml, levelTheme, render, type Blast, type Cam, type Fx, type Mark, type RoadScene } from './render';
 import { icon } from './icons';
+import { buzz } from './haptics';
 import type { LevelData } from './levels';
 
 export interface GameUI {
@@ -43,6 +44,7 @@ export type BestHook = () => number; // лучший результат уров
 export interface Game {
   load(level: LevelData): void;
   reset(): void;
+  restartLevel(): void; // с начала уровня: без контрольной точки, счётчик аварий заново
   onEnd(hook: EndHook | null): void;
   onScore(hook: ScoreHook | null): void;
   onBest(hook: BestHook | null): void;
@@ -211,7 +213,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   function busted(why: string): void {
     const soft = why === 'вылет с дороги' || why === 'съехал с маршрута' || why === 'ежи';
-    sfx(why === 'догнали' ? 'caught' : why === 'поезд' ? 'train' : soft ? 'off' : 'crash');
+    sfx(why === 'догнали' ? 'caught' : why === 'поезд' ? 'train' : soft ? 'off' : 'crash'); buzz(soft ? 30 : 70);
     // удар — взрыв с дымом и тряска, машина разбита; вылет — только пыль
     if (soft) { for (let i = 0; i < 4; i++) puff(car.x + (Math.random() - 0.5) * 40, car.y + (Math.random() - 0.5) * 40, 70 + Math.random() * 30, 0.9, i * 0.08); shake = 5; }
     else { wrecked = true; shake = 14; boom(car.x, car.y, 170, 1.0); for (let i = 0; i < 3; i++) puff(car.x + (Math.random() - 0.5) * 50, car.y + (Math.random() - 0.5) * 50, 80 + Math.random() * 40, 1.2, 0.25 + i * 0.15); }
@@ -590,6 +592,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   return {
     load, reset,
+    restartLevel() { cpS = 0; busts = 0; reset(); },
     onEnd(hook) { endHook = hook; },
     onScore(hook) { scoreHook = hook; },
     onBest(hook) { bestHook = hook; },
