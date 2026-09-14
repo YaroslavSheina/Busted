@@ -5,7 +5,19 @@ canvas{display:block;width:100vw;height:100vh}
 .zone.on{color:#f4b942;background:linear-gradient(to top,rgba(244,185,66,.14),transparent 70%)}
 #left{left:0;border-right:1px solid rgba(255,255,255,.05)} #right{right:0}
 #top{position:absolute;top:calc(12px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:center}
-#hud{font-size:12px;letter-spacing:.06em;opacity:.65;font-variant-numeric:tabular-nums;line-height:1.5}
+#hud{font-size:12px;letter-spacing:.06em;opacity:.65;font-variant-numeric:tabular-nums;line-height:1.5;display:none}
+body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{display:inline-block}
+/* игровой HUD: полоса маршрута с меткой машины и гаражом, очки крупно, шкала копа, событие */
+#ghud{flex:1;max-width:60%;pointer-events:none}
+#bar{position:relative;height:6px;background:rgba(236,233,224,.14);border:2px solid #1a1408;margin:6px 10px 0 0}
+#bar i{display:block;height:100%;width:0;background:#f4b942}
+#bar b{position:absolute;top:-6px;left:0;width:12px;height:12px;background:#f4b942;border:2px solid #1a1408;transform:translateX(-50%) rotate(45deg)}
+#bar em{position:absolute;right:-10px;top:-9px;font-style:normal;font-size:13px}
+#gscore{margin-top:9px;font-size:26px;font-weight:900;color:#f4b942;letter-spacing:.04em;line-height:1;text-shadow:2px 2px 0 #1a1408;font-variant-numeric:tabular-nums}
+#cop{display:none;margin-top:8px;width:110px;height:8px;background:rgba(0,0,0,.45);border:2px solid #1a1408}
+#cop.on{display:block} #cop i{display:block;height:100%;width:0;animation:copbar .5s steps(2) infinite}
+@keyframes copbar{0%{background:#ff4a4a}50%{background:#3b6cff}}
+#gflash{margin-top:6px;font-size:14px;font-weight:800;color:#f4b942;text-shadow:1px 1px 0 #1a1408;letter-spacing:.04em;min-height:16px}
 #hud b{color:#f4b942;font-weight:700}
 #hud .score{font-size:22px;font-weight:800;color:#f4b942;letter-spacing:.04em;line-height:1.2}
 .pill{pointer-events:auto;margin-left:6px;background:rgba(255,255,255,.08);border:0;color:#ece9e0;border-radius:20px;padding:7px 13px;font-size:12px}
@@ -21,6 +33,23 @@ canvas{display:block;width:100vw;height:100vh}
 .tune{display:block;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#ece9e0;border-radius:8px;padding:7px 0;font-size:12px;margin-top:4px}
 .tune.on{border-color:rgba(244,185,66,.5);color:#f4b942}
 .details{margin-top:6px}
+/* карта карьеры: районы по порядку, уровни со статусом; текущий пульсирует, закрытые тусклые */
+#map{position:fixed;inset:0;z-index:5;background:#0c182c;color:#ece9e0;overflow-y:auto;pointer-events:auto;-webkit-user-select:none;user-select:none;padding:calc(14px + env(safe-area-inset-top)) 14px calc(90px + env(safe-area-inset-bottom))}
+#map.hide{display:none}
+.mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.mhead h1{margin:0;font-size:30px;letter-spacing:.16em;font-weight:900;color:#f4b942;text-shadow:3px 3px 0 #1a1408;transform:skew(-8deg)}
+.mhead .fame{text-align:right;line-height:1.1} .mhead .fame small{display:block;font-size:11px;letter-spacing:.14em;opacity:.6} .mhead .fame b{font-size:22px;color:#f4b942;font-variant-numeric:tabular-nums}
+.mdist{margin-bottom:16px} .mdist.locked{opacity:.45}
+.mdist header{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#f4b942;color:#1a1408;transform:skew(-6deg);box-shadow:5px 5px 0 #1a1408;margin-bottom:8px}
+.mdist header>*{transform:skew(6deg)} .mdist header img{height:34px;width:auto;image-rendering:pixelated}
+.mdist h2{margin:0;font-size:17px;letter-spacing:.08em;text-transform:uppercase} .mdist header small{font-size:11px;opacity:.75}
+.mrows{display:flex;flex-direction:column;gap:5px}
+.mrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#152840;border:2px solid #253a52;color:#ece9e0;padding:9px 12px;font-size:14px;border-radius:0}
+.mrow .n{width:22px;font-size:11px;opacity:.55;font-variant-numeric:tabular-nums} .mrow .t{flex:1} .mrow .s{font-variant-numeric:tabular-nums;color:#f4b942;font-weight:700}
+.mrow.done{border-color:#3c5a78} .mrow.cur{border-color:#f4b942;background:#1e3350;animation:pulse 1.2s ease-in-out infinite} .mrow.locked{opacity:.4}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(244,185,66,.0)}50%{box-shadow:0 0 0 4px rgba(244,185,66,.25)}}
+.mfoot{position:fixed;left:0;right:0;bottom:0;padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to top,#0c182c 70%,transparent)}
+.mgo{width:100%;padding:16px;font-size:18px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;background:#f4b942;color:#1a1408;border:3px solid #1a1408;box-shadow:5px 5px 0 #1a1408;transform:skew(-6deg)}
 #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;pointer-events:auto;background:rgba(21,23,28,.6)}
 #overlay.show{display:flex}
 #overlay.busted{animation:cop .5s steps(2) infinite}

@@ -23,6 +23,8 @@ export interface GameUI {
   ovSub: HTMLElement;
   ovHint: HTMLElement;
   ovName?: HTMLElement;   // полоса с именем уровня в интро (в редакторе нет)
+  // игровой HUD (в редакторе и харнессе нет): очки, полоса маршрута с меткой машины, шкала копа, событие
+  gscore?: HTMLElement; barFill?: HTMLElement; barCar?: HTMLElement; cop?: HTMLElement; copFill?: HTMLElement; gflash?: HTMLElement;
   left: HTMLElement;
   right: HTMLElement;
 }
@@ -506,7 +508,19 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       blasts, shake, wrecked,
     });
     hudT += dt;
-    if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, mainS(car.road, car.s) / roads[0].path.L, car, tail, score) + (flash ? ` <b>${flash.text}</b>` : ''); }
+    if (hudT > 0.1) {
+      hudT = 0;
+      const prog = mainS(car.road, car.s) / roads[0].path.L;
+      ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, prog, car, tail, score) + (flash ? ` <b>${flash.text}</b>` : '');
+      // игровой HUD: очки крупно, метка машины на полосе маршрута, шкала копа по близости, событие
+      if (ui.gscore) ui.gscore.textContent = fmtScore(score);
+      const pct = `${Math.max(0, Math.min(100, prog * 100)).toFixed(1)}%`;
+      if (ui.barFill?.style) ui.barFill.style.width = pct;
+      if (ui.barCar?.style) ui.barCar.style.left = pct;
+      if (ui.cop?.classList) ui.cop.classList.toggle('on', !!chaser && state === 'play');
+      if (ui.copFill?.style) ui.copFill.style.width = `${Math.round(Math.max(0, Math.min(1, chaser ? 1 - tail! / level.chaser!.gap : 0)) * 100)}%`;
+      if (ui.gflash) ui.gflash.textContent = flash ? flash.text : '';
+    }
     raf = requestAnimationFrame(frame);
   }
   load(first);

@@ -1,0 +1,47 @@
+// Карта карьеры (docs/career.md): районы по порядку, в каждом — уровни с состоянием: пройден (лучший результат), текущий, закрыт.
+// Тап по пройденному или текущему запускает уровень; закрытые не откликаются. Внизу — «Продолжить» на текущий уровень.
+import { CARS, type CarKey } from './cars';
+import { CAMPAIGN, DISTRICTS, campaign, fame, progressOf } from './campaign';
+import { LEVELS } from './levels';
+import { fmtScore } from './render';
+
+// спрайт машины района — файл из public/art/pixel (те же, что рисует игра)
+const CAR_SPRITE: Record<string, string> = { prologue: 'super_car', finale: 'super_car', minivan: 'happy_bus', sedan: 'white_sedan', muscle: 'muscle_car', sport: 'sport_car', supercar: 'super_car', bus: 'schoolbus' };
+
+export interface MapUi { root: HTMLElement; onPlay: (key: string) => void; onClose: () => void }
+
+export function renderMap(ui: MapUi): void {
+  const root = ui.root; root.innerHTML = '';
+  const cur = campaign.current(), curIdx = CAMPAIGN.indexOf(cur);
+  const base = import.meta.env.BASE_URL;
+  const head = document.createElement('div'); head.className = 'mhead';
+  head.innerHTML = `<h1>BUSTED</h1><div class="fame"><small>слава</small><b>${fmtScore(fame())}</b></div>`;
+  root.appendChild(head);
+  const list = document.createElement('div'); list.className = 'mlist';
+  for (const d of DISTRICTS) {
+    const car = CARS[d.car as CarKey];
+    const done = d.levels.filter(k => progressOf(k).done).length;
+    const open = d.levels.some(k => CAMPAIGN.indexOf(k) <= curIdx);
+    const sec = document.createElement('section'); sec.className = 'mdist' + (open ? '' : ' locked');
+    sec.innerHTML = `<header><img src="${base}art/pixel/${CAR_SPRITE[d.car] ?? 'white_sedan'}.png" alt=""><div><h2>${d.name}</h2><small>${car.name} · ${car.speed} px/с · ${done}/${d.levels.length}</small></div></header>`;
+    const rows = document.createElement('div'); rows.className = 'mrows';
+    d.levels.forEach((k, i) => {
+      const p = progressOf(k), idx = CAMPAIGN.indexOf(k);
+      const state = idx < curIdx || p.done ? 'done' : idx === curIdx ? 'cur' : 'locked';
+      const row = document.createElement('button'); row.className = 'mrow ' + state; row.disabled = state === 'locked';
+      const name = LEVELS[k]?.name ?? k;
+      row.innerHTML = `<span class="n">${i + 1}</span><span class="t">${name}</span><span class="s">${state === 'done' ? (p.best ? fmtScore(p.best) : '✓') : state === 'cur' ? '▶' : ''}</span>`;
+      if (state !== 'locked') row.onclick = () => ui.onPlay(k);
+      rows.appendChild(row);
+    });
+    sec.appendChild(rows); list.appendChild(sec);
+  }
+  root.appendChild(list);
+  const foot = document.createElement('div'); foot.className = 'mfoot';
+  const go = document.createElement('button'); go.className = 'mgo'; go.textContent = curIdx >= CAMPAIGN.length - 1 && progressOf(cur).done ? 'Играть снова' : 'Продолжить';
+  go.onclick = () => ui.onPlay(cur);
+  foot.appendChild(go);
+  root.appendChild(foot);
+  // текущий уровень — в поле зрения
+  requestAnimationFrame(() => root.querySelector('.mrow.cur')?.scrollIntoView({ block: 'center' }));
+}
