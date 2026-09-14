@@ -39,14 +39,23 @@ export function addFame(points: number): number { const n = fame() + Math.round(
 
 // Прогресс по уровням для карты: пройден и лучший результат (очки с множителем)
 const PROG = 'lr.progress';
-export interface LevelProgress { done: boolean; best: number }
+// done — пройден; best — лучшие очки; clean — хоть раз без аварий; target — цель по очкам (задаёт игра при первом прохождении)
+export interface LevelProgress { done: boolean; best: number; clean: boolean; target: number }
+const EMPTY: LevelProgress = { done: false, best: 0, clean: false, target: 0 };
 function readProg(): Record<string, LevelProgress> { try { const p = JSON.parse(localStorage.getItem(PROG) ?? '{}'); return p && typeof p === 'object' ? p : {}; } catch { return {}; } }
-export function progressOf(key: string): LevelProgress { return readProg()[key] ?? { done: false, best: 0 }; }
-export function recordLevel(key: string, points: number): void {
-  const all = readProg(); const p = all[key] ?? { done: false, best: 0 };
-  all[key] = { done: true, best: Math.max(p.best, Math.round(points)) };
+export function progressOf(key: string): LevelProgress { return { ...EMPTY, ...(readProg()[key] ?? {}) }; }
+export function recordLevel(key: string, points: number, clean: boolean, target: number): void {
+  const all = readProg(); const p = { ...EMPTY, ...(all[key] ?? {}) };
+  all[key] = { done: true, best: Math.max(p.best, Math.round(points)), clean: p.clean || clean, target: target || p.target };
   try { localStorage.setItem(PROG, JSON.stringify(all)); } catch { /* приватный режим */ }
 }
+// Звёзды уровня: доставил, без аварий, очки не ниже цели
+export function starsOf(key: string): number { const p = progressOf(key); return (p.done ? 1 : 0) + (p.clean ? 1 : 0) + (p.target > 0 && p.best >= p.target ? 1 : 0); }
+// Гараж: машины по ярусам; открыта, когда открыт район, где она выдаётся
+export const GARAGE: { car: string; district: string }[] = [
+  { car: 'minivan', district: 'Обучение' }, { car: 'sedan', district: 'Центр' }, { car: 'muscle', district: 'Промзона' },
+  { car: 'sport', district: 'Ночной город' }, { car: 'finale', district: 'Финал' },
+];
 
 export const campaign = {
   current(): string { return CAMPAIGN[index()]; },

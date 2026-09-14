@@ -30,7 +30,10 @@ export interface GameUI {
 }
 // Конец уровня: done — доставил, trap — ловушка по сценарию (тоже «пройдено»). Вернуть true, если следующий уровень уже загружен
 export type EndHook = (how: 'done' | 'trap') => boolean;
-export type ScoreHook = (points: number) => number; // уровень пройден: очки в славу, возвращает её сумму (для экрана DELIVERED)
+// Уровень пройден: очки в славу, возвращает её сумму (для экрана DELIVERED). meta — цели уровня (docs/career.md): без аварий за этот
+// заход и цель по очкам (полтора «чистых» проезда: длина × perPx × множитель × 1.5, округлено до сотен)
+export interface LevelResult { clean: boolean; target: number; time: number }
+export type ScoreHook = (points: number, meta: LevelResult) => number;
 
 export interface Game {
   load(level: LevelData): void;
@@ -96,6 +99,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let shake = 0;
   let wrecked = false;
   let reveal: { lines: string[]; at: number; t: number } | null = null;
+  let busts = 0; // BUSTED с момента загрузки уровня — цель «без аварий»
+  const targetScore = () => Math.round(roads[0].path.L * SCORE.perPx * SCORE.finishMul * 1.5 / 100) * 100;
   const boom = (x: number, y: number, size: number, dur = 0.9) => { blasts.push({ kind: 'boom', x, y, age: 0, size, dur }); };
   const puff = (x: number, y: number, size: number, dur = 0.8, delay = 0) => { blasts.push({ kind: 'smoke', x, y, age: -delay, size, dur }); };
   let buzzedPosts: Set<string>; // «дорога:индекс» полицейских машин постов, к которым уже прижимались
@@ -129,7 +134,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
 
   function load(l: LevelData): void {
-    level = l; firstStart = true; cpS = 0;
+    level = l; firstStart = true; cpS = 0; busts = 0;
     spec = carByKey(l.car);
     // Машина и уровень задают стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
     P.width.v = l.width; P.traffic.v = l.traffic;
@@ -188,7 +193,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     // удар — взрыв с дымом и тряска, машина разбита; вылет — только пыль
     if (soft) { for (let i = 0; i < 4; i++) puff(car.x + (Math.random() - 0.5) * 40, car.y + (Math.random() - 0.5) * 40, 70 + Math.random() * 30, 0.9, i * 0.08); shake = 5; }
     else { wrecked = true; shake = 14; boom(car.x, car.y, 170, 1.0); for (let i = 0; i < 3; i++) puff(car.x + (Math.random() - 0.5) * 50, car.y + (Math.random() - 0.5) * 50, 80 + Math.random() * 40, 1.2, 0.25 + i * 0.15); }
-    state = 'busted'; ui.overlay.className = 'show busted';
+    busts++; state = 'busted'; ui.overlay.className = 'show busted';
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = why + '\n' + holdText() + `\nочки ${fmtScore(score)}`;
     ui.ovHint.textContent = cpS > 0 ? 'нажми — продолжить с контрольной точки' : 'нажми, чтобы повторить';
   }
@@ -196,9 +201,11 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     sfx('delivered');
     state = 'done'; cpS = 0; ui.overlay.className = 'show done'; // уровень пройден: повтор — с начала, а не с контрольной точки
     ui.ovTitle.textContent = 'DELIVERED';
-    const total = scoreHook ? scoreHook(score * SCORE.finishMul) : null;
-    // результат раскрывается по строчкам, слава — последней
-    reveal = { lines: [`${timeAlive.toFixed(1)} с`, `очки ${fmtScore(score)}`, `× ${SCORE.finishMul} = ${fmtScore(score * SCORE.finishMul)}`, ...(total !== null ? [`слава ${fmtScore(total)}`] : [])], at: 1, t: 0.45 };
+    const pts = score * SCORE.finishMul, target = targetScore(), clean = busts === 0;
+    const total = scoreHook ? scoreHook(pts, { clean, target, time: timeAlive }) : null;
+    // результат раскрывается по строчкам: время, очки, цели, слава — последней
+    reveal = { lines: [`${timeAlive.toFixed(1)} с`, `очки ${fmtScore(score)} × ${SCORE.finishMul} = ${fmtScore(pts)}`,
+      `${clean ? '★' : '☆'} без аварий`, `${pts >= target ? '★' : '☆'} цель ${fmtScore(target)}`, ...(total !== null ? [`слава ${fmtScore(total)}`] : [])], at: 1, t: 0.45 };
     ui.ovSub.textContent = reveal.lines[0]; // время сразу (харнесс сравнивает первую строку), очки и слава — по строчке
     ui.ovHint.textContent = endHook ? 'нажми — дальше' : 'нажми, чтобы повторить';
   }
@@ -206,7 +213,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   function trap(text: string): void {
     sfx('trap');
     state = 'trap'; cpS = 0; ui.overlay.className = 'show busted trap';
-    const total = scoreHook ? scoreHook(score) : null;
+    const total = scoreHook ? scoreHook(score, { clean: busts === 0, target: 0, time: timeAlive }) : null;
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = text + `\nочки ${fmtScore(score)}` + (total !== null ? ` · слава ${fmtScore(total)}` : '');
     ui.ovHint.textContent = 'нажми — дальше';
   }

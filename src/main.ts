@@ -28,7 +28,7 @@ const game = createGame({
   left: $('left'), right: $('right'),
 }, levelByName(FIRST));
 // Очки пройденного уровня — в славу (только уровни кампании)
-game.onScore(points => { if (campaign.has(levelKey)) recordLevel(levelKey, points); return addFame(campaign.has(levelKey) ? points : 0); });
+game.onScore((points, meta) => { if (campaign.has(levelKey)) recordLevel(levelKey, points, meta.clean, meta.target); return addFame(campaign.has(levelKey) ? points : 0); });
 // Пройденный уровень кампании (в том числе открытый из меню) ведёт к следующему по списку; последний — на карту
 game.onEnd(() => {
   const next = campaign.advance(levelKey);
