@@ -12,7 +12,7 @@ import { layoutBlocks, type Block, type Layout } from './blocks';
 import { makeWidthFn, widthAt, type Narrow, type WidthFn } from './narrow';
 import { NEAR, brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, vehiclePose, type Obb, type TrafficCar, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
-import { fmtScore, hudHtml, render, type Cam, type Fx, type Mark, type RoadScene } from './render';
+import { fmtScore, hudHtml, render, type Blast, type Cam, type Fx, type Mark, type RoadScene } from './render';
 import type { LevelData } from './levels';
 
 export interface GameUI {
@@ -88,6 +88,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   // Очки попытки (фаза B): дистанция + события; fx — всплывающие надписи и искры
   let score = 0;
   let fx: Fx[] = [];
+  // Отклик на события (2026-09-14): взрывы и дым идут по своим часам и после BUSTED, тряска затухает, машина после удара разбита;
+  // DELIVERED раскрывает строки результата по одной
+  let blasts: Blast[] = [];
+  let shake = 0;
+  let wrecked = false;
+  let reveal: { lines: string[]; at: number; t: number } | null = null;
+  const boom = (x: number, y: number, size: number, dur = 0.9) => { blasts.push({ kind: 'boom', x, y, age: 0, size, dur }); };
+  const puff = (x: number, y: number, size: number, dur = 0.8, delay = 0) => { blasts.push({ kind: 'smoke', x, y, age: -delay, size, dur }); };
   let buzzedPosts: Set<string>; // «дорога:индекс» полицейских машин постов, к которым уже прижимались
   // Прыжок с рампы (M8): t — прошло, over — что пролетели (объекты считаем один раз)
   let jump: { t: number; over: Set<object> } | null = null;
@@ -155,6 +163,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     flat = false;
     slow = 0; zoom = 1; flash = null;
     score = 0; fx = []; buzzedPosts = new Set(); jump = null;
+    blasts = []; shake = 0; wrecked = false; reveal = null;
     cardIdx = 0; card = null; horned.clear(); introN = 0;
     for (const r of roads) { for (const rl of r.rails) rl.t0 = undefined; for (const c of r.crossings) c.t0 = undefined; } // сценарные поезда и светофоры ждут игрока заново
     ui.overlay.className = '';
@@ -172,17 +181,23 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
 
   function busted(why: string): void {
-    sfx(why === 'догнали' ? 'caught' : why === 'поезд' ? 'train' : why === 'вылет с дороги' || why === 'съехал с маршрута' || why === 'ежи' ? 'off' : 'crash');
+    const soft = why === 'вылет с дороги' || why === 'съехал с маршрута' || why === 'ежи';
+    sfx(why === 'догнали' ? 'caught' : why === 'поезд' ? 'train' : soft ? 'off' : 'crash');
+    // удар — взрыв с дымом и тряска, машина разбита; вылет — только пыль
+    if (soft) { for (let i = 0; i < 4; i++) puff(car.x + (Math.random() - 0.5) * 40, car.y + (Math.random() - 0.5) * 40, 70 + Math.random() * 30, 0.9, i * 0.08); shake = 5; }
+    else { wrecked = true; shake = 14; boom(car.x, car.y, 170, 1.0); for (let i = 0; i < 3; i++) puff(car.x + (Math.random() - 0.5) * 50, car.y + (Math.random() - 0.5) * 50, 80 + Math.random() * 40, 1.2, 0.25 + i * 0.15); }
     state = 'busted'; ui.overlay.className = 'show busted';
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = why + '\n' + holdText() + `\nочки ${fmtScore(score)}`;
     ui.ovHint.textContent = cpS > 0 ? 'нажми — продолжить с контрольной точки' : 'нажми, чтобы повторить';
   }
   function finish(): void {
     sfx('delivered');
-    state = 'done'; cpS = 0; ui.overlay.className = 'show'; // уровень пройден: повтор — с начала, а не с контрольной точки
+    state = 'done'; cpS = 0; ui.overlay.className = 'show done'; // уровень пройден: повтор — с начала, а не с контрольной точки
     ui.ovTitle.textContent = 'DELIVERED';
     const total = scoreHook ? scoreHook(score * SCORE.finishMul) : null;
-    ui.ovSub.textContent = `${timeAlive.toFixed(1)} с · очки ${fmtScore(score)} × ${SCORE.finishMul} = ${fmtScore(score * SCORE.finishMul)}` + (total !== null ? `\nслава ${fmtScore(total)}` : '');
+    // результат раскрывается по строчкам, слава — последней
+    reveal = { lines: [`${timeAlive.toFixed(1)} с`, `очки ${fmtScore(score)}`, `× ${SCORE.finishMul} = ${fmtScore(score * SCORE.finishMul)}`, ...(total !== null ? [`слава ${fmtScore(total)}`] : [])], at: 1, t: 0.45 };
+    ui.ovSub.textContent = reveal.lines[0]; // время сразу (харнесс сравнивает первую строку), очки и слава — по строчке
     ui.ovHint.textContent = endHook ? 'нажми — дальше' : 'нажми, чтобы повторить';
   }
   // Ловушка по сценарию: BUSTED с текстом уровня, но это «пройдено» — дальше следующий уровень
@@ -268,6 +283,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     }
   }
 
+  // Коп выбыл: взрыв поменьше, дым, тряска и короткое слоу-мо — момент, который игра празднует
+  function copOut(x: number, y: number): void { boom(x, y, 120, 0.8); puff(x, y, 90, 1.0, 0.3); shake = 8; slow = Math.max(slow, 0.45); }
   function chaserPose() {
     const p = pathAtExt(roads[chaser!.road].path, chaser!.s);
     return { x: p.x + p.nx * chaser!.off, y: p.y + p.ny * chaser!.off, h: heading(p.tx, p.ty) };
@@ -281,9 +298,10 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (jump) {
       jump.t += dt;
       if (jump.t >= RAMP.air) {
-        const n = jump.over.size; jump = null; sfx('land');
-        // приземление: искры из-под обоих бортов, потом очки за перелёт
+        const n = jump.over.size; jump = null; sfx('land'); shake = Math.max(shake, 4);
+        // приземление: искры из-под обоих бортов, клубы пыли, потом очки за перелёт
         const rx = Math.cos(car.h), ry = Math.sin(car.h);
+        for (const side of [-1, 1]) puff(car.x + rx * side * car.W / 2, car.y + ry * side * car.W / 2, 50, 0.6);
         for (const side of [-1, 1]) for (let k = 0; k < 7; k++) {
           const a = car.h + side * Math.PI / 2 + (k - 3) * 0.3 + Math.PI * 0.15;
           fx.push({ x: car.x + rx * side * car.W / 2, y: car.y + ry * side * car.W / 2, t: 0.5, vx: Math.sin(a) * 300, vy: -Math.cos(a) * 300 });
@@ -431,14 +449,14 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       const cop = obb(c.x, c.y, c.h, TRAFFIC_SIZE.W, TRAFFIC_SIZE.L);
       if (!jump && chaser.road === car.road && hit(me, cop)) return busted('догнали');
       // Коп под поездом или под поперечной машиной
-      for (const r of cr.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - chaser.s) < 120 && hit(cop, t)) { chaser = null; flash = { text: 'коп под поездом', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', 1); break; } }
-      if (chaser) for (const c of cr.crossings) { if (Math.abs(c.s - chaser.s) > 120) continue; if (crossCars(c, timeAlive).some(cc => hit(cop, cc.obb))) { chaser = null; flash = { text: 'коп на перекрёстке', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', 1); break; } }
+      for (const r of cr.rails) { const t = trainObb(r, timeAlive); if (t && Math.abs(r.s - chaser.s) < 120 && hit(cop, t)) { chaser = null; copOut(c.x, c.y); flash = { text: 'коп под поездом', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', 1); break; } }
+      if (chaser) for (const c of cr.crossings) { if (Math.abs(c.s - chaser.s) > 120) continue; if (crossCars(c, timeAlive).some(cc => hit(cop, cc.obb))) { const cp = chaserPose(); chaser = null; copOut(cp.x, cp.y); flash = { text: 'коп на перекрёстке', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', 1); break; } }
       if (!chaser) { const vl0 = Math.hypot(car.vx, car.vy) || 1; const cl0 = Math.min(1, CAM_LERP * dt); cam.x += (car.x + car.vx / vl0 * CAM_AHEAD - cam.x) * cl0; cam.y += (car.y + car.vy / vl0 * CAM_AHEAD - cam.y) * cl0; return; }
       // Паникёр снёс копа — полиция выбывает из погони
       for (const v of cr.traffic) {
         if (!v.panic || Math.abs(v.s - chaser.s) > 120) continue;
         const p = vehiclePose(cr.path, v, cr.width);
-        if (hit(cop, obb(p.x, p.y, p.h, v.W, v.L))) { chaser = null; v.crashed = true; v.v = 0; v.scored = true; flash = { text: 'коп выбыл', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', v.panic.side); break; }
+        if (hit(cop, obb(p.x, p.y, p.h, v.W, v.L))) { chaser = null; copOut(c.x, c.y); v.crashed = true; v.v = 0; v.scored = true; flash = { text: 'коп выбыл', t: 1.5 }; addScore(SCORE.copOut, 'КОП ВЫБЫЛ', v.panic.side); break; }
       }
     }
 
@@ -468,6 +486,10 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (slow > 0) slow -= dt;
     zoom += ((slow > 0 ? PANIC.zoom : 1) - zoom) * Math.min(1, 8 * dt);
     if (flash) { flash.t -= dt; if (flash.t <= 0) flash = null; }
+    // вспышки и тряска идут всегда (и после BUSTED), строки DELIVERED раскрываются по таймеру
+    for (const b of blasts) b.age += dt; blasts = blasts.filter(b => b.age < b.dur);
+    if (shake > 0) shake = Math.max(0, shake - dt * 30);
+    if (reveal) { reveal.t -= dt; if (reveal.t <= 0 && reveal.at < reveal.lines.length) { ui.ovSub.textContent = reveal.lines.slice(0, ++reveal.at).join('\n'); reveal.t = 0.4; sfx(reveal.at === reveal.lines.length ? 'big' : 'score'); } }
     // отсчёт и карточка: мир стоит
     if (intro !== null && !paused) { intro -= dt; const n = Math.ceil(intro); if (n !== introN) { introN = n; sfx(n > 0 ? 'beep' : 'go'); } ui.ovTitle.textContent = n > 0 ? String(n) : 'GO'; if (intro <= 0) { intro = null; state = 'play'; ui.overlay.className = ''; } }
     else if (card !== null && !paused) { card -= dt; if (card <= 0) { card = null; ui.overlay.className = ''; } }
@@ -481,6 +503,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     render(ctx, view, {
       roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props, nav: level.nav,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
+      blasts, shake, wrecked,
     });
     hudT += dt;
     if (hudT > 0.1) { hudT = 0; ui.hud.innerHTML = hudHtml(`${level.name} · ${spec.name}`, mainS(car.road, car.s) / roads[0].path.L, car, tail, score) + (flash ? ` <b>${flash.text}</b>` : ''); }

@@ -26,6 +26,10 @@ canvas{display:block;width:100vw;height:100vh}
 #overlay.busted{animation:cop .5s steps(2) infinite}
 @keyframes cop{0%{box-shadow:inset 0 0 140px rgba(235,60,60,.55)}50%{box-shadow:inset 0 0 140px rgba(60,100,235,.55)}}
 #overlay h1{margin:0;font-size:52px;letter-spacing:.14em;font-weight:800}
+/* BUSTED и DELIVERED — штамп: влетает крупным и садится с отскоком */
+#overlay.busted h1,#overlay.done h1{animation:stamp .35s cubic-bezier(.2,1.6,.4,1) both}
+#overlay.done h1{color:#f4b942;text-shadow:0 4px 0 #1a1408}
+@keyframes stamp{from{transform:scale(2.2) rotate(-6deg);opacity:0}to{transform:scale(1) rotate(-2deg);opacity:1}}
 #overlay p{margin:0;opacity:.7;font-size:14px;line-height:1.6;text-align:center}
 #overlay small{opacity:.45;font-size:12px;letter-spacing:.1em;margin-top:8px}
 /* отсчёт перед стартом: полоса с именем уровня, цифра крупно, текст в рамке-подписи, как в комиксе */

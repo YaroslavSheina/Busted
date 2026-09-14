@@ -5,6 +5,8 @@
 const FILES: Record<string, string> = {
   sedan: 'sedan.png', car: 'car.png', police: 'police.png',
   asphalt: 'asphalt.jpg', roof: 'roof.jpg', pavement: 'pavement.jpg', grass: 'grass.jpg',
+  // листы кадров (docs/refs, 2026-09-14): взрыв 15 кадров и дым 10 кадров по 96 px в ряд; фон снят по цвету
+  boom: 'pixel/boom.png', smoke: 'pixel/smoke.png',
 };
 export const PIXEL_KEYS = ['armored_vehicle', 'bat', 'bus', 'fire_truck', 'gasoline', 'gray_sedan', 'happy_bus', 'jeep', 'limousine', 'muscle_car',
   'pick_up', 'police_regular', 'police_sport', 'retro_1', 'retro_2', 'retro_3', 'roadster', 'schoolbus', 'sport_car', 'super_car',

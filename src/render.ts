@@ -11,7 +11,7 @@ import { RAIL } from './config';
 import { trainHead, untilTrain, type Rail } from './rails';
 import { CROSS } from './config';
 import { crossCars, lightAt, type Crossing } from './crossings';
-import { procTile, sprite, tile } from './art';
+import { art, procTile, sprite, tile } from './art';
 import { BLOCK } from './config';
 
 export interface View { W: number; H: number; DPR: number }
@@ -22,6 +22,8 @@ export interface RoadScene { path: Path; traffic: Vehicle[]; blocks: Layout; wid
 
 // Эффекты очков: всплывающий текст или искра; t — остаток жизни, с
 export interface Fx { x: number; y: number; t: number; text?: string; vx?: number; vy?: number }
+// Вспышка из листа кадров: boom — взрыв (15 кадров), smoke — клуб дыма (10); age — секунд с начала; size — px; dur — длительность
+export interface Blast { kind: 'boom' | 'smoke'; x: number; y: number; age: number; size: number; dur: number }
 
 export interface Scene {
   roads: RoadScene[]; // 0 — главная (финиш на ней), дальше ветки
@@ -36,6 +38,9 @@ export interface Scene {
   props?: Prop[];                                                // здания и окружение
   nav?: boolean;                                                 // навигатор: линия к гаражу по главной
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
+  blasts?: Blast[];                                              // взрывы и дым
+  shake?: number;                                                // тряска камеры, px (только рисование — cam не трогается)
+  wrecked?: boolean;                                             // машина игрока разбита: тёмная, повёрнута
 }
 
 // Тема. comic — рисованный вид сверху в духе ранних GTA (диздок): контуры, плоские цвета, тротуары в городе,
@@ -200,8 +205,35 @@ export function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, h: 
 }
 
 // Машина игрока: силуэт и детали зависят от кузова. Векторные заглушки до комикс-арта (фаза H).
-export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, spec: CarSpec): void {
+// Кадр из листа: n кадров по size px в ряд; frame — 0..n-1
+function drawFrame(ctx: CanvasRenderingContext2D, key: string, n: number, frame: number, x: number, y: number, size: number, alpha = 1): boolean {
+  const img = art(key); if (!img) return false;
+  const fw = img.width / n, k = Math.max(0, Math.min(n - 1, Math.floor(frame)));
+  ctx.save(); ctx.globalAlpha = alpha; ctx.drawImage(img, k * fw, 0, fw, img.height, x - size / 2, y - size / 2, size, size); ctx.restore();
+  return true;
+}
+// Взрывы и дым: кадры листа по возрасту; без листа — векторные круги того же цвета
+export function drawBlasts(ctx: CanvasRenderingContext2D, blasts: Blast[]): void {
+  for (const b of blasts) {
+    const p = Math.min(1, b.age / b.dur);
+    if (b.kind === 'boom') {
+      if (drawFrame(ctx, 'boom', 15, p * 15, b.x, b.y, b.size)) continue;
+      ctx.fillStyle = `rgba(255,${Math.round(200 - p * 150)},60,${1 - p})`; ctx.beginPath(); ctx.arc(b.x, b.y, b.size * (0.2 + p * 0.4), 0, 7); ctx.fill();
+    } else {
+      if (drawFrame(ctx, 'smoke', 10, p * 10, b.x, b.y, b.size, 1 - p * 0.5)) continue;
+      ctx.fillStyle = `rgba(200,205,215,${0.5 * (1 - p)})`; ctx.beginPath(); ctx.arc(b.x, b.y, b.size * (0.2 + p * 0.3), 0, 7); ctx.fill();
+    }
+  }
+}
+
+export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, spec: CarSpec, wrecked = false): void {
   const { W: w, L: l } = spec;
+  if (wrecked) { // разбитая: та же машина, развёрнутая боком и затемнённая, как на макете из референсов
+    ctx.save(); ctx.translate(x, y); ctx.rotate(h + 0.9);
+    drawPlayer(ctx, 0, 0, 0, spec);
+    ctx.fillStyle = 'rgba(10,8,12,.55)'; ctx.beginPath(); ctx.roundRect(-w / 2 - 1, -l / 2 - 1, w + 2, l + 2, 6); ctx.fill();
+    ctx.restore(); return;
+  }
   const glass = 'rgba(20,22,28,.6)', trim = 'rgba(20,22,28,.35)', lamp = '#fff3c4';
   const wedge = () => { ctx.moveTo(-w / 2 + 6, -l / 2); ctx.lineTo(w / 2 - 6, -l / 2); ctx.lineTo(w / 2, -l / 2 + 16); ctx.lineTo(w / 2, l / 2 - 4); ctx.lineTo(-w / 2, l / 2 - 4); ctx.lineTo(-w / 2, -l / 2 + 16); ctx.closePath(); };
   const round = { sedan: 6, minivan: 9, supercar: 0, bus: 5, muscle: 5, sport: 3 }[spec.body];
@@ -676,7 +708,9 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   const z = sc.zoom ?? 1;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = T.ground; ctx.fillRect(0, 0, W, H);
   setCity(!!sc.props?.length);
-  ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-cam.x, -cam.y);
+  ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z);
+  if (sc.shake) ctx.translate((Math.random() - 0.5) * 2 * sc.shake, (Math.random() - 0.5) * 2 * sc.shake); // тряска — только картинка
+  ctx.translate(-cam.x, -cam.y);
   if (T.sprites === 'hf') { // земля текстурой в мировых координатах: в городе бетон, за городом пустырь
     const g = tile(ctx, sc.props?.length ? 'pavement' : 'grass', 512);
     if (g) { ctx.fillStyle = g; ctx.fillRect(cam.x - W / 2 / z, cam.y - H / 2 / z, W / z, H / z); }
@@ -717,7 +751,8 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
     ctx.save(); ctx.translate(car.x, car.y - 30 * k); ctx.scale(sc2, sc2); ctx.translate(-car.x, -car.y);
     drawPlayer(ctx, car.x, car.y, car.h, sc.spec);
     ctx.restore();
-  } else drawPlayer(ctx, car.x, car.y, car.h, sc.spec);
+  } else drawPlayer(ctx, car.x, car.y, car.h, sc.spec, sc.wrecked);
+  if (sc.blasts?.length) drawBlasts(ctx, sc.blasts);
   // искры и всплывающие очки — в мире, но текст не вращается с камерой (камера и так не вращается)
   for (const f of sc.fx ?? []) {
     const a = Math.min(1, f.t * 2);
