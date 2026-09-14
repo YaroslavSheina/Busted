@@ -223,7 +223,7 @@ ${main.pts.map(p => `    [${p[0]}, ${p[1]}]`).join(',\n')}
   "car": "${spec.car}",
   "panic": ${spec.panic},
   "nav": true,
-  "mix": ${spec.mix ?? 0.15},${route.pace ? `\n  "pace": ${JSON.stringify(route.pace)},` : ''}${route.grip ? `\n  "grip": ${route.grip},` : ''}
+  "mix": ${spec.mix ?? 0.15},${route.pace ? `\n  "pace": ${JSON.stringify(route.pace)},` : ''}${route.grip ? `\n  "grip": ${route.grip},` : ''}${spec.theme ? `\n  "theme": ${JSON.stringify(spec.theme)},` : ''}
   "oncoming": ${main.oncoming},
   "chaser": ${JSON.stringify(chaser)},${route.intro ? `\n  "intro": ${JSON.stringify(route.intro)},` : ''}${cards.length ? `\n  "cards": [\n${cards.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ],` : ''}${trap ? `\n  "trap": ${JSON.stringify(trap)},` : ''}${checkpoints.length ? `\n  "checkpoints": ${JSON.stringify(checkpoints)},` : ''}
   "cars": [
@@ -250,7 +250,7 @@ ${props.map(p => '    ' + JSON.stringify(p)).join(',\n')}
 const DISTRICTS = [
   // «Учебный район» (docs/progression.md): десять коротких уровней по одной механике, один город на всех.
   // Минивэн на 1–5, седан на 6–10. Ветки не используются — уровни линейные (объезды в пост-MVP).
-  { seed: 2026, car: 'minivan', speed: 240, traffic: 0, panic: 0, mix: 0, chaser: null, blocks: { i: [-1, 4], j: [-14, 0] },
+  { seed: 2026, car: 'minivan', speed: 240, traffic: 0, panic: 0, mix: 0, chaser: null, theme: 'pixel', blocks: { i: [-1, 4], j: [-14, 0] },
     routes: [
       { file: 'tut01', name: '1 · Руль', intro: 'Минивэн. Машины разные: эта тяжелее, и в повороте её несёт шире. Камера не поворачивает — жми заранее и смотри, как машина ведёт себя в дуге.',
         cards: [{ at: [0, -2.3], text: 'Поворот: жми заранее — машину несёт' }, { at: [2, -1.6], text: 'Теперь налево' }],
@@ -332,7 +332,7 @@ const DISTRICTS = [
         ] },
       // Финал (docs/career.md): тот же красный спорткар на полной скорости, тот же гараж — с другого конца района, 22 000 px, без контрольных точек
       { file: 'final', name: 'Финал', car: 'finale', speed: 420, traffic: 0.2, mix: 0.1, panic: 0.4, chaser: { gap: 260, speed: 1.02 }, chaserAt: [[7, -1.5], [3, -2.0], [3, -10.5]], // gap 260: к первому переезду коп подтягивается до ~0.48 с и попадает под поезд (after 0.3)
-        intro: 'Финал. Тот самый спорткар — на полной скорости. Тот самый гараж. Доедь.',
+        intro: 'Тот самый спорткар — теперь твой, на полной скорости. Тот самый гараж, в который тогда не доехал. Доедь.',
         cards: [{ at: [7, -1.4], text: 'Он вернулся. И полиция тоже' }, { at: [7, -11.6], text: 'Гараж. В этот раз — доедем' }],
         events: [
           { type: 'parked', at: [7, -0.4] }, { type: 'parked', at: [7, -0.8] },
@@ -363,9 +363,9 @@ const DISTRICTS = [
     ] },
   // ---------- Карьера (docs/career.md): районы по нарастающей, машина на район, все уровни линейные ----------
   // «Окраина»: минивэн, посты и ремонт, светофоры все зелёные — игрок учится читать дорогу впереди
-  { seed: 4101, car: 'minivan', speed: 240, traffic: 0.2, panic: 0, mix: 0, chaser: null, blocks: { i: [-1, 5], j: [-10, 0] },
+  { seed: 4101, car: 'minivan', speed: 240, traffic: 0.2, panic: 0, mix: 0, chaser: null, theme: 'pixel', blocks: { i: [-1, 5], j: [-10, 0] },
     routes: [
-      { file: 'okr1', name: 'Окраина · 1', intro: 'Окраина. Минивэн: тяжёлый, несёт широко. Посты и ремонт — читай дорогу заранее.',
+      { file: 'okr1', name: 'Окраина · 1', intro: 'Слава на нуле, из машин — чужой минивэн. Заказы только на окраине. Минивэн тяжёлый, несёт широко: посты и ремонт читай заранее.',
         events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [2, -5.6], lanes: [2], len: 300 }, { type: 'post', at: [4, -8.2], lanes: [0, 1] }],
         roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -7], [4, -7], [4, -9]], oncoming: 0, offsets: 'green' }] },
       { file: 'okr2', name: 'Окраина · 2', traffic: 0.25, intro: 'Окраина · 2. Ежи, сужение, просветы у постов с краю.',
@@ -393,9 +393,9 @@ const DISTRICTS = [
         roads: [{ nodes: [[1, 0], [1, -2], [4, -2], [4, -5], [0, -5], [0, -8]], oncoming: 0, reds: [[3, -5], [0, -6]] }] },
     ] },
   // «Промзона»: масл-кар, широкие кварталы под его радиус, рельсы и автовозы; коп со второго маршрута
-  { seed: 5202, car: 'muscle', speed: 330, traffic: 0.25, panic: 0.2, mix: 0.3, chaser: { gap: 200, speed: 1 }, grid: { bx: 700, by: 600, road: 200, r: 260 }, blocks: { i: [-1, 6], j: [-11, 0] },
+  { seed: 5202, car: 'muscle', speed: 330, traffic: 0.25, panic: 0.2, mix: 0.3, chaser: { gap: 200, speed: 1 }, theme: 'pixeldusk', grid: { bx: 700, by: 600, road: 200, r: 260 }, blocks: { i: [-1, 6], j: [-11, 0] },
     routes: [
-      { file: 'ind1', name: 'Промзона · 1', chaser: null, intro: 'Промзона. Масл-кар: быстрый на прямой, в заносе широкий. Рельсы режут район, автовозы ходят колоннами.',
+      { file: 'ind1', name: 'Промзона · 1', chaser: null, intro: 'Масл-кар из порта — плата за центр. Быстрый на прямой, в заносе широкий. Рельсы режут район, автовозы ходят колоннами.',
         events: [{ type: 'rails', at: [0, -2.5], offset: 'behind', length: 600 }, { type: 'works', at: [0, -3.3], lanes: [2], len: 200 },
           { type: 'ramp', at: [2, -6.3], lane: 1, speed: 110 }, { type: 'post', at: [2, -6.6] }, { type: 'narrow', at: [3.4, -9], to: [3.7, -9], width: 140 }],
         roads: [{ nodes: [[0, 0], [0, -5], [2, -5], [2, -9], [5, -9]], oncoming: 0, offsets: 'green' }] },
@@ -427,7 +427,7 @@ const DISTRICTS = [
   // «Ночной город»: спорт, кварталы мельче и углы теснее (R 200 при радиусе спорта ~150), встречка, плотный трафик, повторные погони
   { seed: 6303, car: 'sport', speed: 350, traffic: 0.4, panic: 0.3, mix: 0.15, chaser: { gap: 200, speed: 1.02 }, grid: { bx: 600, by: 520, road: 180, r: 200 }, blocks: { i: [-1, 7], j: [-13, 0] },
     routes: [
-      { file: 'night1', name: 'Ночной город · 1', chaser: null, traffic: 0.35, intro: 'Ночной город. Спорт: острый руль, быстро гасит вираж. Улицы тесные, слева встречка.',
+      { file: 'night1', name: 'Ночной город · 1', chaser: null, traffic: 0.35, intro: 'О тебе говорят. Спорт: острый руль, быстро гасит вираж. Улицы тесные, слева встречка, и полиция уже знает номер.',
         events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [2, -6.4], lanes: [2], len: 200 }, { type: 'narrow', at: [5, -9.4], to: [5, -9.7], width: 120 }],
         roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -8], [5, -8], [5, -12]], oncoming: 1, reds: [[0, -3], [2, -6]] }] },
       // «Тоннель» — шесть кварталов в две полосы без единого поворота: коп не отстаёт, спасение — переезд в конце
@@ -455,7 +455,7 @@ const DISTRICTS = [
     routes: [
       // маршрут 1: старт (0,0), север 3, восток 3, север 1. Ветка А: направо у (0,−1), прямо через (1,−1), налево у (2,−1),
       // прямо через (2,−2), вливается в главную у (2,−3). Ветка Б от А: налево у (1,−1), направо у (1,−2), вливается в А у (2,−2)
-      { file: 'district2', name: 'Центр · 1', traffic: 0.3, intro: 'Центр. Седан. Перекрёстки на красный, поперечные идут — проскакивай между ними.',
+      { file: 'district2', name: 'Центр · 1', traffic: 0.3, intro: 'Окраина тебя заметила — дали седан и заказы в центре. Перекрёстки на красный, поперечные идут: проскакивай между ними.',
         // вводный: пост с просветом после первого перекрёстка, ремонт правой полосы на восточном отрезке
         events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [1.6, -3], lanes: [2], len: 400 }],
         roads: [

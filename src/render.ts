@@ -45,7 +45,7 @@ export interface Scene {
 
 // Тема. comic — рисованный вид сверху в духе ранних GTA (диздок): контуры, плоские цвета, тротуары в городе,
 // тени под машинами и зданиями. night — прежний тёмный вид (?theme=night). Физика и данные о теме не знают
-export type ThemeName = 'comic' | 'night' | 'dark' | 'bright' | 'sprites' | 'pixel' | 'pixelnight';
+export type ThemeName = 'comic' | 'night' | 'dark' | 'bright' | 'sprites' | 'pixel' | 'pixelnight' | 'pixeldusk';
 interface Theme {
   ground: string; grid: string; asphalt: string; shoulder: string; cross: string;
   lane: string; edge: string; dyellow: string;
@@ -89,10 +89,19 @@ const THEMES: Record<ThemeName, Theme> = {
     lane: '#45637c', edge: '', dyellow: '#505330', outline: '#556e81', sidewalk: '#253a52', shadow: 'rgba(0,0,0,.35)',
     roofs: ['#14263a', '#132438', '#172a40', '#112235', '#152840'], sprites: 'pixel', dash: [18, 26], parapet: '#526d84', slabs: '#364d65', lights: '#202f44',
     walls: ['#0b1220', '#070d18'], zebra: '#445e78', windows: '#d9b565' },
+  // закат для Промзоны (2026-09-14): тёплая коричнево-серая палитра той же геометрии, окна уже горят
+  pixeldusk: { ground: '#3a3230', grid: 'rgba(0,0,0,0)', asphalt: '#2a2724', shoulder: '#8a7d6a', cross: '#2a2724',
+    lane: '#b9ab90', edge: '', dyellow: '#a8862a', outline: '#8a7d6a', sidewalk: '#3a3230', shadow: 'rgba(0,0,0,.35)',
+    roofs: ['#4b3d36', '#54453d', '#463a34', '#5a4a40', '#4f4038'], sprites: 'pixel', dash: [18, 26], parapet: '#8a7d6a', slabs: '#4a403b', lights: '#2a2422',
+    walls: ['#241e1b', '#1a1513'], zebra: '#c8bca0', windows: '#f0c070' },
 };
 // Основная тема — pixelnight: ночная улица по референсам пользователя (2026-09-10); прежняя night и остальные — ?theme=…
 let T: Theme = THEMES.pixelnight;
 export function setTheme(name: string | null | undefined): void { T = THEMES[(name as ThemeName)] ?? THEMES.pixelnight; }
+// Тема уровня (JSON `theme`): применяется, если тема не задана адресом (?theme= — эксперименты, сильнее уровня)
+let themeLocked = false;
+export function lockTheme(): void { themeLocked = true; }
+export function levelTheme(name: string | undefined): void { if (!themeLocked) setTheme(name ?? 'pixelnight'); }
 export const groundColor = (): string => T.ground;
 export const themeName = (): ThemeName => (Object.keys(THEMES) as ThemeName[]).find(k => THEMES[k] === T) ?? 'comic';
 let city = false; // тротуары вдоль дорог — только там, где есть здания

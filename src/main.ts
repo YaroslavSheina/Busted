@@ -1,16 +1,16 @@
 import './style.css';
 import { createGame } from './game';
-import { setTheme } from './render';
+import { lockTheme, setTheme } from './render';
 import { loadArt } from './art';
 import { setAudioEnabled, unlockAudio } from './audio';
 const query = new URLSearchParams(location.search);
-setTheme(query.get('theme')); // ?theme=night|comic|dark|bright|sprites|pixel — эксперименты; без параметра pixelnight
+if (query.get('theme')) { setTheme(query.get('theme')); lockTheme(); } // ?theme=night|comic|dark|bright|sprites|pixel|pixeldusk — сильнее темы уровня
 loadArt();
 if (query.get('mute')) setAudioEnabled(false); // ?mute=1 — без звука (настройки — позже)
 import { LEVEL_KEYS, levelByName } from './levels';
 import { buildPanel, initToggle } from './debug';
 import { CARS, type CarKey, type CarSpec } from './cars';
-import { addFame, campaign, recordLevel } from './campaign';
+import { addFame, campaign, fame, recordLevel } from './campaign';
 import { renderMap } from './map';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -30,9 +30,9 @@ const game = createGame({
 // Очки пройденного уровня — в славу (только уровни кампании)
 game.onScore((points, meta) => { if (campaign.has(levelKey)) recordLevel(levelKey, points, meta.clean, meta.target); return addFame(campaign.has(levelKey) ? points : 0); });
 // Пройденный уровень кампании (в том числе открытый из меню) ведёт к следующему по списку; последний — на карту
-game.onEnd(() => {
+game.onEnd(how => {
   const next = campaign.advance(levelKey);
-  if (!next) { if (campaign.has(levelKey)) { openMap(); return true; } return false; }
+  if (!next) { if (levelKey === 'final' && how === 'done') { showEnding(); return true; } if (campaign.has(levelKey)) { openMap(); return true; } return false; }
   selectLevel(next);
   return true;
 });
@@ -75,6 +75,14 @@ function showPanel(key: string): void {
   });
 }
 
+// Титры после финала: история пролога закрыта — тот же гараж, в этот раз доехал
+const ending = $('ending');
+ending.style.backgroundImage = `url(${import.meta.env.BASE_URL}art/hero.jpg)`;
+function showEnding(): void {
+  $('endText').textContent = `Тот самый гараж. В этот раз — доехал.\nСпорткар твой, город твой, полиция знает номер.\n\nСлава ${fame().toLocaleString('ru-RU')}\n\nBUSTED — конец первой главы`;
+  ending.classList.remove('hide'); syncPause();
+}
+ending.addEventListener('pointerdown', e => { e.preventDefault(); ending.classList.add('hide'); openMap(); });
 // Карта карьеры: районы и уровни, прогресс; открывается после загрузочного экрана (без ?level=) и по кнопке ☰; мир стоит
 const mapEl = $('map');
 function openMap(): void { renderMap({ root: mapEl, onPlay: k => { closeMap(); if (k !== levelKey) selectLevel(k); else game.reset(); }, onClose: closeMap }); mapEl.classList.remove('hide'); syncPause(); }
@@ -86,7 +94,7 @@ splash.style.backgroundImage = `url(${import.meta.env.BASE_URL}art/hero.jpg)`;
 splash.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); splash.classList.add('hide'); if (!query.get('level')) openMap(); else syncPause(); }); // первый жест — можно включать звук
 // Пока открыто меню, карта или загрузочный экран, мир стоит; тап по игровому полю закрывает меню и продолжает попытку
 const menus = [panel, carPanel];
-const syncPause = () => game.pause(!splash.classList.contains('hide') || !mapEl.classList.contains('hide') || menus.some(m => m.classList.contains('open')));
+const syncPause = () => game.pause(!splash.classList.contains('hide') || !mapEl.classList.contains('hide') || !ending.classList.contains('hide') || menus.some(m => m.classList.contains('open')));
 syncPause();
 initToggle($('levelBtn'), panel, [carPanel], syncPause);
 initToggle($('carBtn'), carPanel, [panel], syncPause);

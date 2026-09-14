@@ -21,6 +21,7 @@ export function formatLevel(l: LevelData): string {
   const mix = l.mix ? `,\n  "mix": ${l.mix}` : '';
   const pace = l.pace ? `,\n  "pace": ${JSON.stringify(l.pace)}` : '';
   const grip = l.grip !== undefined ? `,\n  "grip": ${l.grip}` : '';
+  const theme = l.theme ? `,\n  "theme": ${JSON.stringify(l.theme)}` : '';
   const intro = l.intro ? `,\n  "intro": ${JSON.stringify(l.intro)}` : '';
   const cards = l.cards?.length ? `,\n  "cards": [\n${l.cards.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ]` : '';
   const trap = l.trap ? `,\n  "trap": ${JSON.stringify(l.trap)}` : '';
@@ -35,7 +36,7 @@ export function formatLevel(l: LevelData): string {
     ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}${b.parent !== undefined ? `, "parent": ${b.parent}` : ''}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.oncoming ? `, "oncoming": ${b.oncoming}` : ''}${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''}${b.narrows?.length ? `, "narrows": ${JSON.stringify(b.narrows)}` : ''}${b.rails?.length ? `, "rails": ${JSON.stringify(b.rails)}` : ''}${b.crossings?.length ? `, "crossings": ${JSON.stringify(b.crossings)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${nav}${mix}${pace}${grip}${intro}${cards}${trap}${checkpoints}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${nav}${mix}${pace}${grip}${theme}${intro}${cards}${trap}${checkpoints}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -131,6 +132,7 @@ export function parseLevel(raw: unknown): LevelData {
   if (o.mix !== undefined) { if (!isNum(o.mix) || o.mix < 0 || o.mix > 0.5) throw new Error('«mix» — число 0..0.5'); if (o.mix > 0) level.mix = o.mix; }
   if (o.pace !== undefined) { const p = o.pace as unknown[]; if (!Array.isArray(p) || p.length !== 2 || !p.every(isNum) || (p[0] as number) > (p[1] as number)) throw new Error('«pace» — [min, max] доли скорости'); level.pace = [p[0] as number, p[1] as number]; }
   if (o.grip !== undefined) { if (!isNum(o.grip) || o.grip <= 0 || o.grip > 1) throw new Error('«grip» — число 0..1'); level.grip = o.grip; }
+  if (o.theme !== undefined) { if (typeof o.theme !== 'string') throw new Error('«theme» — строка'); level.theme = o.theme; }
   const card = (v: unknown, what: string): Card => { if (typeof v !== 'object' || v === null || !isNum((v as Card).s) || typeof (v as Card).text !== 'string') throw new Error(`${what}: нужны s и text`); return { s: (v as Card).s, text: (v as Card).text }; };
   if (o.intro !== undefined) { if (typeof o.intro !== 'string') throw new Error('«intro» — строка'); level.intro = o.intro; }
   if (o.cards !== undefined) { if (!Array.isArray(o.cards)) throw new Error('«cards» должно быть массивом'); level.cards = o.cards.map((c, i) => card(c, `карточка ${i}`)); }

@@ -29,6 +29,7 @@
   "panic": 0,
   "nav": true,
   "mix": 0,
+  "theme": "pixel",
   "oncoming": 0,
   "chaser": null,
   "intro": "Автовоз с рампой. Заезжай сзади ровно и быстрее него — полетишь.",

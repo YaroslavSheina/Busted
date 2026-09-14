@@ -12,7 +12,7 @@ import { layoutBlocks, type Block, type Layout } from './blocks';
 import { makeWidthFn, widthAt, type Narrow, type WidthFn } from './narrow';
 import { NEAR, brushSide, collides, fullBlockAhead, hit, moveTraffic, obb, spawnTraffic, vehiclePose, type Obb, type TrafficCar, type Vehicle } from './traffic';
 import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
-import { fmtScore, hudHtml, render, type Blast, type Cam, type Fx, type Mark, type RoadScene } from './render';
+import { fmtScore, hudHtml, levelTheme, render, type Blast, type Cam, type Fx, type Mark, type RoadScene } from './render';
 import type { LevelData } from './levels';
 
 export interface GameUI {
@@ -135,6 +135,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   function load(l: LevelData): void {
     level = l; firstStart = true; cpS = 0; busts = 0;
+    levelTheme(l.theme); // палитра района
     spec = carByKey(l.car);
     // Машина и уровень задают стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
     P.width.v = l.width; P.traffic.v = l.traffic;

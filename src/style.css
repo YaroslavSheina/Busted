@@ -33,6 +33,14 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 .tune{display:block;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#ece9e0;border-radius:8px;padding:7px 0;font-size:12px;margin-top:4px}
 .tune.on{border-color:rgba(244,185,66,.5);color:#f4b942}
 .details{margin-top:6px}
+/* титры: ключевой арт затемнён, текст истории по строкам */
+#ending{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:24px;background:#0c182c center/cover no-repeat;pointer-events:auto}
+#ending::before{content:'';position:absolute;inset:0;background:rgba(12,24,44,.78)}
+#ending.hide{display:none}
+#ending .ebox{position:relative;max-width:360px;text-align:center}
+#ending h1{margin:0 0 18px;font-size:44px;letter-spacing:.2em;font-weight:900;color:#f4b942;text-shadow:4px 4px 0 #1a1408;transform:skew(-8deg)}
+#ending p{margin:0 0 18px;font-size:16px;line-height:1.7;color:#ece9e0;white-space:pre-line;text-shadow:0 1px 2px #000}
+#ending small{opacity:.7;font-size:12px;letter-spacing:.14em}
 /* карта карьеры: районы по порядку, уровни со статусом; текущий пульсирует, закрытые тусклые */
 #map{position:fixed;inset:0;z-index:5;background:#0c182c;color:#ece9e0;overflow-y:auto;pointer-events:auto;-webkit-user-select:none;user-select:none;padding:calc(14px + env(safe-area-inset-top)) 14px calc(90px + env(safe-area-inset-bottom))}
 #map.hide{display:none}

@@ -28,6 +28,7 @@
   "panic": 0,
   "nav": true,
   "mix": 0,
+  "theme": "pixel",
   "oncoming": 0,
   "chaser": null,
   "intro": "Переезд. Поезд не ждёт — и не догонит. Держи темп.",

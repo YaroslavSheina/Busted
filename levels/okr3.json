@@ -42,6 +42,7 @@
   "panic": 0,
   "nav": true,
   "mix": 0.1,
+  "theme": "pixel",
   "oncoming": 0,
   "chaser": null,
   "intro": "Окраина · 3. Длинный маршрут, два красных, всё вместе.",
