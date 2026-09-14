@@ -102,6 +102,12 @@ export function setTheme(name: string | null | undefined): void { T = THEMES[(na
 let themeLocked = false;
 export function lockTheme(): void { themeLocked = true; }
 export function levelTheme(name: string | undefined): void { if (!themeLocked) setTheme(name ?? 'pixelnight'); }
+// Нарисовать что-то в другой теме и вернуть текущую (карта карьеры: районы своей палитрой)
+export function withTheme(name: string | undefined, fn: () => void): void { const keep = T; T = THEMES[(name as ThemeName)] ?? THEMES.pixelnight; try { fn(); } finally { T = keep; } }
+// Земля района в мировых координатах: цвет темы, в пиксельных темах — плитка тротуара
+export function drawGround(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  ctx.fillStyle = (T.slabs && slabs(ctx)) || T.ground; ctx.fillRect(x, y, w, h);
+}
 export const groundColor = (): string => T.ground;
 export const themeName = (): ThemeName => (Object.keys(THEMES) as ThemeName[]).find(k => THEMES[k] === T) ?? 'comic';
 let city = false; // тротуары вдоль дорог — только там, где есть здания
@@ -657,7 +663,7 @@ function grain(g: CanvasRenderingContext2D, n: number, seed: number, count: numb
 }
 // Плитка тротуара (pixel): плиты 36 px со швами и зерном
 function slabs(ctx: CanvasRenderingContext2D): CanvasPattern | null {
-  return procTile(ctx, 'slabs', 72, (g, n) => {
+  return procTile(ctx, `slabs:${T.sidewalk}:${T.slabs}`, 72, (g, n) => { // ключ с цветами темы: кэш общий на холст, темы меняются между уровнями и на карте
     g.fillStyle = T.sidewalk!; g.fillRect(0, 0, n, n);
     grain(g, n, 7, 90, 'rgba(255,255,255,.06)', 'rgba(0,0,0,.07)');
     g.fillStyle = T.slabs!; g.fillRect(0, 0, n, 1); g.fillRect(0, 0, 1, n); g.fillRect(n / 2, 0, 1, n); g.fillRect(0, n / 2, n, 1);
@@ -665,7 +671,7 @@ function slabs(ctx: CanvasRenderingContext2D): CanvasPattern | null {
 }
 // Асфальт (pixel): ровный тон с редким зерном
 function asphalt(ctx: CanvasRenderingContext2D): CanvasPattern | null {
-  return procTile(ctx, 'asphalt', 64, (g, n) => { g.fillStyle = T.asphalt; g.fillRect(0, 0, n, n); grain(g, n, 13, 70, 'rgba(255,255,255,.05)', 'rgba(0,0,0,.12)'); });
+  return procTile(ctx, `asphalt:${T.asphalt}`, 64, (g, n) => { g.fillStyle = T.asphalt; g.fillRect(0, 0, n, n); grain(g, n, 13, 70, 'rgba(255,255,255,.05)', 'rgba(0,0,0,.12)'); });
 }
 // Фонари по краю тротуара с обеих сторон: тёмный столбик каждые 320 px по s, в видимой области
 function drawLights(ctx: CanvasRenderingContext2D, path: Path, wa: (s: number) => number): void {

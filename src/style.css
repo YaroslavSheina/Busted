@@ -54,22 +54,29 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 .msnd{background:var(--panel);border:2px solid var(--panel2);color:var(--paper);padding:6px 10px;font-size:12px;white-space:nowrap}
 .mhead h1{margin:0;font-family:var(--display);font-size:20px;letter-spacing:0;font-weight:400;color:var(--yellow);text-shadow:3px 3px 0 var(--ink);transform:var(--skew)}
 .mhead .fame{text-align:right;line-height:1.1} .mhead .fame small{display:block;font-size:11px;letter-spacing:.14em;opacity:.6} .mhead .fame .ico{margin-right:6px;vertical-align:-3px} .mhead .fame b{font-family:var(--display);font-size:14px;color:var(--yellow)}
-.mdist{margin-bottom:16px} .mdist.locked{opacity:.45}
-.mdist header{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--yellow);color:var(--ink);transform:skew(-6deg);box-shadow:5px 5px 0 var(--ink);margin-bottom:8px}
-.mdist header>*{transform:skew(6deg)} .mdist header img{height:34px;width:auto;image-rendering:pixelated}
-.mdist h2{margin:0;font-family:var(--display);font-size:11px;letter-spacing:0;text-transform:uppercase;font-weight:400} .mdist header small{font-size:11px;opacity:.75}
 .mgarage{margin:0 0 16px} .mgarage>small{display:block;font-size:11px;letter-spacing:.14em;opacity:.6;margin-bottom:6px;text-transform:uppercase}
 .mgarage .cars{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
 .mgarage .car{flex:0 0 92px;background:var(--panel);border:2px solid var(--panel2);padding:8px 6px;text-align:center;font-size:11px;line-height:1.3}
 .mgarage .car img{height:40px;width:auto;image-rendering:pixelated;display:block;margin:0 auto 4px} .mgarage .car b{display:block;font-size:12px} .mgarage .car small{opacity:.6}
 .mgarage .car.locked{opacity:.4} .mgarage .car.locked img{filter:grayscale(1)}
-.mrow .stars{width:48px;text-align:right;white-space:nowrap} .mrow .stars .ico{margin-left:1px}
-.mrows{display:flex;flex-direction:column;gap:5px}
-.mrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--panel);border:2px solid var(--panel2);color:var(--paper);padding:9px 12px;font-size:14px;border-radius:0}
-.mrow .n{width:22px;font-size:11px;opacity:.55;font-variant-numeric:tabular-nums} .mrow .t{flex:1} .mrow .s{font-variant-numeric:tabular-nums;color:var(--yellow);font-weight:700}
-.mrow.done{border-color:#3c5a78} .mrow.cur{border-color:var(--yellow);background:#1e3350;animation:pulse 1.2s ease-in-out infinite} .mrow.locked{opacity:.4}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(244,185,66,.0)}50%{box-shadow:0 0 0 4px rgba(244,185,66,.25)}}
-.mfoot{position:fixed;left:0;right:0;bottom:0;padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--night) 70%,transparent)}
+/* город: холст с дорогой и районами, поверх — таблички и точки уровней */
+.mcity{position:relative;margin:0 auto 110px;border:3px solid var(--ink);box-shadow:var(--hard);overflow:hidden}
+.mcity canvas{display:block}
+.msign{position:absolute;display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--yellow);color:var(--ink);border:2px solid var(--ink);box-shadow:var(--hard-s);transform:translateY(-50%) skew(-6deg);max-width:46%}
+.msign>*{transform:skew(6deg)} .msign.l{left:8px} .msign.r{right:8px}
+.msign img{height:26px;width:auto;image-rendering:pixelated} .msign h2{margin:0;font-family:var(--display);font-size:9px;font-weight:400;text-transform:uppercase;line-height:1.3} .msign small{font-size:10px;opacity:.75;white-space:nowrap}
+.mpin{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;padding:0;border:3px solid var(--ink);background:var(--panel);color:var(--paper);box-shadow:3px 3px 0 var(--ink);display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:11px}
+.mpin.done{background:var(--yellow);color:var(--ink)} .mpin.locked{opacity:.55;background:var(--panel2)}
+.mpin.cur{background:var(--paper);width:52px;height:52px;margin:-26px 0 0 -26px;animation:pulse 1.2s ease-in-out infinite} .mpin.cur img{height:34px;width:auto;image-rendering:pixelated}
+.mpin.sel{outline:3px solid var(--paper);outline-offset:2px}
+.mpin .pstars{position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:5px;white-space:nowrap;background:var(--ink);padding:1px 3px;line-height:0}
+@keyframes pulse{0%,100%{box-shadow:3px 3px 0 var(--ink),0 0 0 0 rgba(244,185,66,.0)}50%{box-shadow:3px 3px 0 var(--ink),0 0 0 6px rgba(244,185,66,.35)}}
+/* карточка выбранного уровня внизу */
+.mfoot{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--night) 75%,transparent)}
+.mcard{display:grid;grid-template-columns:1fr auto;grid-template-areas:"t go" "s go";align-items:center;gap:4px 12px;background:var(--paper);color:var(--ink);border:3px solid var(--ink);box-shadow:var(--hard);padding:10px 12px}
+.mcard-t{grid-area:t;line-height:1.2} .mcard-t small{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;opacity:.6} .mcard-t b{font-size:15px}
+.mcard-s{grid-area:s;display:flex;align-items:center;gap:8px;font-size:11px;opacity:.8;white-space:nowrap}
+.mcard .mgo{grid-area:go;width:auto;padding:14px 16px;font-size:11px}
 .mgo{width:100%;padding:18px;font-family:var(--display);font-size:13px;font-weight:400;letter-spacing:0;text-transform:uppercase;background:var(--yellow);color:var(--ink);border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);transform:skew(-6deg)}
 #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;pointer-events:auto;background:rgba(21,23,28,.6)}
 #overlay.show{display:flex}
