@@ -12,6 +12,7 @@ import { buildPanel, initToggle } from './debug';
 import { CARS, type CarKey, type CarSpec } from './cars';
 import { addFame, campaign, fame, recordLevel } from './campaign';
 import { renderMap } from './map';
+import { icon } from './icons';
 
 const $ = (id: string) => document.getElementById(id)!;
 const panel = $('panel'), carPanel = $('carPanel');
@@ -87,6 +88,7 @@ ending.addEventListener('pointerdown', e => { e.preventDefault(); ending.classLi
 const mapEl = $('map');
 function openMap(): void { renderMap({ root: mapEl, onPlay: k => { closeMap(); if (k !== levelKey) selectLevel(k); else game.reset(); }, onClose: closeMap }); mapEl.classList.remove('hide'); syncPause(); }
 function closeMap(): void { mapEl.classList.add('hide'); syncPause(); }
+$('mapBtn').innerHTML = icon('map', 18);
 $('mapBtn').onclick = () => { if (mapEl.classList.contains('hide')) openMap(); else closeMap(); };
 // Загрузочный экран с ключевым артом: мир стоит (отсчёт не идёт), тап убирает экран
 const splash = $('splash');
