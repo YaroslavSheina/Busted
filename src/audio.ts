@@ -25,7 +25,10 @@ function softClip(drive: number): Float32Array<ArrayBuffer> {
 // сирена: два тона, частота качается прямоугольным LFO; громкость — от близости копа
 let sirOsc: OscillatorNode | null = null, sirGain: GainNode | null = null;
 
-export function setAudioEnabled(on: boolean): void { enabled = on; if (master) master.gain.value = on ? 0.5 : 0; }
+const SND = 'lr.sound';
+try { if (localStorage.getItem(SND) === '0') enabled = false; } catch { /* нет хранилища */ }
+export function audioEnabled(): boolean { return enabled; }
+export function setAudioEnabled(on: boolean): void { enabled = on; if (master) master.gain.value = on ? 0.5 : 0; try { localStorage.setItem(SND, on ? '1' : '0'); } catch { /* приватный режим */ } }
 
 // Первый жест пользователя: создать контекст и постоянные узлы
 export function unlockAudio(): void {

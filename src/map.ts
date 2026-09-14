@@ -4,6 +4,7 @@ import { CARS, type CarKey } from './cars';
 import { CAMPAIGN, DISTRICTS, GARAGE, campaign, fame, progressOf, starsOf } from './campaign';
 import { LEVELS } from './levels';
 import { fmtScore } from './render';
+import { audioEnabled, setAudioEnabled } from './audio';
 
 // спрайт машины района — файл из public/art/pixel (те же, что рисует игра)
 const CAR_SPRITE: Record<string, string> = { prologue: 'super_car', finale: 'super_car', minivan: 'happy_bus', sedan: 'white_sedan', muscle: 'muscle_car', sport: 'sport_car', supercar: 'super_car', bus: 'schoolbus' };
@@ -17,6 +18,11 @@ export function renderMap(ui: MapUi): void {
   const head = document.createElement('div'); head.className = 'mhead';
   head.innerHTML = `<h1>BUSTED</h1><div class="fame"><small>слава</small><b>${fmtScore(fame())}</b></div>`;
   root.appendChild(head);
+  // настройки: пока только звук; выбор запоминается
+  const snd = document.createElement('button'); snd.className = 'msnd';
+  const sync = () => { snd.textContent = audioEnabled() ? '🔊 звук вкл' : '🔇 звук выкл'; };
+  snd.onclick = () => { setAudioEnabled(!audioEnabled()); sync(); };
+  sync(); head.appendChild(snd);
   // гараж: машины по ярусам, открыта — когда открыт её район
   const garage = document.createElement('div'); garage.className = 'mgarage';
   const total = CAMPAIGN.reduce((n, k) => n + starsOf(k), 0);

@@ -44,7 +44,8 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 /* карта карьеры: районы по порядку, уровни со статусом; текущий пульсирует, закрытые тусклые */
 #map{position:fixed;inset:0;z-index:5;background:#0c182c;color:#ece9e0;overflow-y:auto;pointer-events:auto;-webkit-user-select:none;user-select:none;padding:calc(14px + env(safe-area-inset-top)) 14px calc(90px + env(safe-area-inset-bottom))}
 #map.hide{display:none}
-.mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.mhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}
+.msnd{background:#152840;border:2px solid #253a52;color:#ece9e0;padding:6px 10px;font-size:12px;white-space:nowrap}
 .mhead h1{margin:0;font-size:30px;letter-spacing:.16em;font-weight:900;color:#f4b942;text-shadow:3px 3px 0 #1a1408;transform:skew(-8deg)}
 .mhead .fame{text-align:right;line-height:1.1} .mhead .fame small{display:block;font-size:11px;letter-spacing:.14em;opacity:.6} .mhead .fame b{font-size:22px;color:#f4b942;font-variant-numeric:tabular-nums}
 .mdist{margin-bottom:16px} .mdist.locked{opacity:.45}
