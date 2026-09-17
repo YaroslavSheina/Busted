@@ -166,6 +166,8 @@ docs/refs/         — референсы визуала от пользоват
     io.ts          — формат файла уровня, валидация импорта
 levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings?, props?, oncoming?, nav?, mix?, intro?, cards?, trap?, checkpoints? } — см. docs/mechanics.md и docs/progression.md
 tools/district.cjs — генератор районов: район (сетка, здания, машина) × маршруты (дороги по узлам: главная + ветки с родителем, перекрёстки, события: посты, ремонт, перекрытия, сужения, переезды) → levels/district*.json, один район — несколько уровней
+tools/harness/     — харнесс в репозитории (2026-09-17): bundle.mjs склеивает dist (vite build --minify false) в port.mjs с хуком __lr; compare.mjs — покадровое сравнение с прототипом (`npm run harness`, должно кончаться «порт идентичен прототипу»); routebot.mjs — бот прохождения уровней (LEVEL, LANE, PLAN, CLEAN, KEEPCOP, KEEPRAMP, OVERTAKE, LOOK, TRACE). port.mjs не в git. После правок game/physics/traffic/road — харнесс обязателен; после правок main.ts (обработчики, оболочка) — прогнать бота: стаб DOM бота проще браузера
+README.md          — запуск, флаги адреса, харнесс, порядок работы вдвоём (для коллег и GitHub)
 docs/concept.md
 docs/design.md     — диздок BUSTED
 docs/mechanics.md  — лаборатория механик: карточки идей со статусами, формат данных каждой

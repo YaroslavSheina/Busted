@@ -1,12 +1,15 @@
 {
-  "name": "left-right",
+  "name": "busted",
   "private": true,
   "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "harness:build": "vite build --minify false && node tools/harness/bundle.mjs",
+    "harness:compare": "node tools/harness/compare.mjs",
+    "harness": "npm run harness:build && npm run harness:compare"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
