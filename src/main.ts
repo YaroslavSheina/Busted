@@ -135,7 +135,9 @@ $('mapBtn').onclick = () => { if ($('pause').classList.contains('hide')) showPau
 // Загрузочный экран с ключевым артом: мир стоит (отсчёт не идёт), тап убирает экран
 const splash = $('splash');
 splash.style.backgroundImage = `url(${import.meta.env.BASE_URL}art/hero.jpg)`;
-splash.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); splash.classList.add('hide'); if (!query.get('level')) openMap(); else syncPause(); }); // первый жест — можно включать звук
+// Новый игрок после загрузочного экрана сразу в прологе: сначала крючок, потом меню. Карта — когда пролог пройден
+const firstRun = () => levelKey === 'prologue' && !progressOf('prologue').done;
+splash.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); splash.classList.add('hide'); if (!query.get('level') && !firstRun()) openMap(); else syncPause(); }); // первый жест — можно включать звук
 // Пока открыто меню, карта или загрузочный экран, мир стоит; тап по игровому полю закрывает меню и продолжает попытку
 const menus = [panel, carPanel];
 const syncPause = () => game.pause(!splash.classList.contains('hide') || !mapEl.classList.contains('hide') || !ending.classList.contains('hide') || shellEls().some(e => !e.classList.contains('hide')) || menus.some(m => m.classList.contains('open')));
