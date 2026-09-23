@@ -25,7 +25,6 @@
   "seed": 2026,
   "car": "sedan",
   "panic": 0.5,
-  "nav": true,
   "mix": 0.1,
   "theme": "pixel",
   "oncoming": 1,

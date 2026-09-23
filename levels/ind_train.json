@@ -29,7 +29,6 @@
   "seed": 5202,
   "car": "muscle",
   "panic": 0.2,
-  "nav": true,
   "mix": 0.3,
   "theme": "pixeldusk",
   "oncoming": 0,

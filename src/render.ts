@@ -36,7 +36,6 @@ export interface Scene {
   fx?: Fx[];                                                     // всплывающие очки и искры
   air?: number;                                                  // прыжок: 0..1 — фаза полёта, undefined — на земле
   props?: Prop[];                                                // здания и окружение
-  nav?: boolean;                                                 // навигатор: линия к гаражу по главной
   chaser?: { x: number; y: number; h: number; danger: number };  // danger: 0 — держит дистанцию, 1 — догнал
   blasts?: Blast[];                                              // взрывы и дым
   shake?: number;                                                // тряска камеры, px (только рисование — cam не трогается)
@@ -520,10 +519,6 @@ export function drawTurnArrow(ctx: CanvasRenderingContext2D, path: Path, w: numb
   ctx.beginPath(); ctx.moveTo(side * 27, -4); ctx.lineTo(side * 13, -13); ctx.lineTo(side * 13, 5); ctx.closePath(); ctx.fill();
   ctx.restore();
 }
-// Навигатор: пунктир к гаражу по осевой главной дороги; ветки без линии — на свой страх и риск
-export function drawNav(ctx: CanvasRenderingContext2D, path: Path): void {
-  dashed(ctx, path, 0, 30, 24, 'rgba(90,200,255,.3)', 6);
-}
 // С какой стороны родителя отходит ветка: знак смещения её точки за заходом от оси родителя
 export function branchSide(parent: Path, branch: Path, from: number): 1 | -1 {
   const a = pathAt(parent, from), b = pathAt(branch, BRANCH.lead + 220);
@@ -740,7 +735,6 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   if (sc.props?.length) drawProps(ctx, sc.props);
   for (const r of roads) for (const c of r.crossings ?? []) drawCrossingRoad(ctx, c);
   for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0, roads[i].oncoming ?? 0);
-  if (sc.nav) drawNav(ctx, roads[0].path);
   for (const r of roads) if (r.from !== undefined && r.parent !== undefined) { const pr = roads[r.parent], side = branchSide(pr.path, r.path, r.from); for (const s of arrowSpots(r.from, pr.from !== undefined)) drawTurnArrow(ctx, pr.path, pr.width, s, side); }
   for (const r of roads) drawBlocks(ctx, r.path, r.width, r.blocks, sc.t ?? 0);
   for (const r of roads) if (r.rails?.length) drawRails(ctx, r.rails, r.width, sc.t ?? 0);

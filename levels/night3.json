@@ -41,7 +41,6 @@
   "seed": 6303,
   "car": "sport",
   "panic": 0.3,
-  "nav": true,
   "mix": 0.15,
   "oncoming": 1,
   "chaser": {"gap":200,"speed":1.03,"at":[260,3894,7011]},

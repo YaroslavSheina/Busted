@@ -26,7 +26,6 @@
   "seed": 777,
   "car": "sedan",
   "panic": 0.3,
-  "nav": true,
   "mix": 0.2,
   "pace": [0.35,0.45],
   "oncoming": 0,

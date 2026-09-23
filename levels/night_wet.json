@@ -41,7 +41,6 @@
   "seed": 6303,
   "car": "sport",
   "panic": 0.3,
-  "nav": true,
   "mix": 0.15,
   "grip": 0.7,
   "oncoming": 1,

@@ -17,7 +17,6 @@ export function formatLevel(l: LevelData): string {
     : '';
   const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed}${l.chaser.at !== undefined ? `, "at": ${JSON.stringify(l.chaser.at)}` : ''} }` : '';
   const panic = l.panic ? `,\n  "panic": ${l.panic}` : '';
-  const nav = l.nav ? ',\n  "nav": true' : '';
   const mix = l.mix ? `,\n  "mix": ${l.mix}` : '';
   const pace = l.pace ? `,\n  "pace": ${JSON.stringify(l.pace)}` : '';
   const grip = l.grip !== undefined ? `,\n  "grip": ${l.grip}` : '';
@@ -36,7 +35,7 @@ export function formatLevel(l: LevelData): string {
     ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}${b.parent !== undefined ? `, "parent": ${b.parent}` : ''}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.oncoming ? `, "oncoming": ${b.oncoming}` : ''}${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''}${b.narrows?.length ? `, "narrows": ${JSON.stringify(b.narrows)}` : ''}${b.rails?.length ? `, "rails": ${JSON.stringify(b.rails)}` : ''}${b.crossings?.length ? `, "crossings": ${JSON.stringify(b.crossings)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${nav}${mix}${pace}${grip}${theme}${intro}${cards}${trap}${checkpoints}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${mix}${pace}${grip}${theme}${intro}${cards}${trap}${checkpoints}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -128,7 +127,6 @@ export function parseLevel(raw: unknown): LevelData {
     }
   }
   if (o.panic !== undefined) { if (!isNum(o.panic) || o.panic < 0 || o.panic > 1) throw new Error('«panic» — число 0..1'); level.panic = o.panic; }
-  if (o.nav !== undefined) { if (o.nav !== true && o.nav !== false) throw new Error('«nav» — true/false'); if (o.nav) level.nav = true; }
   if (o.mix !== undefined) { if (!isNum(o.mix) || o.mix < 0 || o.mix > 0.5) throw new Error('«mix» — число 0..0.5'); if (o.mix > 0) level.mix = o.mix; }
   if (o.pace !== undefined) { const p = o.pace as unknown[]; if (!Array.isArray(p) || p.length !== 2 || !p.every(isNum) || (p[0] as number) > (p[1] as number)) throw new Error('«pace» — [min, max] доли скорости'); level.pace = [p[0] as number, p[1] as number]; }
   if (o.grip !== undefined) { if (!isNum(o.grip) || o.grip <= 0 || o.grip > 1) throw new Error('«grip» — число 0..1'); level.grip = o.grip; }

@@ -83,7 +83,6 @@
   "seed": 31337,
   "car": "finale",
   "panic": 0.4,
-  "nav": true,
   "mix": 0.1,
   "oncoming": 0,
   "chaser": {"gap":260,"speed":1.02,"at":[962,7615,15553]},
