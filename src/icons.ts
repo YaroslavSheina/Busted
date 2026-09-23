@@ -25,6 +25,7 @@ const RAW: Record<string, string[]> = {
   hand: ['.......##.......', '......#ww#......', '......#ww#......', '...##.#ww#.##...', '..#ww##ww##ww#..', '..#wwwwwwwwww#..', '..#wwwwwwwwww#.#', '.##wwwwwwwwww#w#', '#ww#wwwwwwwwwww#', '#www#wwwwwwwww#.', '.#wwwwwwwwwwww#.', '..#wwwwwwwwww#..', '..#wwwwwwwwww#..', '...#wwwwwwww#...', '...##########...', '................'],
   ramp: ['................', '................', '..############..', '..#rrrrrrrrrr#..', '..#r#ww#rrrrr#..', '..#r#ww#rrrrr#..', '..#rrrrrrrrrr###', '..#rrrrrrrrr#ww#', '..#rrrrrrrr#www#', '..#rrrrrrr#wwww#', '..############.#', '...#..#..#..#...', '..###.####.###..', '..###......###..', '................', '................'],
   narrow: ['................', '.#............#.', '.##..........##.', '.#w#........#w#.', '.#ww#......#ww#.', '.#www#....#www#.', '.#www#....#www#.', '.#www#....#www#.', '.#www#....#www#.', '.#www#....#www#.', '.#www#....#www#.', '.#ww#......#ww#.', '.#w#........#w#.', '.##..........##.', '.#............#.', '................'],
+  note: ['................', '..#########.....', '..#wwwwwww##....', '..#wwwwwww#w#...', '..#wwwwwww####..', '..#wwwwwwwwww#..', '..#ww######ww#..', '..#wwwwwwwwww#..', '..#ww######ww#..', '..#wwwwwwwwww#..', '..#ww####wwww#..', '..#wwwwwwwwww#..', '..#wwwwwwwwww#..', '..############..', '................', '................'],
 };
 const FILL: Record<string, string> = { '#': 'var(--ink)', y: 'var(--yellow)', w: 'var(--paper)', r: 'var(--red)', b: 'var(--blue)', d: 'var(--panel2)' };
 const cache = new Map<string, string>();

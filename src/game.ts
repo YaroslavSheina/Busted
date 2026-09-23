@@ -41,6 +41,12 @@ export interface LevelResult { clean: boolean; target: number; time: number }
 export interface ScoreReply { fame: number; best: number; record: boolean; unlock?: string }
 export type ScoreHook = (points: number, meta: LevelResult) => ScoreReply | number;
 export type BestHook = () => number; // лучший результат уровня — для экрана BUSTED
+// Итог попытки для журнала теста (log.ts): как кончилась, где на маршруте (s) и на карте (x, y — для тепловой карты в редакторе),
+// за сколько, с какой частотой кадров. quit — попытку бросили посреди заезда: «заново» из паузы, другой уровень с карты
+export interface Attempt { end: 'busted' | 'done' | 'trap' | 'quit'; why?: string; car: string; s: number; L: number; x: number; y: number; t: number; dur: number; score: number; cp: number; fps: number; slow: number }
+export type AttemptHook = (a: Attempt) => void;
+// Где игрок сейчас — для заметки тестера
+export interface GameInfo { state: string; why: string; s: number; L: number; x: number; y: number; t: number; score: number; busts: number }
 
 export interface Game {
   load(level: LevelData): void;
@@ -49,6 +55,8 @@ export interface Game {
   onEnd(hook: EndHook | null): void;
   onScore(hook: ScoreHook | null): void;
   onBest(hook: BestHook | null): void;
+  onAttempt(hook: AttemptHook | null): void;
+  info(): GameInfo;
   pause(on: boolean): void; // меню открыто — мир стоит, кадр рисуется
   isPaused(): boolean;
   stop(): void;
@@ -142,6 +150,10 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let endHook: EndHook | null = null;
   let scoreHook: ScoreHook | null = null;
   let bestHook: BestHook | null = null;
+  let attemptHook: AttemptHook | null = null;
+  // журнал теста: попытка открыта с reset, закрывается итогом; кадры считаются, пока мир едет
+  let attemptOpen = false, attemptT0 = 0, attemptCp = 0, lastWhy = '';
+  let frames = 0, frameSum = 0, slowFrames = 0;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
     const r: Road = { path, def, parent: -1, width: P.width.v, narrows, blockDefs: blocks, rails: [], crossings: [], oncoming: 0, blocks: layoutBlocks(path, P.width.v, []), solids: [], cars: cars ?? [], traffic: [] };
@@ -159,6 +171,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
 
   function load(l: LevelData): void {
+    abandon();
     level = l; firstStart = true; cpS = 0; busts = 0; cardsSeen = 0;
     levelTheme(l.theme); // палитра района
     spec = carByKey(l.car);
@@ -193,6 +206,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
 
   function reset(): void {
+    abandon();
     const p0 = pathAt(roads[0].path, 0);
     car = { x: p0.x, y: p0.y, h: heading(p0.tx, p0.ty), w: 0, vx: p0.tx * P.speed.v, vy: p0.ty * P.speed.v, s: 0, off: 0, skid: false, W: spec.W, L: spec.L, road: 0 };
     marks = [];
@@ -221,10 +235,12 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       cardIdx = Math.max(cardsSeen, (level.cards ?? []).filter(c => c.s <= cpS).length);
       copIdx = Math.max(0, copAts().filter(a => a <= cpS).length - 1); // последняя пройденная точка копа срабатывает снова
     }
+    attemptOpen = true; attemptT0 = timeAlive; attemptCp = cpS; lastWhy = ''; frames = frameSum = slowFrames = 0;
     if (firstStart) { firstStart = false; intro = 3; state = 'intro'; ui.overlay.className = 'show intro'; ui.ovTitle.textContent = '3'; ui.ovSub.textContent = level.intro ?? level.name; ui.ovHint.textContent = 'нажми, чтобы начать'; if (ui.ovName) ui.ovName.textContent = level.name; }
   }
 
   function busted(why: string): void {
+    lastWhy = why;
     const soft = why === 'вылет с дороги' || why === 'съехал с маршрута' || why === 'ежи';
     sfx(why === 'догнали' ? 'caught' : why === 'поезд' ? 'train' : soft ? 'off' : 'crash'); buzz(soft ? 30 : 70);
     // удар — взрыв с дымом и тряска, машина разбита; вылет — только пыль
@@ -242,10 +258,25 @@ export function createGame(ui: GameUI, first: LevelData): Game {
         <div class="rows"><div><small>очки</small><b>${fmtScore(score)}</b></div>${best ? `<div><small>лучший</small><b>${fmtScore(best)}</b></div>` : ''}</div>
         <div class="hint">${r.hint}</div><button class="rbtn">${icon('retry', 16)} ${cpS > 0 ? 'с контрольной' : 'ещё раз'}</button></div>`;
     }
+    emit('busted');
+  }
+  // Итог попытки — в журнал теста (один раз за попытку)
+  function emit(end: Attempt['end']): void {
+    if (!attemptOpen) return;
+    attemptOpen = false;
+    attemptHook?.({ end, why: end === 'busted' ? lastWhy : undefined, car: level.car ?? 'sedan', s: Math.round(mainS(car.road, car.s)), L: Math.round(roads[0].path.L),
+      x: Math.round(car.x), y: Math.round(car.y), t: +timeAlive.toFixed(1), dur: +(timeAlive - attemptT0).toFixed(1), score: Math.round(score), cp: Math.round(attemptCp),
+      fps: frames ? Math.round(frames / frameSum) : 0, slow: frames ? +(slowFrames / frames).toFixed(3) : 0 });
+  }
+  // Попытку бросили посреди заезда (заново из паузы, другой уровень с карты) — в журнал как quit; меньше секунды езды не считаем
+  function abandon(): void {
+    if (attemptOpen && state === 'play' && timeAlive - attemptT0 > 1) emit('quit');
+    attemptOpen = false;
   }
   function finish(): void {
     sfx('delivered');
     state = 'done'; cpS = 0; ui.overlay.className = 'show done'; // уровень пройден: повтор — с начала, а не с контрольной точки
+    emit('done');
     ui.ovTitle.textContent = 'DELIVERED';
     const pts = score * SCORE.finishMul, target = targetScore(), clean = busts === 0;
     const raw = scoreHook ? scoreHook(pts, { clean, target, time: timeAlive }) : null;
@@ -274,6 +305,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   function trap(text: string): void {
     sfx('trap');
     state = 'trap'; cpS = 0; ui.overlay.className = 'show busted trap';
+    emit('trap');
     const raw = scoreHook ? scoreHook(score, { clean: busts === 0, target: 0, time: timeAlive }) : null;
     const total = raw === null ? null : typeof raw === 'number' ? raw : raw.fame;
     ui.ovTitle.textContent = 'BUSTED'; ui.ovSub.textContent = text + `\nочки ${fmtScore(score)}` + (total !== null ? ` · слава ${fmtScore(total)}` : '');
@@ -552,7 +584,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   let raf = 0, last = performance.now(), hudT = 0;
   function frame(now: number): void {
-    const dt = Math.min(MAX_DT, (now - last) / 1000); last = now;
+    const raw = (now - last) / 1000, dt = Math.min(MAX_DT, raw); last = now;
+    // частота кадров попытки для журнала: кадров в секунду и доля медленных (ниже 40 к/с) — только пока мир едет
+    if (state === 'play' && !paused && intro === null && card === null && raw < 0.5) { frames++; frameSum += raw; if (raw > 1 / 40) slowFrames++; }
     // слоу-мо провокации: мир идёт медленнее, камера чуть ближе; формула физики та же, меняется только dt
     if (slow > 0) slow -= dt;
     zoom += ((slow > 0 ? PANIC.zoom : 1) - zoom) * Math.min(1, 8 * dt);
@@ -611,6 +645,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     onEnd(hook) { endHook = hook; },
     onScore(hook) { scoreHook = hook; },
     onBest(hook) { bestHook = hook; },
+    onAttempt(hook) { attemptHook = hook; },
+    info: () => ({ state, why: lastWhy, s: Math.round(mainS(car.road, car.s)), L: Math.round(roads[0].path.L), x: Math.round(car.x), y: Math.round(car.y), t: +timeAlive.toFixed(1), score: Math.round(score), busts }),
     pause(on) { paused = on; },
     isPaused: () => paused,
     stop() {

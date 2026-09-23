@@ -6,6 +6,7 @@ import { audioEnabled, setAudioEnabled } from './audio';
 import { hapticsEnabled, setHapticsEnabled } from './haptics';
 import { icon } from './icons';
 import { setTester, tester } from './tester';
+import { clearLog, logCount, shareLog } from './log';
 
 export const CAR_SPRITE: Record<string, string> = { prologue: 'super_car', finale: 'super_car', minivan: 'happy_bus', sedan: 'white_sedan', muscle: 'muscle_car', sport: 'sport_car', supercar: 'super_car', bus: 'schoolbus' };
 const base = () => import.meta.env.BASE_URL;
@@ -81,11 +82,14 @@ export function showPause(el: HTMLElement, ui: ShellUi): void {
 export function renderSettings(el: HTMLElement, ui: ShellUi): void {
   let armed = false; // сброс — двумя тапами
   let taps = 0;      // пять тапов по номеру сборки — режим тестера
+  let sent = '';     // что вышло с отправкой журнала
   const draw = () => {
     el.innerHTML = `<div class="sbox"><h1>${icon('gear', 18)} настройки</h1>
       <button class="srow" data-a="sound"><span>${icon(audioEnabled() ? 'sound' : 'mute', 16)} звук</span><b>${audioEnabled() ? 'вкл' : 'выкл'}</b></button>
       <button class="srow" data-a="haptics"><span>${icon('siren', 16)} вибрация</span><b>${hapticsEnabled() ? 'вкл' : 'выкл'}</b></button>
       <div class="srow static"><span>язык</span><b>русский</b></div>
+      <button class="srow" data-a="log"><span>${icon('note', 16)} журнал теста</span><b>${sent || `${logCount()} · отправить`}</b></button>
+      ${tester() ? `<button class="srow" data-a="clearlog"><span>${icon('note', 16)} очистить журнал</span><b></b></button>` : ''}
       ${tester() ? `<button class="srow" data-a="tester"><span>${icon('flag', 16)} тестер: все уровни</span><b>вкл</b></button>` : ''}
       <button class="srow danger" data-a="reset"><span>${icon('cuffs', 16)} сбросить прогресс</span><b>${armed ? 'точно?' : ''}</b></button>
       <button class="sclose">${icon('map', 16)} на карту</button><small class="sbuild">сборка ${__BUILD__}</small></div>`;
@@ -97,6 +101,8 @@ export function renderSettings(el: HTMLElement, ui: ShellUi): void {
     if (a === 'sound') setAudioEnabled(!audioEnabled());
     else if (a === 'haptics') setHapticsEnabled(!hapticsEnabled());
     else if (a === 'tester') setTester(false);
+    else if (a === 'clearlog') { clearLog(); sent = ''; }
+    else if (a === 'log') { void shareLog().then(r => { sent = r; draw(); }); return; }
     else if (a === 'reset') { if (!armed) { armed = true; } else { armed = false; ui.onReset(); el.classList.add('hide'); ui.onMap(); return; } }
     draw();
   };

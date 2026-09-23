@@ -15,6 +15,7 @@ import { renderMap } from './map';
 import { icon } from './icons';
 import { chosenCar, districtToIntroduce, renderGarage, renderSettings, showDistrict, showPause, type ShellUi } from './shell';
 import { setTester } from './tester';
+import { logAttempt, logOpen } from './log';
 if (query.get('tester') !== null) setTester(query.get('tester') === '1'); // ?tester=1 — все уровни открыты (tester.ts)
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -43,6 +44,9 @@ game.onScore((points, meta) => {
   return { fame: total, best: prev, record: inCamp && points > prev && prev > 0, unlock };
 });
 game.onBest(() => progressOf(levelKey).best);
+// Журнал теста: запуск игры и каждая попытка (log.ts) — где разбиваются, сколько попыток, какая частота кадров
+logOpen();
+game.onAttempt(a => logAttempt(levelKey, a));
 // Пройденный уровень кампании (в том числе открытый из меню) ведёт к следующему по списку; последний — на карту
 game.onEnd(how => {
   const next = campaign.advance(levelKey);
