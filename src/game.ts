@@ -237,7 +237,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (ui.ovBody) {
       const r = REASONS[why] ?? { icon: 'crash', hint: 'Смотри на два квартала вперёд' };
       const best = bestHook ? bestHook() : 0;
-      ui.ovBody.innerHTML = `<div class="res"><div class="reason">${icon(r.icon, 20)}<span>${why}</span></div>
+      // причина в терминах ввода (решение 5 в CLAUDE.md): «держал RIGHT 0.8 с» — игрок понимает, что сделал не так
+      ui.ovBody.innerHTML = `<div class="res"><div class="reason">${icon(r.icon, 20)}<span>${why}</span></div><div class="hold">${holdText()}</div>
         <div class="rows"><div><small>очки</small><b>${fmtScore(score)}</b></div>${best ? `<div><small>лучший</small><b>${fmtScore(best)}</b></div>` : ''}</div>
         <div class="hint">${r.hint}</div><button class="rbtn">${icon('retry', 16)} ${cpS > 0 ? 'с контрольной' : 'ещё раз'}</button></div>`;
     }
