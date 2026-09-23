@@ -9,10 +9,10 @@ import { tester } from './tester';
 export interface District { name: string; car: string; levels: string[]; story?: string }
 export const DISTRICTS: District[] = [
   { name: 'Пролог', car: 'prologue', levels: ['prologue'] },
-  { name: 'Обучение', car: 'minivan', levels: ['tut01', 'tut02', 'tut03', 'tut04', 'tut05', 'tut06', 'tut07', 'tut08', 'tut09', 'tut10'],
-    story: 'Спорткара больше нет. Есть чужой минивэн и десять коротких заказов, чтобы вспомнить, как ездить.' },
+  { name: 'Обучение', car: 'minivan', levels: ['tut01', 'tut02', 'tut03', 'tut04', 'tut05', 'tut06'],
+    story: 'Два года спустя. У ворот тюрьмы ждёт Штурман — старый друг на старом кабриолете: «Город изменился. Покажу, как тут теперь ездят».' },
   { name: 'Окраина', car: 'minivan', levels: ['okr1', 'okr_works', 'okr2', 'okr_convoy', 'okr3'],
-    story: 'Слава на нуле. Заказы только на окраине: посты, ремонт и медленный минивэн.' },
+    story: 'Штурман свёл тебя с первым заказчиком. Заказы только на окраине: посты, ремонт и тот же минивэн.' },
   { name: 'Центр', car: 'sedan', levels: ['district2', 'ctr_red', 'district2b', 'ctr_jam', 'district2c'],
     story: 'Окраина тебя заметила — дали седан и заказы в центре. Перекрёстки, встречка, пробки.' },
   { name: 'Промзона', car: 'muscle', levels: ['ind_serp', 'ind1', 'ind_train', 'ind2', 'ind_ramps', 'ind3'],
@@ -32,8 +32,10 @@ export const MENU: string[] = [...CAMPAIGN, 'polygon'].filter(k => LEVEL_KEYS.in
 const KEY = 'lr.campaign';
 interface Progress { key: string }
 
+// Уроки 7–10 слиты в шесть уроков с другом (2026-09-24): сохранение на удалённом уроке ведёт на ближайший новый, а не в пролог
+const MOVED: Record<string, string> = { tut07: 'tut05', tut08: 'tut05', tut09: 'tut06', tut10: 'tut06' };
 function index(): number {
-  try { const p = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Progress> | null; const i = CAMPAIGN.indexOf(p?.key ?? ''); if (i >= 0) return i; } catch { /* нет сохранения */ }
+  try { const p = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Progress> | null; const key = p?.key ?? ''; const i = CAMPAIGN.indexOf(MOVED[key] ?? key); if (i >= 0) return i; } catch { /* нет сохранения */ }
   return 0;
 }
 function save(i: number): void { try { localStorage.setItem(KEY, JSON.stringify({ key: CAMPAIGN[i] } satisfies Progress)); } catch { /* приватный режим */ } }

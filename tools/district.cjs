@@ -224,6 +224,11 @@ function build(district, route) {
   const cards = (route.cards ?? []).map(c => ({ s: atS(c.at), text: c.text }));
   const trap = route.trap ? { s: atS(route.trap.at), text: route.trap.text } : null;
   const checkpoints = (route.checkpoints ?? []).map(atS);
+  // друг-наставник (docs/teaching.md): план полос и «дальше сам» — координатами сетки или числом s; реплики — по s главной
+  const toS = at => typeof at === 'number' ? at : atS(at);
+  const mentor = route.mentor ? { ...(route.mentor.gap ? { gap: route.mentor.gap } : {}), plan: route.mentor.plan.map(([at, lane]) => [toS(at), lane]), until: toS(route.mentor.until), ...(route.mentor.bye ? { bye: route.mentor.bye } : {}) } : null;
+  const talk = (route.talk ?? []).map(t => ({ s: atS(t.at), text: t.text }));
+  const trafficFrom = route.trafficFrom ? toS(route.trafficFrom) : null;
   // chaserAt — координата или список координат: повторные погони, новый коп в каждой точке, если прежний выбыл
   const chaser = spec.chaser ? { ...spec.chaser, ...(route.chaserAt ? { at: Array.isArray(route.chaserAt[0]) ? route.chaserAt.map(atS) : atS(route.chaserAt) } : {}) } : null;
   if (!chaser && route.chaserAt) throw new Error(`${spec.name}: chaserAt без chaser`);
@@ -286,7 +291,7 @@ ${main.pts.map(p => `    [${p[0]}, ${p[1]}]`).join(',\n')}
   "panic": ${spec.panic},
   "mix": ${spec.mix ?? 0.15},${route.pace ? `\n  "pace": ${JSON.stringify(route.pace)},` : ''}${route.grip ? `\n  "grip": ${route.grip},` : ''}${spec.theme ? `\n  "theme": ${JSON.stringify(spec.theme)},` : ''}
   "oncoming": ${main.oncoming},
-  "chaser": ${JSON.stringify(chaser)},${route.intro ? `\n  "intro": ${JSON.stringify(route.intro)},` : ''}${route.goal ? `\n  "goal": ${JSON.stringify(route.goal)},` : ''}${cards.length ? `\n  "cards": [\n${cards.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ],` : ''}${trap ? `\n  "trap": ${JSON.stringify(trap)},` : ''}${checkpoints.length ? `\n  "checkpoints": ${JSON.stringify(checkpoints)},` : ''}
+  "chaser": ${JSON.stringify(chaser)},${route.intro ? `\n  "intro": ${JSON.stringify(route.intro)},` : ''}${route.goal ? `\n  "goal": ${JSON.stringify(route.goal)},` : ''}${mentor ? `\n  "mentor": ${JSON.stringify(mentor)},` : ''}${talk.length ? `\n  "talk": [\n${talk.map(t => '    ' + JSON.stringify(t)).join(',\n')}\n  ],` : ''}${trafficFrom ? `\n  "trafficFrom": ${trafficFrom},` : ''}${cards.length ? `\n  "cards": [\n${cards.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ],` : ''}${trap ? `\n  "trap": ${JSON.stringify(trap)},` : ''}${checkpoints.length ? `\n  "checkpoints": ${JSON.stringify(checkpoints)},` : ''}
   "cars": [
 ${mainCars.map(c => '    ' + JSON.stringify(c)).join(',\n')}
   ],${blocks.length ? `\n  "blocks": [\n${blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ],` : ''}${narrows.length ? `\n  "narrows": [\n${narrows.map(n => '    ' + JSON.stringify(n)).join(',\n')}\n  ],` : ''}${rails.length ? `\n  "rails": [\n${rails.map(r => '    ' + JSON.stringify(r)).join(',\n')}\n  ],` : ''}
@@ -309,61 +314,74 @@ ${props.map(p => '    ' + JSON.stringify(p)).join(',\n')}
 }
 
 const DISTRICTS = [
-  // «Учебный район» (docs/progression.md): десять коротких уровней по одной механике, один город на всех.
-  // Минивэн на 1–5, седан на 6–10. Ветки не используются — уровни линейные (объезды в пост-MVP).
-  { seed: 2026, car: 'minivan', speed: 240, traffic: 0, panic: 0, mix: 0, chaser: null, theme: 'pixel', blocks: { i: [-1, 4], j: [-14, 0] },
+  // «Учебный район» — шесть уроков с другом (docs/teaching.md, решение 2026-09-24): после ловушки пролога и тюрьмы героя
+  // встречает старый друг Штурман и учит ездить заново. Урок: друг впереди показывает (знакомство), с until растворяется —
+  // «дальше сам» (проверка), в конце та же механика в новом месте (поворот). Всё на минивэне; седан приходит с Центром.
+  // Третья звезда — цель урока (goal). Участок с другом — без случайного трафика (trafficFrom): друг его не видит
+  { seed: 2026, car: 'minivan', speed: 240, traffic: 0, panic: 0, mix: 0, chaser: null, theme: 'pixel', blocks: { i: [-1, 7], j: [-11, 1] },
     routes: [
-      { file: 'tut01', name: '1 · Руль', intro: 'Минивэн. Машины разные: эта тяжелее, и в повороте её несёт шире. Камера не поворачивает — жми заранее и смотри, как машина ведёт себя в дуге.',
-        cards: [{ at: [0, -2.3], text: 'Поворот: жми заранее — машину несёт' }, { at: [2, -1.6], text: 'Теперь налево' }],
-        roads: [{ nodes: [[0, 0], [0, -3], [2, -3], [2, -1], [4, -1], [4, -4]], oncoming: 0, crossings: false }] },
-      { file: 'tut02', name: '2 · Трафик', traffic: 0.5, intro: 'Впереди машины. Обгоняй — меняй полосу заранее.',
-        cards: [{ at: [0, -0.8], text: 'Проезд впритирку — NEAR MISS, +100' }],
+      // 1 · Руль: змейка из углов, два спуска — первый с другом, второй сам. Цель — ни одного заноса
+      { file: 'tut01', name: '1 · Руль', goal: { type: 'noskid', n: 1 },
+        intro: 'Два года за решёткой. У ворот ждёт Штурман: «Город изменился. Минивэн мой, тормозов у него нет. Держись за мной».',
+        mentor: { plan: [[0, 1]], until: [2, -0.4], bye: 'Дальше сам. Жду в гараже.' },
+        talk: [{ at: [0, -0.25], text: 'Жми коротко — машину несёт, отпускай заранее.' }, { at: [0, -1.25], text: 'Поворот начинай раньше, чем кажется. Как я.' },
+          { at: [2, -1.65], text: 'Едем вниз: теперь LEFT уводит вправо. Смотри на машину, не на экран.' },
+          { at: [6, -1.6], text: 'Опять вниз. Кнопки — от машины, не от экрана.' }],
+        roads: [{ nodes: [[0, 0], [0, -2], [2, -2], [2, 0], [4, 0], [4, -2], [6, -2], [6, 0]], oncoming: 0, crossings: false }] },
+      // 2 · Трафик: друг обходит медленные машины заранее; дальше плотный поток сам, обгон сразу за углом. Цель — near miss × 5
+      { file: 'tut02', name: '2 · Трафик', traffic: 0.45, goal: { type: 'near', n: 5 }, trafficFrom: [0, -3.8],
+        intro: 'Штурман: «Все медленнее тебя — обгоняй. Заранее, не в последний момент. Смотри, как я».',
+        mentor: { plan: [[0, 1], [430, 0], [820, 1]], until: [0, -3.6], bye: 'Дальше сам. Поток плотнее.' },
+        talk: [{ at: [0, -0.3], text: 'Медленный впереди — ухожу в соседнюю заранее.' }, { at: [0, -2.0], text: 'Прошёл впритирку — NEAR MISS. Пять — и я впечатлён.' },
+          { at: [1, -4.45], text: 'Обгон сразу за углом — самый опасный.' }],
+        events: [{ type: 'slow', at: [0, -1.1], lane: 1, speed: 70 }, { type: 'slow', at: [0, -2.2], lane: 0, speed: 70 }, { type: 'slow', at: [0, -3.0], lane: 2, speed: 60 }],
         roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -8]], oncoming: 0, crossings: false }] },
-      { file: 'tut03', name: '3 · Перекрёсток', traffic: 0.1, intro: 'Светофоры. На зелёный — езжай. На красный поперечные идут друг за другом — проскочи между ними. Кирпич на поперечной улице: туда нельзя.',
-        cards: [{ at: [0, -0.5], text: 'Кирпич — на поперечную не сворачивать' }, { at: [0, -2.5], text: 'Впереди красный: смотри на поперечные' }],
-        roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -7]], oncoming: 0, offsets: ['green', 'green', 'red', 'green', 'red', 'green'] }] },
-      { file: 'tut04', name: '4 · Пост', traffic: 0.15, intro: 'Посты полиции перекрывают полосы. Ищи просвет и перестраивайся заранее.',
-        cards: [{ at: [0, -1.0], text: 'Пост: просвет посередине' }, { at: [0, -2.3], text: 'Просвет слева' }, { at: [1, -5.0], text: 'Просвет справа' }, { at: [1, -6.5], text: 'Ежи справа — только середина' }],
-        events: [{ type: 'post', at: [0, -1.5] }, { type: 'post', at: [0, -2.8], lanes: [1, 2] }, { type: 'post', at: [1, -5.9], lanes: [0, 1] }, { type: 'spikes', at: [1, -7.2] }], // после дуги угла 600 px на перестроение
-        roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -8]], oncoming: 0, crossings: false }] },
-      { file: 'tut05', name: '5 · Ремонт', traffic: 0.2, intro: 'Ремонт закрывает полосы. Сужение — держись середины.',
-        cards: [{ at: [0, -0.7], text: 'Ремонт справа: уходи в левую полосу' }, { at: [1, -4.8], text: 'Сужение впереди' }],
-        events: [{ type: 'works', at: [0, -1.2], lanes: [1, 2], len: 400 }, { type: 'works', at: [0, -2.8], lanes: [0], len: 300 },
-          { type: 'narrow', at: [1, -5.2], to: [1, -5.8], width: 110 }, { type: 'works', at: [1, -6.8], lanes: [2], len: 300 }],
-        roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -8]], oncoming: 0, crossings: false }] },
-      // переезд: первый поезд «перед носом» — сценарный по дистанции (rails.before), второй и третий сразу за спиной (rails.after)
-      { file: 'tut06', name: '6 · Переезд', car: 'sedan', speed: 300, traffic: 0.15, intro: 'Переезд. Поезд не ждёт — и не догонит. Держи темп.',
-        cards: [{ at: [0, -1.6], text: 'Переезд: поезд пройдёт перед тобой' }, { at: [0, -3.5], text: 'Этот пройдёт сразу за тобой' }],
-        events: [{ type: 'rails', at: [0, -2.5], offset: 'ahead', length: 500 }, { type: 'rails', at: [0, -4.2], offset: 'behind', length: 500 }, { type: 'rails', at: [1, -7], offset: 'behind', length: 600 }],
-        roads: [{ nodes: [[0, 0], [0, -5], [1, -5], [1, -9]], oncoming: 0, crossings: false }] },
-      // погоня: коп чуть быстрее на прямой (1.02: +6 px/с) и отстаёт в поворотах (~25 px за дугу) — за уровень подтягивается со 180 до ~120 px;
-      // 1.05 догонял бота на 15 с, 1.03 доводил хвост до 60 px — поезд в конце уже не успевал его снять
-      { file: 'tut07', name: '7 · Погоня', car: 'sedan', speed: 300, traffic: 0.15, chaser: { gap: 180, speed: 1.02 }, chaserAt: [0, -0.8],
-        intro: 'Полиция на хвосте. На прямой коп быстрее, в поворотах отстаёт — не сбавляй и не виляй.',
-        cards: [{ at: [0, -0.9], text: 'Погоня! Держи дистанцию в поворотах' }, { at: [2, -6.5], text: 'Переезд впереди: поезд разберётся с копом' }],
-        events: [{ type: 'rails', at: [2, -7], offset: 'behind', after: 0.2, length: 500 }], // коп подтянулся до ~0.4 с — поезд идёт раньше, чем в прологе (0.5)
-        roads: [{ nodes: [[0, 0], [0, -2], [2, -2], [2, -4], [0, -4], [0, -6], [2, -6], [2, -8]], oncoming: 0, crossings: false }] },
-      // рампы: первые две в двух кварталах друг от друга; автовоз встаёт за RAMP.stopGap до преграды, ремонт за рампой короткий (100)
-      { file: 'tut08', name: '8 · Рампа', car: 'sedan', speed: 300, traffic: 0.1, intro: 'Автовоз с рампой. Заезжай сзади ровно и быстрее него — полетишь.',
-        cards: [{ at: [0, -0.5], text: 'Рампа: заезжай сзади по центру' }, { at: [0, -3.0], text: 'Перелети ремонт' }, { at: [1, -7.0], text: 'Перелети пост' }],
-        events: [{ type: 'ramp', at: [0, -1.0], lane: 1, speed: 100 }, { type: 'ramp', at: [0, -3.5], lane: 1, speed: 100 }, { type: 'works', at: [0, -3.85], lanes: [0, 1, 2], len: 100 },
-          { type: 'ramp', at: [1, -7.5], lane: 1, speed: 100 }, { type: 'closure', at: [1, -7.85] }],
-        roads: [{ nodes: [[0, 0], [0, -5], [1, -5], [1, -10]], oncoming: 0, crossings: false }] },
-      // встречка: после карточки про панику — медленные и стоящие машины, есть кого обойти впритирку
-      { file: 'tut09', name: '9 · Встречка', car: 'sedan', speed: 300, traffic: 0.4, panic: 0.5, mix: 0.1, intro: 'Левая полоса — встречная. Проезд впритирку пугает водителей: паника — очки.',
-        cards: [{ at: [0, -0.7], text: 'Двойная жёлтая: слева встречка' }, { at: [0, -2.5], text: 'Прижмись к машине — ПАНИКА +300' }],
-        events: [{ type: 'slow', at: [0, -2.8], lane: 2, speed: 90 }, { type: 'slow', at: [1, -4.8], lane: 1, speed: 90 }, { type: 'parked', at: [1, -6.3], lane: 2 }],
-        roads: [{ nodes: [[0, 0], [0, -4], [1, -4], [1, -8]], oncoming: 1, crossings: false }] },
-      // экзамен: длиннее (7 ног), два копа — второй появляется после того, как первый попал под поезд; события между перекрёстками
-      { file: 'tut10', name: '10 · Экзамен', car: 'sedan', speed: 300, traffic: 0.35, mix: 0.15, panic: 0.3, chaser: { gap: 190, speed: 1.04 }, chaserAt: [[0, -0.5], [2, -9.6]],
-        intro: 'Экзамен. Всё, что умеешь: посты, ремонт, поезда, рампа, встречка. Копов будет двое. Гараж в конце.',
-        cards: [{ at: [2, -9.5], text: 'Второй коп на хвосте' }],
-        events: [{ type: 'post', at: [0, -1.5] }, { type: 'works', at: [1.5, -3], lanes: [2], len: 300 }, { type: 'rails', at: [2, -4.5], offset: 'behind', length: 500 },
-          { type: 'ramp', at: [4, -7.5], lane: 1, speed: 100 }, { type: 'closure', at: [4, -7.8] }, { type: 'narrow', at: [4, -8.3], to: [4, -8.7], width: 110 },
-          { type: 'spikes', at: [2, -10.5] }, { type: 'post', at: [2, -11.5], lanes: [0, 1] }, { type: 'rails', at: [2, -12.5], offset: 'behind', length: 500 }],
-        roads: [{ nodes: [[0, 0], [0, -3], [2, -3], [2, -6], [4, -6], [4, -9], [2, -9], [2, -13]], oncoming: 1,
-          // на последней ноге красный только у (2,−10): дальше пост с просветом справа, а на красный проходит лишь средняя
-          offsets: ['green', 'red', 'green', 'red', 'green', 'red', 'green', 'green', 'red', 'red', 'green', 'green'] }] },
+      // 3 · Посты и ремонт: с другом — просвет в твоей полосе, потом в соседней; сам — ремонт твоей полосы и пост за углом;
+      // поворот — пост с ежами на спуске, просвет посередине. Цель — впритирку к посту × 3
+      { file: 'tut03', name: '3 · Посты и ремонт', traffic: 0.15, goal: { type: 'police', n: 3 }, trafficFrom: [0, -2.9],
+        intro: 'Штурман: «Полиция перекрывает улицы. Где просвет — видно издалека. Смотри, куда еду я».',
+        mentor: { plan: [[0, 1], [700, 0]], until: [0, -2.5], bye: 'Дальше сам: ремонт закрывает твою полосу.' }, checkpoints: [[0, -2.55]],
+        talk: [{ at: [0, -0.3], text: 'Пост. Просвет посередине — проезжай между ними.' }, { at: [0, -1.3], text: 'Просвет слева — ухожу заранее.' },
+          { at: [0.9, -4], text: 'Впритирку к посту — очки. Три — и звезда твоя.' },
+          { at: [2, -3.35], text: 'Вниз. Ежи по краю — просвет посередине.' }],
+        events: [{ type: 'post', at: [0, -0.9] }, { type: 'post', at: [0, -2.1], lanes: [1, 2] }, { type: 'works', at: [0, -3.2], lanes: [0], len: 250 },
+          { type: 'post', at: [1.0, -4], lanes: [0, 1] }, { type: 'spikes', at: [2, -2.6], lanes: [0], spikes: [2] }],
+        roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -1]], oncoming: 0, crossings: false }] },
+      // 4 · Светофор и поезд: с другом — зелёные; сам — красный с выбором полосы, ещё красный; поезд перед носом, поезд за спиной.
+      // Цель — на красный × 2
+      { file: 'tut04', name: '4 · Светофор и поезд', traffic: 0.15, goal: { type: 'red', n: 2 }, trafficFrom: [0, -2.9],
+        intro: 'Штурман: «Светофоры и поезда. Зелёный — просто едем. Красный — это окно между машинами».',
+        mentor: { plan: [[0, 1]], until: [0, -2.35], bye: 'Дальше сам. Впереди красный.' }, checkpoints: [[0, -2.4]],
+        cards: [{ at: [0, -2.6], text: 'Красный: поперечные идут группой — проскочи между ними' }],
+        talk: [{ at: [0, -0.3], text: 'Зелёный — едем. Поперечные ждут.' },
+          { at: [0, -4.4], text: 'Ещё красный — выбирай полосу заранее.' }, { at: [1.0, -6], text: 'Переезд: поезд пройдёт перед тобой. Держи темп.' },
+          { at: [2, -6.9], text: 'Этот пройдёт за спиной.' }],
+        events: [{ type: 'rails', at: [1.5, -6], offset: 'ahead', length: 500 }, { type: 'rails', at: [2, -7.5], offset: 'behind', length: 500 }],
+        roads: [{ nodes: [[0, 0], [0, -6], [2, -6], [2, -9]], oncoming: 0, reds: [[0, -3], [0, -5]] }] },
+      // 5 · Рампа и погоня: друг прыгает первым — со свободной рампы и через перекрытие; сам — рампа через перекрытие, коп, поезд
+      // за спиной снимает копа. Цель — перелёт × 2
+      { file: 'tut05', name: '5 · Рампа и погоня', traffic: 0.1, goal: { type: 'flyover', n: 2 }, trafficFrom: [2, -5.2],
+        chaser: { gap: 180, speed: 1.02 }, chaserAt: [2, -6.0],
+        intro: 'Штурман: «Автовоз с опущенной рампой — твой трамплин. Сначала смотри, как прыгаю я».',
+        mentor: { plan: [[0, 1]], until: [0, -3.7], bye: 'Дальше сам. Жду в гараже.' }, checkpoints: [[0, -3.75], [2, -5.6]],
+        cards: [{ at: [0, -0.6], text: 'Рампа: заезжай сзади, по центру полосы' }],
+        talk: [{ at: [0, -0.3], text: 'Автовоз с рампой. Сзади, по центру — и летим.' }, { at: [0, -2.35], text: 'Теперь через перекрытие. За мной.' },
+          { at: [2, -5.95], text: 'Коп на хвосте! Ровно в поворотах — он отстанет.' },
+          { at: [2, -7.9], text: 'Переезд. Поезд разберётся с копом.' }],
+        events: [{ type: 'ramp', at: [0, -1.0], lane: 1, speed: 100 },
+          { type: 'ramp', at: [0, -2.9], lane: 1, speed: 100 }, { type: 'closure', at: [0, -3.25] },
+          { type: 'ramp', at: [2, -6.8], lane: 1, speed: 100 }, { type: 'closure', at: [2, -7.15] },
+          { type: 'rails', at: [2, -8.5], offset: 'behind', after: 0.3, length: 500 }],
+        roads: [{ nodes: [[0, 0], [0, -5], [2, -5], [2, -10]], oncoming: 0, crossings: false }] },
+      // 6 · Экзамен: без друга — пост, ремонт, красный, поезд за спиной снимает копа, пост на спуске, кольцо налево, рампа
+      { file: 'tut06', name: '6 · Экзамен', traffic: 0.3, mix: 0.1, chaser: { gap: 190, speed: 1.02 }, chaserAt: [0, -0.5],
+        intro: 'Штурман: «Сегодня без меня. Посты, красный, поезд, спуск, кольцо, рампа — всё сам. Докажи, что готов».',
+        talk: [{ at: [0, -0.6], text: 'Коп сзади. Не виляй — в поворотах он отстаёт.' }, { at: [2.1, -3], text: 'Поезд за спиной — снимет копа.' },
+          { at: [3, -2.6], text: 'Вниз. Пост — просвет слева по ходу.' }, { at: [4.2, -1], text: 'Кольцо! Съезд — где разметка уходит с круга.' }],
+        events: [{ type: 'post', at: [0, -1.5] }, { type: 'works', at: [1.5, -3], lanes: [2], len: 160 },
+          { type: 'rails', at: [2.5, -3], offset: 'behind', length: 500 }, { type: 'post', at: [3, -1.75], lanes: [1, 2] },
+          { type: 'ramp', at: [5, -3.5], lane: 1, speed: 100 }, { type: 'closure', at: [5, -3.8] }],
+        roads: [{ nodes: [[0, 0], [0, -3], [3, -3], [3, -1], [5, -1], [5, -5]], rings: [[5, -1]], oncoming: 0, reds: [[1, -3]] }] },
     ] },
   // «Пролог» (docs/progression.md): широкие улицы, спорткар, линейный длинный маршрут, финал — ловушка перед гаражом
   { seed: 31337, car: 'prologue', speed: 360, traffic: 0.1, panic: 0.4, mix: 0.1, chaser: { gap: 200, speed: 1 },
@@ -375,7 +393,7 @@ const DISTRICTS = [
         cards: [{ at: [0, -2.5], text: 'Погоня!' }, { at: [0, -4.4], text: 'Переезд' }, { at: [2, -5.6], text: 'Автовоз впереди — прыгай!' },
           { at: [4, -3.5], text: 'Переулок' }, { at: [7, -7.3], text: 'Гараж уже виден' }],
         checkpoints: [[0, -5.4], [2, -4.3], [4, -1.6], [7, -7.6]],
-        trap: { at: [7, -9.35], text: 'Ловушка. Тебя взяли.\nСлава утеряна — начинаем с нуля.' },
+        trap: { at: [7, -9.35], text: 'Ловушка. Тебя взяли.\nДва года за решёткой. Слава утеряна.' },
         events: [
           { type: 'parked', at: [0, -0.4] }, { type: 'parked', at: [0, -0.8] },
           { type: 'rails', at: [0, -4.6], period: 14, length: 500, offset: 'behind' },
@@ -417,7 +435,7 @@ const DISTRICTS = [
   // «Окраина»: минивэн, посты и ремонт, светофоры все зелёные — игрок учится читать дорогу впереди
   { seed: 4101, car: 'minivan', speed: 240, traffic: 0.2, panic: 0, mix: 0, chaser: null, theme: 'pixel', blocks: { i: [-1, 5], j: [-10, 0] },
     routes: [
-      { file: 'okr1', name: 'Окраина · 1', intro: 'Слава на нуле, из машин — чужой минивэн. Заказы только на окраине. Минивэн тяжёлый, несёт широко: посты и ремонт читай заранее.',
+      { file: 'okr1', name: 'Окраина · 1', intro: 'Первый заказ от Штурмана. Минивэн тот же: тяжёлый, несёт широко — посты и ремонт читай заранее.',
         events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [2, -5.6], lanes: [2], len: 300 }, { type: 'post', at: [4, -8.2], lanes: [0, 1] }],
         roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -7], [4, -7], [4, -9]], oncoming: 0, offsets: 'green' }] },
       { file: 'okr2', name: 'Окраина · 2', traffic: 0.25, intro: 'Окраина · 2. Ежи, сужение, просветы у постов с краю.',
@@ -508,9 +526,10 @@ const DISTRICTS = [
   { seed: 777, car: 'sedan', traffic: 0.3, panic: 0.3, chaser: { gap: 160, speed: 1 }, blocks: { i: [-1, 4], j: [-9, 0] },
     routes: [
       // маршрут 1: старт (0,0), север 3, восток 3, север 1. Линейный (2026-09-24: ветки-объезды А и Б убраны — путь один)
-      { file: 'district2', name: 'Центр · 1', traffic: 0.3, intro: 'Окраина тебя заметила — дали седан и заказы в центре. Перекрёстки на красный, поперечные идут: проскакивай между ними.',
+      { file: 'district2', name: 'Центр · 1', traffic: 0.3, intro: 'Окраина тебя заметила — дали седан и заказы в центре. Слева встречка за двойной жёлтой. Прижмёшься к машине — водитель запаникует и может снести копа.',
         // вводный: пост с просветом после первого перекрёстка, ремонт правой полосы на восточном отрезке
-        events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [1.6, -3], lanes: [2], len: 400 }],
+        // встречка и паника переехали сюда из обучения (docs/teaching.md): медленная в правой — прижаться и напугать
+        events: [{ type: 'slow', at: [0, -1.4], lane: 2, speed: 90 }, { type: 'post', at: [0, -2.5] }, { type: 'works', at: [1.6, -3], lanes: [2], len: 400 }],
         roads: [
         { nodes: [[0, 0], [0, -3], [3, -3], [3, -4]], oncoming: 1, reds: [[0, -2]], // красный на втором перекрёстке, остальные зелёные
           cars: h => [{ s: 340, lane: 2, speed: 0 }, { s: h.sAt(...h.node([1, -3])) + 220, lane: 2, speed: 0 }] },
