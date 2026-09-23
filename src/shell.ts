@@ -85,7 +85,7 @@ export function renderSettings(el: HTMLElement, ui: ShellUi): void {
       <button class="srow" data-a="haptics"><span>${icon('siren', 16)} вибрация</span><b>${hapticsEnabled() ? 'вкл' : 'выкл'}</b></button>
       <div class="srow static"><span>язык</span><b>русский</b></div>
       <button class="srow danger" data-a="reset"><span>${icon('cuffs', 16)} сбросить прогресс</span><b>${armed ? 'точно?' : ''}</b></button>
-      <button class="sclose">${icon('map', 16)} на карту</button></div>`;
+      <button class="sclose">${icon('map', 16)} на карту</button><small class="sbuild">сборка ${__BUILD__}</small></div>`;
     el.querySelectorAll<HTMLButtonElement>('.srow[data-a]').forEach(b => { b.onclick = () => act(b.dataset.a!); });
     el.querySelector<HTMLButtonElement>('.sclose')!.onclick = () => { el.classList.add('hide'); ui.onMap(); };
   };

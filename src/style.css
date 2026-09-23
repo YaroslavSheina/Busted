@@ -73,6 +73,7 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 .sbox{display:flex;flex-direction:column;gap:10px;max-width:420px;margin:0 auto} .sbox h1{margin:0 0 8px;font-family:var(--display);font-size:16px;font-weight:400;color:var(--yellow)}
 .srow span{display:flex;align-items:center;gap:8px} .srow b{font-family:var(--display);font-size:10px;text-transform:uppercase} .srow.static{opacity:.6}
 .srow.danger{background:var(--red);color:var(--paper)} .sclose{margin-top:10px;align-self:flex-start}
+.sbuild{margin-top:6px;font-size:11px;letter-spacing:.06em;opacity:.5}
 .mgarage{cursor:pointer} .mgarage>small em{font-style:normal;float:right;color:var(--yellow);opacity:1}
 /* титры: ключевой арт затемнён, текст истории по строкам */
 #ending{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--night) center/cover no-repeat;pointer-events:auto}
@@ -136,6 +137,7 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 /* загрузочный экран: арт во весь экран, название и полоса загрузки внизу; после полосы — подсказка «нажми» */
 #splash{position:fixed;inset:0;z-index:10;background:var(--night) center/cover no-repeat;display:flex;justify-content:center;align-items:flex-end;padding-bottom:calc(36px + env(safe-area-inset-bottom));pointer-events:auto;-webkit-user-select:none;user-select:none}
 #splash.hide{display:none}
+#splash #build{position:absolute;right:calc(10px + env(safe-area-inset-right));bottom:calc(8px + env(safe-area-inset-bottom));font-style:normal;font-size:10px;letter-spacing:.06em;color:var(--paper);opacity:.55;text-shadow:1px 1px 0 var(--ink)}
 #splash .brand{display:flex;flex-direction:column;align-items:center;padding:18px 26px 14px;background:rgba(12,24,44,.72);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink)}
 #splash h1{margin:0;font-family:var(--display);font-size:34px;letter-spacing:0;font-weight:400;color:var(--yellow);text-shadow:4px 4px 0 var(--ink);transform:var(--skew)}
 #splash .bar{width:min(240px,64vw);height:10px;background:var(--ink);border:2px solid var(--paper);margin:14px 0 10px}

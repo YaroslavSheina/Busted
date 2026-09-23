@@ -135,6 +135,7 @@ $('mapBtn').onclick = () => { if ($('pause').classList.contains('hide')) showPau
 // Загрузочный экран с ключевым артом: мир стоит (отсчёт не идёт), тап убирает экран
 const splash = $('splash');
 splash.style.backgroundImage = `url(${import.meta.env.BASE_URL}art/hero.jpg)`;
+$('build').textContent = __BUILD__; // заметки и журнал тестеров привязаны к версии
 // Новый игрок после загрузочного экрана сразу в прологе: сначала крючок, потом меню. Карта — когда пролог пройден
 const firstRun = () => levelKey === 'prologue' && !progressOf('prologue').done;
 splash.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); splash.classList.add('hide'); if (!query.get('level') && !firstRun()) openMap(); else syncPause(); }); // первый жест — можно включать звук
