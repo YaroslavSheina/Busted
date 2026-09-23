@@ -439,18 +439,20 @@ const DISTRICTS = [
   { seed: 4101, car: 'minivan', speed: 240, traffic: 0.2, panic: 0, mix: 0, chaser: null, theme: 'pixel', blocks: { i: [-1, 5], j: [-10, 0] },
     routes: [
       { file: 'okr1', name: 'Окраина · 1', intro: 'Первый заказ от Штурмана. Минивэн тот же: тяжёлый, несёт широко — посты и ремонт читай заранее.',
-        events: [{ type: 'post', at: [0, -2.5] }, { type: 'works', at: [2, -5.6], lanes: [2], len: 300 }, { type: 'post', at: [4, -8.2], lanes: [0, 1] }],
-        roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -7], [4, -7], [4, -9]], oncoming: 0, offsets: 'green' }] },
+        // спуск (2,−4)→(2,−2) пустой — первая встреча с инверсией в карьере (docs/teaching.md, §6); заграждения между перекрёстками
+        events: [{ type: 'works', at: [0, -1.3], lanes: [2], len: 200 }, { type: 'post', at: [0, -2.5] }, { type: 'post', at: [4, -4.5], lanes: [0, 1] }],
+        roads: [{ nodes: [[0, 0], [0, -4], [2, -4], [2, -2], [4, -2], [4, -6]], oncoming: 0, offsets: 'green' }] },
       { file: 'okr2', name: 'Окраина · 2', traffic: 0.25, intro: 'Окраина · 2. Ежи, сужение, просветы у постов с краю.',
-        events: [{ type: 'works', at: [3, -1.4], lanes: [0, 1], len: 300 }, { type: 'post', at: [1.7, -3] }, { type: 'spikes', at: [1, -4.6] },
-          { type: 'narrow', at: [1, -5.0], to: [1, -5.4], width: 130 }, { type: 'works', at: [2.2, -6], lanes: [2], len: 200 }, { type: 'post', at: [3, -7.6], lanes: [1, 2] }],
-        roads: [{ nodes: [[3, 0], [3, -3], [1, -3], [1, -6], [3, -6], [3, -9]], oncoming: 0, offsets: 'green' }] },
+        // в конце спуск к гаражу с постом: просвет слева по ходу — справа на экране
+        events: [{ type: 'works', at: [3, -1.35], lanes: [0, 1], len: 200 }, { type: 'post', at: [1.65, -3] }, { type: 'spikes', at: [1, -4.5] },
+          { type: 'narrow', at: [1, -5.3], to: [1, -5.65], width: 130 }, { type: 'works', at: [2.4, -6], lanes: [2], len: 150 }, { type: 'post', at: [5, -6.6], lanes: [1, 2] }],
+        roads: [{ nodes: [[3, 0], [3, -3], [1, -3], [1, -6], [3, -6], [3, -8], [5, -8], [5, -6]], oncoming: 0, offsets: 'green' }] },
       // концептуальные (docs/career.md, §4): «Стройка» — ремонт на каждом квартале, свободная полоса каждый раз другая
       { file: 'okr_works', name: 'Окраина · Стройка', traffic: 0.15, intro: 'Стройка. Ремонт на каждом квартале, свободная полоса каждый раз другая. Читай на два квартала вперёд.',
         // свободная полоса каждый раз соседняя (0→1→2→1→0→1), между ремонтами 530 px: перестроение минивэна ~1.5 с = 360 px
         events: [{ type: 'works', at: [2, -1.3], lanes: [1, 2], len: 200 }, { type: 'works', at: [2, -2.7], lanes: [0, 2], len: 200 }, { type: 'works', at: [2, -4.1], lanes: [0, 1], len: 200 },
           { type: 'works', at: [2, -5.5], lanes: [0, 2], len: 200 }, { type: 'works', at: [2, -6.9], lanes: [1, 2], len: 200 }, { type: 'works', at: [2, -8.3], lanes: [0, 2], len: 200 }],
-        roads: [{ nodes: [[2, 0], [2, -9]], oncoming: 0, offsets: 'green' }] },
+        roads: [{ nodes: [[2, 0], [2, -9]], oncoming: 0, crossings: false }] }, // улица на ремонте без поперечных: ремонт не режет перекрёстки
       // «Колонна» — грузовики парами занимают две полосы, свободная каждый раз другая; дальние пары медленнее, чтобы догнать до гаража
       { file: 'okr_convoy', name: 'Окраина · Колонна', traffic: 0, intro: 'Колонна. Грузовики идут парами и занимают две полосы. Свободная — каждый раз другая, ищи её заранее.',
         // свободная полоса: 0 → 1 → 2 → 1 (соседняя каждый раз); пары идут на 60, игрок догоняет их у s≈1100, 2100, 3050; последняя стоит.
@@ -460,10 +462,11 @@ const DISTRICTS = [
           { type: 'slow', at: [4, -4.4], lane: 0, speed: 60, model: 'truck' }, { type: 'slow', at: [4, -4.4], lane: 1, speed: 60, model: 'truck' },
           { type: 'slow', at: [2, -6.3], lane: 0, speed: 0, model: 'truck' }, { type: 'slow', at: [2, -6.3], lane: 2, speed: 0, model: 'truck' }],
         roads: [{ nodes: [[4, 0], [4, -5], [2, -5], [2, -9]], oncoming: 0, offsets: 'green' }] },
-      { file: 'okr3', name: 'Окраина · 3', traffic: 0.3, mix: 0.1, intro: 'Окраина · 3. Длинный маршрут, два красных, всё вместе.',
-        events: [{ type: 'post', at: [1, -1.3] }, { type: 'works', at: [2.4, -2], lanes: [1, 2], len: 300 }, { type: 'spikes', at: [4, -3.5] },
-          { type: 'post', at: [2.5, -5], lanes: [0, 2] }, { type: 'narrow', at: [0, -6.35], to: [0, -6.65], width: 130 }, { type: 'post', at: [0, -7.6], lanes: [1, 2] }],
-        roads: [{ nodes: [[1, 0], [1, -2], [4, -2], [4, -5], [0, -5], [0, -8]], oncoming: 0, reds: [[3, -5], [0, -6]] }] },
+      { file: 'okr3', name: 'Окраина · 3', traffic: 0.3, mix: 0.1, intro: 'Окраина · 3. Два красных, ремонт на спуске — кнопки наоборот, — всё вместе.',
+        // спуск (3,−4)→(3,−1) с ремонтом двух полос: свободна правая по ходу — слева на экране
+        events: [{ type: 'post', at: [1, -1.5] }, { type: 'spikes', at: [1, -2.5] }, { type: 'works', at: [3, -2.5], lanes: [0, 1], len: 120 },
+          { type: 'narrow', at: [5, -2.35], to: [5, -2.65], width: 130 }, { type: 'post', at: [5, -3.5], lanes: [1, 2] }],
+        roads: [{ nodes: [[1, 0], [1, -4], [3, -4], [3, -1], [5, -1], [5, -5]], oncoming: 0, reds: [[1, -3], [5, -4]] }] },
     ] },
   // «Промзона»: масл-кар, широкие кварталы под его радиус, рельсы и автовозы; коп со второго маршрута
   { seed: 5202, car: 'muscle', speed: 330, traffic: 0.25, panic: 0.2, mix: 0.3, chaser: { gap: 200, speed: 1 }, theme: 'pixeldusk', grid: { bx: 700, by: 600, road: 200, r: 260 }, blocks: { i: [-1, 6], j: [-11, 0] },

@@ -35,24 +35,17 @@
     {"s":4316,"works":[0,2],"len":200}
   ],
   "crossings": [
-    {"s":522,"period":12,"offset":4.2},
-    {"s":1038,"period":12,"offset":6.3},
-    {"s":1560,"period":12,"offset":8.5},
-    {"s":2082,"period":12,"offset":10.7},
-    {"s":2598,"period":12,"offset":0.8},
-    {"s":3120,"period":12,"offset":3},
-    {"s":3642,"period":12,"offset":5.2},
-    {"s":4158,"period":12,"offset":7.3}
+
   ],
   "branches": [
 
   ],
   "signs": [
     {"s":270,"kind":"works"},
-    {"s":908,"kind":"works"},
+    {"s":996,"kind":"works"},
     {"s":1722,"kind":"works"},
     {"s":2454,"kind":"works"},
-    {"s":2990,"kind":"works"},
+    {"s":3180,"kind":"works"},
     {"s":3908,"kind":"works"}
   ],
   "props": [
