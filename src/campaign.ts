@@ -1,5 +1,6 @@
 // Кампания: порядок уровней и локальный прогресс (docs/progression.md). Меню уровней — отладочное и идёт мимо.
 import { LEVEL_KEYS } from './levels';
+import { tester } from './tester';
 
 // Порядок пока из того, что есть; по мере сборки пролога и обучения список заменяется
 // Пролог → обучение → карьера (docs/career.md): Окраина (минивэн) → Центр (седан, бывший «Район 2») → Промзона (масл-кар) →
@@ -70,11 +71,12 @@ export const campaign = {
   has(key: string): boolean { return CAMPAIGN.includes(key); },
   index,
   // Уровень from пройден (доставка или ловушка по сценарию) — следующий по списку, прогресс не откатывается назад;
-  // null — уровень не из кампании или последний. Уровень из меню тоже ведёт дальше по списку: так и ждёт игрок
+  // null — уровень не из кампании или последний. Уровень из меню тоже ведёт дальше по списку: так и ждёт игрок.
+  // Тестер, забежавший вперёд по открытой карте, прогресс кампании не двигает
   advance(from: string): string | null {
     const i = CAMPAIGN.indexOf(from);
     if (i < 0 || i >= CAMPAIGN.length - 1) return null;
-    save(Math.max(index(), i + 1));
+    if (!tester() || i <= index()) save(Math.max(index(), i + 1));
     return CAMPAIGN[i + 1];
   },
   reset(): void { save(0); },

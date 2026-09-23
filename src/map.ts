@@ -2,6 +2,7 @@
 // палитре (день, закат, ночь), на дороге — точки уровней: пройден (звёзды), текущий (машина игрока, пульс), закрыт (замок).
 // Холст рисует город и дорогу один раз при открытии; точки, таблички районов и карточка уровня — DOM поверх холста.
 import { CARS, type CarKey } from './cars';
+import { tester } from './tester';
 import { CAMPAIGN, DISTRICTS, GARAGE, campaign, fame, progressOf, starsOf, type District } from './campaign';
 import { LEVELS } from './levels';
 import { buildPath, pathAt, type Path, type Pt } from './road';
@@ -103,11 +104,11 @@ export function renderMap(ui: MapUi): void {
     const idx = CAMPAIGN.indexOf(n.key), p = progressOf(n.key);
     const state = idx < curIdx || p.done ? 'done' : idx === curIdx ? 'cur' : 'locked';
     const [x, y] = toCss(n.s);
-    const pin = document.createElement('button'); pin.className = `mpin ${state}`; pin.disabled = state === 'locked';
+    const pin = document.createElement('button'); pin.className = `mpin ${state}`; pin.disabled = state === 'locked' && !tester();
     pin.style.left = `${x}px`; pin.style.top = `${y}px`;
     const num = n.district.levels.indexOf(n.key) + 1;
     pin.innerHTML = state === 'cur' ? `<img src="${base}art/pixel/${CAR_SPRITE[n.district.car] ?? 'white_sedan'}.png" alt="">`
-      : state === 'locked' ? icon('lock', 14) : `<b>${num}</b>`;
+      : state === 'locked' && !tester() ? icon('lock', 14) : `<b>${num}</b>`;
     if (state === 'done') pin.insertAdjacentHTML('beforeend', `<span class="pstars">${starIcons(starsOf(n.key), 9)}</span>`);
     pin.onclick = () => select(n.key);
     pins.set(n.key, pin); city.appendChild(pin);
@@ -124,7 +125,7 @@ export function renderMap(ui: MapUi): void {
     const st = starsOf(key);
     foot.innerHTML = `<div class="mcard"><div class="mcard-t"><small>${d?.name ?? ''}</small><b>${lv?.name ?? key}</b></div>
       <div class="mcard-s">${starIcons(st, 16)}${p.done ? `<small>лучший ${fmtScore(p.best)}${p.target ? ` · цель ${fmtScore(p.target)}` : ''}</small>` : `<small>${key === cur ? 'текущий' : ''}</small>`}</div>
-      <button class="mgo">${key === cur && !p.done ? 'ехать' : 'ещё раз'} ${icon('next', 14)}</button></div>`;
+      <button class="mgo">${!p.done ? 'ехать' : 'ещё раз'} ${icon('next', 14)}</button></div>`;
     foot.querySelector<HTMLButtonElement>('.mgo')!.onclick = () => ui.onPlay(selected);
   }
   select(cur);

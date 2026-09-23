@@ -14,6 +14,8 @@ import { CAMPAIGN, DISTRICTS, addFame, campaign, fame, progressOf, recordLevel, 
 import { renderMap } from './map';
 import { icon } from './icons';
 import { chosenCar, districtToIntroduce, renderGarage, renderSettings, showDistrict, showPause, type ShellUi } from './shell';
+import { setTester } from './tester';
+if (query.get('tester') !== null) setTester(query.get('tester') === '1'); // ?tester=1 — все уровни открыты (tester.ts)
 
 const $ = (id: string) => document.getElementById(id)!;
 const panel = $('panel'), carPanel = $('carPanel');

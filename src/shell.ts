@@ -5,6 +5,7 @@ import { CAMPAIGN, DISTRICTS, GARAGE, campaign, progressOf, type District } from
 import { audioEnabled, setAudioEnabled } from './audio';
 import { hapticsEnabled, setHapticsEnabled } from './haptics';
 import { icon } from './icons';
+import { setTester, tester } from './tester';
 
 export const CAR_SPRITE: Record<string, string> = { prologue: 'super_car', finale: 'super_car', minivan: 'happy_bus', sedan: 'white_sedan', muscle: 'muscle_car', sport: 'sport_car', supercar: 'super_car', bus: 'schoolbus' };
 const base = () => import.meta.env.BASE_URL;
@@ -79,19 +80,23 @@ export function showPause(el: HTMLElement, ui: ShellUi): void {
 // ---------- настройки: звук, вибрация, сброс прогресса ----------
 export function renderSettings(el: HTMLElement, ui: ShellUi): void {
   let armed = false; // сброс — двумя тапами
+  let taps = 0;      // пять тапов по номеру сборки — режим тестера
   const draw = () => {
     el.innerHTML = `<div class="sbox"><h1>${icon('gear', 18)} настройки</h1>
       <button class="srow" data-a="sound"><span>${icon(audioEnabled() ? 'sound' : 'mute', 16)} звук</span><b>${audioEnabled() ? 'вкл' : 'выкл'}</b></button>
       <button class="srow" data-a="haptics"><span>${icon('siren', 16)} вибрация</span><b>${hapticsEnabled() ? 'вкл' : 'выкл'}</b></button>
       <div class="srow static"><span>язык</span><b>русский</b></div>
+      ${tester() ? `<button class="srow" data-a="tester"><span>${icon('flag', 16)} тестер: все уровни</span><b>вкл</b></button>` : ''}
       <button class="srow danger" data-a="reset"><span>${icon('cuffs', 16)} сбросить прогресс</span><b>${armed ? 'точно?' : ''}</b></button>
       <button class="sclose">${icon('map', 16)} на карту</button><small class="sbuild">сборка ${__BUILD__}</small></div>`;
+    el.querySelector<HTMLElement>('.sbuild')!.onclick = () => { if (++taps >= 5) { taps = 0; setTester(!tester()); draw(); } };
     el.querySelectorAll<HTMLButtonElement>('.srow[data-a]').forEach(b => { b.onclick = () => act(b.dataset.a!); });
     el.querySelector<HTMLButtonElement>('.sclose')!.onclick = () => { el.classList.add('hide'); ui.onMap(); };
   };
   const act = (a: string) => {
     if (a === 'sound') setAudioEnabled(!audioEnabled());
     else if (a === 'haptics') setHapticsEnabled(!hapticsEnabled());
+    else if (a === 'tester') setTester(false);
     else if (a === 'reset') { if (!armed) { armed = true; } else { armed = false; ui.onReset(); el.classList.add('hide'); ui.onMap(); return; } }
     draw();
   };
