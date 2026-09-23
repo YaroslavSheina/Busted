@@ -50,6 +50,7 @@ export interface Game {
   onScore(hook: ScoreHook | null): void;
   onBest(hook: BestHook | null): void;
   pause(on: boolean): void; // меню открыто — мир стоит, кадр рисуется
+  isPaused(): boolean;
   stop(): void;
 }
 
@@ -575,7 +576,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const tail = chaser ? mainS(car.road, car.s) - mainS(chaser.road, chaser.s) : undefined;
     // звук: мотор, пока мир идёт; сирена — пока коп на хвосте, громче с близостью
     sfxEngine(state === 'play' && !paused && intro === null && card === null, P.speed.v, Math.abs(car.w) / P.spin.v, car.skid, !!jump, slow > 0);
-    sfxSiren(chaser && state === 'play' ? Math.max(0, 1 - tail! / level.chaser!.gap) : 0);
+    sfxSiren(chaser && state === 'play' && !paused ? Math.max(0, 1 - tail! / level.chaser!.gap) : 0);
     const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings, oncoming: r.oncoming, from: r.def?.from, parent: r.def ? r.parent : undefined }));
     render(ctx, view, {
       roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props, nav: level.nav,
@@ -609,6 +610,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     onScore(hook) { scoreHook = hook; },
     onBest(hook) { bestHook = hook; },
     pause(on) { paused = on; },
+    isPaused: () => paused,
     stop() {
       cancelAnimationFrame(raf);
       disposeInput();

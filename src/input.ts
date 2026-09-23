@@ -54,8 +54,11 @@ export function initInput(zones: { left: HTMLElement; right: HTMLElement }, onRe
     if (e.key === 'ArrowLeft' || e.key === 'a') { held.left = false; zones.left.classList.remove('on'); }
     if (e.key === 'ArrowRight' || e.key === 'd') { held.right = false; zones.right.classList.remove('on'); }
   };
+  // окно потеряло фокус — отпущенные в это время клавиши и пальцы не придут, кнопки не должны залипнуть
+  const release = () => { held.left = held.right = false; zones.left.classList.remove('on'); zones.right.classList.remove('on'); };
   addEventListener('keydown', keydown);
   addEventListener('keyup', keyup);
-  disposers.push(() => { removeEventListener('keydown', keydown); removeEventListener('keyup', keyup); });
+  addEventListener('blur', release);
+  disposers.push(() => { removeEventListener('keydown', keydown); removeEventListener('keyup', keyup); removeEventListener('blur', release); });
   return () => { for (const d of disposers) d(); };
 }

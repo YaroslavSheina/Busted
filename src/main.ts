@@ -2,7 +2,7 @@ import './style.css';
 import { createGame } from './game';
 import { lockTheme, setTheme } from './render';
 import { loadArt } from './art';
-import { setAudioEnabled, unlockAudio } from './audio';
+import { quietAudio, setAudioEnabled, unlockAudio } from './audio';
 const query = new URLSearchParams(location.search);
 if (query.get('theme')) { setTheme(query.get('theme')); lockTheme(); } // ?theme=night|comic|dark|bright|sprites|pixel|pixeldusk — сильнее темы уровня
 loadArt();
@@ -142,6 +142,13 @@ const syncPause = () => game.pause(!splash.classList.contains('hide') || !mapEl.
 syncPause();
 initToggle($('levelBtn'), panel, [carPanel], syncPause);
 initToggle($('carBtn'), carPanel, [panel], syncPause);
+// Свернул игру, погасил экран, пришёл звонок — заезд встаёт на паузу с меню, звук молчит. Вернулся — едешь, когда сам нажмёшь
+// «продолжить», а не в ту же секунду без рук на руле. Если мир уже стоит (карта, загрузочный экран, меню), меню паузы не нужно
+function suspend(): void { if (!game.isPaused()) showPause($('pause'), shell); }
+document.addEventListener('visibilitychange', () => { quietAudio(document.hidden); if (document.hidden) suspend(); });
+addEventListener('blur', suspend);
+addEventListener('pagehide', suspend);
+document.addEventListener('pointerdown', () => unlockAudio(), true); // будит звук после звонка и блокировки (iOS)
 document.addEventListener('pointerdown', e => {
   if (!menus.some(m => m.classList.contains('open'))) return;
   if ((e.target as HTMLElement).closest('.panel, #top')) return;

@@ -30,9 +30,11 @@ try { if (localStorage.getItem(SND) === '0') enabled = false; } catch { /* не�
 export function audioEnabled(): boolean { return enabled; }
 export function setAudioEnabled(on: boolean): void { enabled = on; if (master) master.gain.value = on ? 0.5 : 0; try { localStorage.setItem(SND, on ? '1' : '0'); } catch { /* приватный режим */ } }
 
-// Первый жест пользователя: создать контекст и постоянные узлы
+// Первый жест пользователя: создать контекст и постоянные узлы. Дальше каждый жест будит контекст, если система его остановила
+// (iOS после звонка держит его в состоянии interrupted, пока пользователь не коснётся экрана)
 export function unlockAudio(): void {
-  if (ctx || typeof AudioContext === 'undefined') return;
+  if (ctx) { if (ctx.state !== 'running' && !quiet) void ctx.resume(); return; }
+  if (typeof AudioContext === 'undefined') return;
   ctx = new AudioContext();
   master = ctx.createGain(); master.gain.value = enabled ? 0.5 : 0; master.connect(ctx.destination);
   // буфер шума на 2 с
@@ -66,6 +68,13 @@ export function unlockAudio(): void {
   sirGain = ctx.createGain(); sirGain.gain.value = 0;
   sirOsc.connect(sirFilter); sirFilter.connect(sirGain); sirGain.connect(master); sirOsc.start();
   if (ctx.state === 'suspended') void ctx.resume();
+}
+
+// Свёрнутая игра молчит: пока страница скрыта, контекст стоит — иначе мотор и сирена гудят в фоне и после блокировки экрана
+let quiet = false;
+export function quietAudio(on: boolean): void {
+  quiet = on;
+  if (ctx) void (on ? ctx.suspend() : ctx.resume()).catch(() => { /* без жеста iOS не разбудит — разбудит следующий тап */ });
 }
 
 // Мотор каждый кадр: on — мир идёт; speed — скорость машины px/с; turn — |ω|/порог заноса 0..1+; skid — занос; air — в полёте; slow — слоу-мо
