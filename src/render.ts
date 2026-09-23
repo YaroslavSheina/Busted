@@ -1,4 +1,5 @@
 // Камера, дорога, машины, следы заноса, HUD. drawGrid/drawRoad также использует редактор.
+import { RING, type Ring } from './rings';
 import { BRANCH, LANES, TRAFFIC_SIZE } from './config';
 import { heading, laneOff, lanesFor, pathAt, type Path } from './road';
 import { vehiclePose, type Vehicle } from './traffic';
@@ -40,6 +41,7 @@ export interface Scene {
   blasts?: Blast[];                                              // взрывы и дым
   shake?: number;                                                // тряска камеры, px (только рисование — cam не трогается)
   wrecked?: boolean;                                             // машина игрока разбита: тёмная, повёрнута
+  rings?: Ring[];                                                // кольца главной дороги (M11)
 }
 
 // Тема. comic — рисованный вид сверху в духе ранних GTA (диздок): контуры, плоские цвета, тротуары в городе,
@@ -142,7 +144,7 @@ function poly(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: numb
 
 // Пунктир: каждый штрих стоит на своём месте по s (от k·период до k·период + on), поэтому не «ползёт»,
 // когда видимый кусок дороги начинается с другой точки. Рисуются штрихи в видимом диапазоне s
-function dashed(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: number) => number), on: number, gap: number, color: string, lw: number): void {
+function dashed(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: number) => number), on: number, gap: number, color: string, lw: number, skip?: (s: number) => boolean): void {
   const pt = path.pt, period = on + gap, m = lw + 60;
   let s0 = Infinity, s1 = -Infinity;
   for (let i = 0; i < pt.length; i += STEP) { const p = pt[i]; if (visible(p.x, p.y, m)) { if (p.s < s0) s0 = p.s; if (p.s > s1) s1 = p.s; } }
@@ -153,6 +155,7 @@ function dashed(ctx: CanvasRenderingContext2D, path: Path, off: number | ((s: nu
   let i = 0;
   for (let k = Math.max(0, Math.floor((s0 - period) / period)); k * period <= s1 && k * period < path.L; k++) {
     const a = k * period, b = Math.min(a + on, path.L);
+    if (skip?.(a)) continue;
     const [ax, ay] = at(a); ctx.moveTo(ax, ay);
     while (i < pt.length && pt[i].s <= a) i++;                      // точки внутри штриха — по ним идёт кривая
     for (; i < pt.length && pt[i].s < b; i++) { const p = pt[i], o = typeof off === 'number' ? off : off(p.s); ctx.lineTo(p.x + p.nx * o, p.y + p.ny * o); }
@@ -620,7 +623,7 @@ function ribbon(ctx: CanvasRenderingContext2D, path: Path, half: (s: number) => 
   for (const p of [pt[0], pt[pt.length - 1]]) if (visible(p.x, p.y, m)) { ctx.beginPath(); ctx.arc(p.x, p.y, half(p.s), 0, 7); ctx.fill(); }
 }
 
-export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | WidthFn, finish = true, oncoming = 0): void {
+export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | WidthFn, finish = true, oncoming = 0, rings?: Ring[]): void {
   // у веток торцы плоские: концы лежат на главной дороге и должны прятаться под ней
   const cap: CanvasLineCap = finish ? 'round' : 'butt';
   // слои полотна снизу вверх: тротуар с контуром (в городе), контур/обочина, асфальт
@@ -631,14 +634,17 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
     const fill = extra === 0 && T.sprites === 'hf' ? (tile(ctx, 'asphalt', 384) ?? color) : extra === SIDEWALK && T.sprites === 'hf' ? (tile(ctx, 'pavement', 256) ?? color) : extra === SIDEWALK && T.slabs ? (slabs(ctx) ?? color) : extra === 0 && T.slabs ? (asphalt(ctx) ?? color) : color;
     if (typeof w === 'number') poly(ctx, path, 0, fill, w + 2 * extra, cap); // постоянная ширина — штрихом, как в прототипе
     else ribbon(ctx, path, s => w(s) / 2 + extra, fill, finish);
+    // кольца — в том же слое, что и маршрут: иначе тротуар маршрута у въезда ложится поверх асфальта круга
+    for (const g of rings ?? []) ringLayer(ctx, g, widthAt(w, g.s0), extra, fill);
   }
   const wa = (s: number) => widthAt(w, s);
   const [on, gap] = T.dash ?? [26, 22];
   for (let k = 1; k < LANES; k++) {
     // граница встречки — сплошная двойная жёлтая; остальные — пунктир
     if (k === oncoming) { poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) - 2.5, T.dyellow, 2); poly(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES) + 2.5, T.dyellow, 2); }
-    else dashed(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES), on, gap, T.lane, T.dash ? 3 : 2);
+    else dashed(ctx, path, s => -wa(s) / 2 + k * (wa(s) / LANES), on, gap, T.lane, T.dash ? 3 : 2, rings?.length ? s => rings.some(g => s > g.s0 - on && s < g.s1) : undefined);
   }
+  for (const g of rings ?? []) ringTop(ctx, g, widthAt(w, g.s0), on, gap);
   if (T.edge) { poly(ctx, path, s => -wa(s) / 2 + 3, T.edge, 2); poly(ctx, path, s => wa(s) / 2 - 3, T.edge, 2); }
   if (T.lights && city) drawLights(ctx, path, wa);
   if (!finish) return;
@@ -648,6 +654,53 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
   drawGarage(ctx, we);
   for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? '#ece9e0' : '#15171c'; ctx.fillRect(-we / 2 + i * we / 8, -6, we / 8, 12); }
   ctx.restore();
+}
+
+// ---------- кольцо (M11): полный круг и чужие рукава одним слоем с дорогой; сверху разметка, остров, «кирпичи» ----------
+function ringLayer(ctx: CanvasRenderingContext2D, g: Ring, w: number, extra: number, fill: string | CanvasPattern): void {
+  if (!visible(g.x, g.y, g.r + w + RING.arm)) return;
+  ctx.strokeStyle = fill; ctx.lineWidth = w + 2 * extra;
+  ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = fill;
+  for (const [ax, ay] of g.arms) { // рукав — прямоугольник вдоль направления: от оси кольца до конца
+    ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(Math.atan2(ay, ax));
+    ctx.fillRect(g.r, -(w / 2 + extra), w / 2 + RING.arm, w + 2 * extra);
+    ctx.restore();
+  }
+}
+// Остров: трава, деревья, памятник посередине; цвета — под палитру района
+const ISLAND: Partial<Record<ThemeName, [string, string, string]>> = {
+  pixel: ['#56703f', '#3e5a30', '#6f8a4f'], pixelnight: ['#1f3325', '#15261b', '#2c4632'], pixeldusk: ['#56563a', '#43442d', '#6b6a45'],
+};
+function ringTop(ctx: CanvasRenderingContext2D, g: Ring, w: number, on: number, gap: number): void {
+  if (!visible(g.x, g.y, g.r + w + RING.arm)) return;
+  // полосы по кругу — пунктиром той же длины, что на маршруте
+  ctx.strokeStyle = T.lane; ctx.lineWidth = T.dash ? 3 : 2; ctx.setLineDash([on, gap]);
+  for (let k = 1; k < LANES; k++) { ctx.beginPath(); ctx.arc(g.x, g.y, g.r - w / 2 + k * w / LANES, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.setLineDash([]);
+  // рукава: осевой пунктир, как у поперечных улиц, и «кирпич» у въезда
+  for (const [ax, ay] of g.arms) {
+    if (T.dash) {
+      ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(Math.atan2(ay, ax)); ctx.fillStyle = T.lane;
+      for (let d = g.r + w / 2 + 70; d < g.r + w / 2 + RING.arm - T.dash[0]; d += T.dash[0] + T.dash[1]) ctx.fillRect(d, -1.5, T.dash[0], 3);
+      ctx.restore();
+    }
+    drawNoEntry(ctx, g.x + ax * (g.r + w / 2 + 34), g.y + ay * (g.r + w / 2 + 34));
+  }
+  // остров внутри круга: бордюр, трава, деревья по кругу, памятник
+  const ri = g.r - w / 2 - (T.sidewalk && city ? SIDEWALK : 4);
+  const [grass, dark, light] = ISLAND[themeName()] ?? ['#3f5a3a', '#2d4429', '#557049'];
+  ctx.fillStyle = T.outline ?? T.shoulder; ctx.beginPath(); ctx.arc(g.x, g.y, ri + 3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = grass; ctx.beginPath(); ctx.arc(g.x, g.y, ri, 0, Math.PI * 2); ctx.fill();
+  const n = Math.max(5, Math.round(ri / 28));
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2 + 0.4, tx = g.x + Math.cos(a) * ri * 0.62, ty = g.y + Math.sin(a) * ri * 0.62;
+    if (T.shadow) { ctx.fillStyle = T.shadow; ctx.beginPath(); ctx.arc(tx + 6, ty + 7, 17, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(tx, ty, 17, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = light; ctx.beginPath(); ctx.arc(tx - 4, ty - 5, 9, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = T.parapet ?? '#8a8f96'; ctx.fillRect(g.x - 14, g.y - 14, 28, 28);
+  ctx.fillStyle = T.outline ?? '#2a2d33'; ctx.fillRect(g.x - 7, g.y - 7, 14, 14);
 }
 
 // Детерминированное зерно: мелкие точки чуть светлее и чуть темнее фона — пиксельная фактура из референса
@@ -734,7 +787,7 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   // здания под всем, потом поперечные улицы, ветки под главной: её разметка и финиш сверху на стыках
   if (sc.props?.length) drawProps(ctx, sc.props);
   for (const r of roads) for (const c of r.crossings ?? []) drawCrossingRoad(ctx, c);
-  for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0, roads[i].oncoming ?? 0);
+  for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0, roads[i].oncoming ?? 0, i === 0 ? sc.rings : undefined);
   for (const r of roads) if (r.from !== undefined && r.parent !== undefined) { const pr = roads[r.parent], side = branchSide(pr.path, r.path, r.from); for (const s of arrowSpots(r.from, pr.from !== undefined)) drawTurnArrow(ctx, pr.path, pr.width, s, side); }
   for (const r of roads) drawBlocks(ctx, r.path, r.width, r.blocks, sc.t ?? 0);
   for (const r of roads) if (r.rails?.length) drawRails(ctx, r.rails, r.width, sc.t ?? 0);

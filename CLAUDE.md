@@ -162,6 +162,7 @@ docs/refs/         — референсы визуала от пользоват
   blocks.ts        — заграждения: данные уровня → геометрия (посты, ежи, ремонт, обочины)
   crossings.ts     — перекрёсток: поперечная улица, группа машин по циклу, светофор (crossCars, lightAt)
   rails.ts         — переезд: рельсы через дорогу, детерминированный поезд (trainObb, untilTrain)
+  rings.ts         — кольцо (M11): полный круг, остров и чужие рукава — окружение для рисования и причины BUSTED; маршрут по кругу строит генератор
   narrow.ts        — сужения: ширина как функция от s (makeWidthFn/widthAt), переходы NARROW.ramp
   roads.ts         — граф дорог: ветка { from, to, points, parent? } пристыковывается к родителю (главная или другая ветка), buildRoadPaths, parentEquivalent для прогресса
   debug.ts         — панель «уровень»: список уровней + кнопка «тюнинг» со слайдерами (в проде слайдеры выключены)
@@ -170,7 +171,7 @@ docs/refs/         — референсы визуала от пользоват
     main.ts        — панель, экспорт/импорт, «Играть» через createGame на той же странице
     canvas.ts      — холст: панорама, зум, точки; дорога рисуется drawRoad
     io.ts          — формат файла уровня, валидация импорта
-levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings?, props?, oncoming?, nav?, mix?, intro?, cards?, trap?, checkpoints? } — см. docs/mechanics.md и docs/progression.md
+levels/*.json      — { name, points, width, traffic, seed, car?, cars?, chaser?, blocks?, branches?, panic?, narrows?, rails?, crossings?, props?, oncoming?, mix?, pace?, grip?, theme?, rings?, intro?, cards?, trap?, checkpoints? } — см. docs/mechanics.md и docs/progression.md
 tools/district.cjs — генератор районов: район (сетка, здания, машина) × маршруты (дороги по узлам: главная + ветки с родителем, перекрёстки, события: посты, ремонт, перекрытия, сужения, переезды) → levels/district*.json, один район — несколько уровней
 tools/harness/     — харнесс в репозитории (2026-09-17): bundle.mjs склеивает dist (vite build --minify false) в port.mjs с хуком __lr; compare.mjs — покадровое сравнение с прототипом («порт идентичен прототипу»); routebot.mjs — бот прохождения уровней (LEVEL, LANE, PLAN, CLEAN, KEEPCOP, KEEPRAMP, OVERTAKE, LOOK, TAKE, TRACE); sweep.mjs — бот по всей кампании (список из campaign.ts) по планам полос plans.json, без трафика («все уровни кампании проходимы»). `npm run harness` = сборка + сравнение + боты. port.mjs не в git. После правок game/physics/traffic/road/main и уровней — харнесс обязателен; новый уровень кампании — план в plans.json
 .github/workflows/ci.yml — на каждый пуш и pull request: типы и харнесс; выкладка на Pages только из main после зелёной проверки

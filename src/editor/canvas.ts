@@ -103,7 +103,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
           if (on) { ctx.lineWidth = 2 / zoom; ctx.strokeStyle = '#fff'; ctx.stroke(); }
         });
       });
-      drawRoad(ctx, path, wMain, true, l.oncoming ?? 0);
+      drawRoad(ctx, path, wMain, true, l.oncoming ?? 0, l.rings);
       (l.branches ?? []).forEach((b, bi) => {
         const bp = roadPaths[bi + 1], pp = roadPaths[parentRoad(b)];
         if (!bp || !pp) return;

@@ -15,6 +15,7 @@ import { currentDir, holdText, initInput, resetHold, trackHold } from './input';
 import { fmtScore, hudHtml, levelTheme, render, type Blast, type Cam, type Fx, type Mark, type RoadScene } from './render';
 import { icon } from './icons';
 import { buzz } from './haptics';
+import { ringZone } from './rings';
 import type { LevelData } from './levels';
 
 export interface GameUI {
@@ -128,6 +129,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     'догнали': { icon: 'siren', hint: 'В поворотах коп отстаёт — не виляй на прямой' },
     'вылет с дороги': { icon: 'offroad', hint: 'Жми заранее и отпускай — машину несёт' },
     'съехал с маршрута': { icon: 'offroad', hint: 'Держись своей улицы: на чужую съезжать нельзя' },
+    'проехал съезд': { icon: 'offroad', hint: 'Съезд с кольца там, где разметка уходит с круга. Выходи заранее: машину несёт' },
     'ежи': { icon: 'spikes', hint: 'Ежи в крайней полосе — держись середины' },
     'перекрёсток': { icon: 'light', hint: 'На красный поперечные идут друг за другом — проскакивай между ними' },
   };
@@ -241,7 +243,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   function busted(why: string): void {
     lastWhy = why;
-    const soft = why === 'вылет с дороги' || why === 'съехал с маршрута' || why === 'ежи';
+    const soft = why === 'вылет с дороги' || why === 'съехал с маршрута' || why === 'проехал съезд' || why === 'ежи';
     sfx(why === 'догнали' ? 'caught' : why === 'поезд' ? 'train' : soft ? 'off' : 'crash'); buzz(soft ? 30 : 70);
     // удар — взрыв с дымом и тряска, машина разбита; вылет — только пыль
     if (soft) { for (let i = 0; i < 4; i++) puff(car.x + (Math.random() - 0.5) * 40, car.y + (Math.random() - 0.5) * 40, 70 + Math.random() * 30, 0.9, i * 0.08); shake = 5; }
@@ -453,7 +455,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       if (flat) return busted('ежи');
       // Дорога под колёсами есть, но это другой участок маршрута (срезал кольцо, выехал на встречный рукав)
       const onOther = roads.some(r => { const n = nearestGlobal(r.path, car.x, car.y); return Math.abs(n.off) <= widthAt(r.width, n.s) / 2 + P.tol.v; });
-      return busted(onOther ? 'съехал с маршрута' : 'вылет с дороги');
+      // кольцо: остальной круг и чужие рукава — асфальт, но не маршрут (M11)
+      const zone = onOther ? null : ringZone(level.rings, P.width.v, car.x, car.y);
+      return busted(onOther || zone === 'arm' ? 'съехал с маршрута' : zone === 'ring' ? 'проехал съезд' : 'вылет с дороги');
     }
     if (car.road === 0 && car.s >= rd.path.L - 60) return finish();
 
@@ -616,7 +620,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     sfxSiren(chaser && state === 'play' && !paused ? Math.max(0, 1 - tail! / level.chaser!.gap) : 0);
     const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings, oncoming: r.oncoming, from: r.def?.from, parent: r.def ? r.parent : undefined }));
     render(ctx, view, {
-      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props,
+      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props, rings: level.rings,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
       blasts, shake, wrecked,
     });

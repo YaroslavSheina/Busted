@@ -6,6 +6,7 @@ import type { BranchDef } from './roads';
 import type { Narrow } from './narrow';
 import type { RailDef } from './rails';
 import type { CrossingDef } from './crossings';
+import type { Ring } from './rings';
 
 // Окружение — только для отрисовки, физика его не знает (docs/mechanics.md, «город»)
 export interface Prop { type: 'building'; x: number; y: number; w: number; h: number; tone?: number }
@@ -31,6 +32,7 @@ export interface LevelData {
   narrows?: Narrow[];  // необязательно: сужения дороги (docs/mechanics.md, M6)
   rails?: RailDef[];   // необязательно: переезды на главной дороге (docs/mechanics.md, M7)
   crossings?: CrossingDef[]; // необязательно: перекрёстки со светофором (docs/mechanics.md, M9)
+  rings?: Ring[];      // необязательно: кольца на главной дороге (docs/mechanics.md, M11) — маршрут в points, здесь остальной круг
   props?: Prop[];      // необязательно: здания и прочее окружение
   oncoming?: number;   // необязательно: сколько левых полос едут навстречу (docs/mechanics.md, M10)
   mix?: number;        // необязательно: доля длинных машин в трафике (автобусы, грузовики), 0..0.5; фургонов — ещё столько же

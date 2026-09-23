@@ -11,6 +11,9 @@ let BX = 620, BY = 520;        // размер квартала между ос�
 let ROAD = 180, R = 220;       // R: внутренняя полоса угла = R − 60 ≥ минимального радиуса седана (~150 после настройки 2026-09-08)
 const MARGIN = 26, LEAD = 60;  // LEAD = BRANCH.lead
 let SPEED = 300;               // скорость машины уровня — для прикидок времени прибытия
+// Кольцо (M11): радиус оси круга RR, радиус дуг въезда и съезда RE; RD — от центра узла до начала въезда по оси улицы
+// (въезд — дуга вправо, касательная к улице и к кругу снаружи: |центр круга − центр дуги| = RR + RE)
+let RR = 286, RE = 286, RD = 495;
 const mkRnd = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const node = ([i, j]) => [i * BX, j * BY];
 
@@ -32,32 +35,57 @@ const sAt = (sm, x, y) => { let best = Infinity, bs = 0; for (const p of sm) { c
 const at = (sm, s) => { s = Math.max(0, Math.min(sm.at(-1).s, s)); let i = 1; while (i < sm.length - 1 && sm[i].s < s) i++; const a = sm[i - 1], b = sm[i], t = (s - a.s) / ((b.s - a.s) || 1); return [a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t]; };
 
 // --- ноги между узлами и ломаная с дугами; соседние ноги одного направления сливаются в одну (узлы между ними — прямые проезды)
-function legsOf(nodes) {
+function legsOf(nodes, rings = new Set()) {
   const legs = [];
   for (let k = 0; k < nodes.length - 1; k++) {
     const a = node(nodes[k]), b = node(nodes[k + 1]), dx = Math.sign(b[0] - a[0]), dy = Math.sign(b[1] - a[1]);
     const last = legs.at(-1);
-    if (last && last.dx === dx && last.dy === dy) { last.b = b; last.len = Math.hypot(b[0] - last.a[0], b[1] - last.a[1]); }
+    if (last && last.dx === dx && last.dy === dy && !rings.has(nodes[k].join(','))) { last.b = b; last.len = Math.hypot(b[0] - last.a[0], b[1] - last.a[1]); } // кольцо на прямой делит ногу
     else legs.push({ a, b, dx, dy, len: Math.hypot(b[0] - a[0], b[1] - a[1]) });
   }
   return legs;
 }
-// open — ветка: первая и последняя ноги виртуальные (лежат на родителе), от них берутся только дуги
-function polyline(legs, open) {
+// Кольцо на узле C: въезд с курсом hin, съезд по направлению u. Въезд — дуга вправо (угол растёт: на экране по часовой),
+// круг — против часовой на экране (угол убывает), съезд — снова вправо. Точки каждые ~15°; T и U — касания круга
+function ringPath(C, hin, u) {
+  if (hin[0] === -u[0] && hin[1] === -u[1]) throw new Error(`кольцо у ${C}: разворот на кольце не поддерживается`);
+  const nr = v => [-v[1], v[0]];                                   // правая нормаль к курсу
+  const add = (a, b, k) => [a[0] + b[0] * k, a[1] + b[1] * k];
+  const P0 = add(C, hin, -RD), E = add(P0, nr(hin), RE), Q0 = add(C, u, RD), F = add(Q0, nr(u), RE);
+  const onRing = P => { const d = Math.hypot(P[0] - C[0], P[1] - C[1]); return [C[0] + (P[0] - C[0]) / d * RR, C[1] + (P[1] - C[1]) / d * RR]; };
+  const T = onRing(E), U = onRing(F);
+  const ang = (P, O) => Math.atan2(P[1] - O[1], P[0] - O[0]);
+  const pos = a => { while (a <= 0) a += 2 * Math.PI; while (a > 2 * Math.PI) a -= 2 * Math.PI; return a; };
+  const pts = [];
+  const arc = (O, rad, a0, da) => { const n = Math.max(3, Math.ceil(Math.abs(da) / (Math.PI / 12))); for (let m = 1; m <= n; m++) { const a = a0 + da * m / n; pts.push([O[0] + rad * Math.cos(a), O[1] + rad * Math.sin(a)]); } };
+  let a0 = ang(P0, E); arc(E, RE, a0, pos(ang(T, E) - a0));       // въезд
+  a0 = ang(T, C); arc(C, RR, a0, -pos(a0 - ang(U, C)));           // круг
+  a0 = ang(U, F); arc(F, RE, a0, pos(ang(Q0, F) - a0));           // съезд
+  return { pts, T, U };
+}
+// open — ветка: первая и последняя ноги виртуальные (лежат на родителе), от них берутся только дуги.
+// isRing(p) — узел p кольцо; rings — сюда складываются касания въезда и съезда для разметки круга
+function polyline(legs, open, isRing = () => false, rings = []) {
   const pts = [];
   const push = p => { const q = [Math.round(p[0]), Math.round(p[1])]; const l = pts[pts.length - 1]; if (!l || l[0] !== q[0] || l[1] !== q[1]) pts.push(q); };
   if (!open) push(legs[0].a);
   for (let k = 0; k < legs.length; k++) {
     const L = legs[k], next = legs[k + 1], prev = legs[k - 1];
     const virt = open && (k === 0 || k === legs.length - 1);
-    const start = prev ? [L.a[0] + L.dx * R, L.a[1] + L.dy * R] : L.a;   // после дуги
-    const end = next ? [L.b[0] - L.dx * R, L.b[1] - L.dy * R] : L.b;     // до начала дуги
+    const offA = prev ? (isRing(L.a) ? RD : R) : 0, offB = next ? (isRing(L.b) ? RD : R) : 0;
+    const start = [L.a[0] + L.dx * offA, L.a[1] + L.dy * offA];   // после дуги или съезда с кольца
+    const end = [L.b[0] - L.dx * offB, L.b[1] - L.dy * offB];     // до начала дуги или въезда на кольцо
     if (!virt) {
-      const span = Math.hypot(end[0] - start[0], end[1] - start[1]);
+      const span = L.len - offA - offB;
+      if (span < 0) throw new Error(`отрезок ${L.a}→${L.b}: дуги и въезды на кольца не помещаются (не хватает ${Math.round(-span)} px) — нужна нога длиннее`);
       const n = Math.max(1, Math.ceil(span / 500));
       for (let m = 0; m <= n; m++) push([start[0] + (end[0] - start[0]) * m / n, start[1] + (end[1] - start[1]) * m / n]);
     }
-    if (next) { // дуга от end к точке после угла
+    if (next && isRing(L.b)) {
+      const rp = ringPath(L.b, [L.dx, L.dy], [next.dx, next.dy]);
+      for (const p of rp.pts) push(p);
+      rings.push({ C: L.b, T: rp.T, U: rp.U, hin: [L.dx, L.dy], u: [next.dx, next.dy] });
+    } else if (next) { // дуга от end к точке после угла
       const cx = end[0] + next.dx * R, cy = end[1] + next.dy * R;
       const a0 = Math.atan2(end[1] - cy, end[0] - cx), a1 = Math.atan2((L.b[1] + next.dy * R) - cy, (L.b[0] + next.dx * R) - cx);
       let da = a1 - a0; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
@@ -93,13 +121,19 @@ function straightNodes(legs) {
 function build(district, route) {
   const spec = { ...district, ...route };
   ({ bx: BX = 620, by: BY = 520, road: ROAD = 180, r: R = 220 } = spec.grid ?? {});
+  // 1.3 радиуса угла: масл-кар на Промзоне (R 260) проходит такое кольцо ботом из всех трёх полос; 1.2 срывал внешнюю на съезде
+  ({ r: RR = Math.round(1.3 * R), entry: RE = Math.round(1.3 * R) } = spec.grid?.ring ?? {});
+  RD = Math.round(Math.sqrt(RR * RR + 2 * RR * RE));
   SPEED = spec.speed ?? 300;
   const rnd = mkRnd(spec.seed);
-  const roads = [];
+  const roads = [], ringHits = [];
   spec.roads.forEach((rd, idx) => {
-    const legs = legsOf(rd.nodes);
+    if (rd.rings && idx > 0) throw new Error(`${spec.name}: кольца только на главной`);
+    if (rd.rings?.length && rd.oncoming) throw new Error(`${spec.name}: на кольце движение одностороннее — oncoming: 0`);
+    const ringKeys = new Set((rd.rings ?? []).map(n => n.join(',')));
+    const legs = legsOf(rd.nodes, ringKeys);
     let pts, sm, def = null;
-    if (idx === 0) { pts = polyline(legs, false); sm = sample(pts); }
+    if (idx === 0) { pts = polyline(legs, false, p => ringKeys.has([p[0] / BX, p[1] / BY].join(',')), ringHits); sm = sample(pts); }
     else {
       const parent = roads[rd.parent === undefined ? 0 : rd.parent + 1];
       const n0 = rd.nodes[0], nk = rd.nodes.at(-1);
@@ -128,7 +162,8 @@ function build(district, route) {
     const mode = (k, x, y) => r.reds ? (r.reds.some(p => p[0] * BX === x && p[1] * BY === y) ? 'red' : 'green') : (r.offsets === 'green' ? 'green' : r.offsets[k] ?? 0);
     // 'red' — сценарный: красный включается через 1.05 с после того, как игрок за before px до перекрёстка, так что при
     // прибытии красный горит 2.0 с и средняя полоса проходит между тронувшимися поперечными (по развёртке crosslanes)
-    r.crossings = r.noCross ? [] : r.straight.filter(p => !junctions.has(p.join(','))).map(([x, y], k) => {
+    const nearRing = ([x, y]) => ringHits.some(g => Math.hypot(x - g.C[0], y - g.C[1]) < RD + ROAD / 2 + 80);
+    r.crossings = r.noCross ? [] : r.straight.filter(p => !junctions.has(p.join(',')) && !nearRing(p)).map(([x, y], k) => {
       const s = sAt(r.sm, x, y), arrive = s / SPEED, m = mode(k, x, y);
       if (m === 'red' && s < 3.05 * SPEED + 60) console.log(`   ! ${spec.name}: перекрёсток s${s} ближе ${Math.round(3.05 * SPEED)} px к старту — сценарный красный не успеет, оставлен зелёный`);
       if (m === 'red' && s >= 3.05 * SPEED + 60) return { s, period: 12, offset: 0, before: Math.round(3.05 * SPEED), arrive: +arrive.toFixed(1) };
@@ -200,6 +235,22 @@ function build(district, route) {
     return [[p0, Math.min(p1, b0)], [Math.max(p0, b1), p1]].filter(([a, b]) => b - a >= 80).map(([a, b]) => band.axis === 'y' ? { ...p, y: a, h: b - a } : { ...p, x: a, w: b - a });
   });
   for (const band of bands) props = cut(props, band);
+  const trim = (list, cx, cy, rad) => list.flatMap(p => {
+    const nx = Math.max(p.x, Math.min(cx, p.x + p.w)), ny = Math.max(p.y, Math.min(cy, p.y + p.h));
+    if (Math.hypot(nx - cx, ny - cy) >= rad) return [p];
+    const keep = [];                                                // часть здания целиком вне круга — какая больше
+    if (p.x + p.w > cx + rad) keep.push({ ...p, x: cx + rad, w: p.x + p.w - (cx + rad) });
+    if (p.x < cx - rad) keep.push({ ...p, w: cx - rad - p.x });
+    if (p.y + p.h > cy + rad) keep.push({ ...p, y: cy + rad, h: p.y + p.h - (cy + rad) });
+    if (p.y < cy - rad) keep.push({ ...p, h: cy - rad - p.y });
+    const ok = keep.filter(o => o.w >= 80 && o.h >= 80).sort((a, b) => b.w * b.h - a.w * a.h);
+    return ok.length ? [ok[0]] : [];
+  });
+  for (const g of ringHits) props = trim(props, g.C[0], g.C[1], RR + ROAD / 2 + 26 + 40);
+  // кольца в уровень: центр, радиус, участок маршрута по кругу, рукава, по которым маршрут не идёт
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const rings = ringHits.map(g => ({ x: g.C[0], y: g.C[1], r: RR, s0: sAt(roads[0].sm, g.T[0], g.T[1]), s1: sAt(roads[0].sm, g.U[0], g.U[1]),
+    arms: DIRS.filter(d => !(d[0] === -g.hin[0] && d[1] === -g.hin[1]) && !(d[0] === g.u[0] && d[1] === g.u[1])) }));
 
   const main = roads[0];
   const strip = c => { const { arrive, ...r } = c; return r; };
@@ -233,7 +284,7 @@ ${main.crossings.map(c => '    ' + JSON.stringify(strip(c))).join(',\n')}
   ],
   "branches": [
 ${roads.slice(1).map(branchJson).join(',\n')}
-  ],
+  ],${rings.length ? `\n  "rings": [\n${rings.map(g => '    ' + JSON.stringify(g)).join(',\n')}\n  ],` : ''}
   "props": [
 ${props.map(p => '    ' + JSON.stringify(p)).join(',\n')}
   ]
@@ -389,9 +440,11 @@ const DISTRICTS = [
         events: [{ type: 'rails', at: [0, -2.5], offset: 'behind', length: 600 }, { type: 'works', at: [0, -3.3], lanes: [2], len: 200 },
           { type: 'ramp', at: [2, -6.3], lane: 1, speed: 110 }, { type: 'post', at: [2, -6.6] }, { type: 'narrow', at: [3.4, -9], to: [3.7, -9], width: 140 }],
         roads: [{ nodes: [[0, 0], [0, -5], [2, -5], [2, -9], [5, -9]], oncoming: 0, offsets: 'green' }] },
-      // «Серпантин» — только геометрия: S-повороты через квартал, без трафика — знакомство с масл-каром в чистом виде
-      { file: 'ind_serp', name: 'Промзона · Серпантин', traffic: 0, chaser: null, intro: 'Серпантин. Только руль и масл-кар. Держи кнопку коротко — длинное удержание срывает в занос.',
-        roads: [{ nodes: [[0, 0], [0, -2], [1, -2], [1, -4], [0, -4], [0, -6], [1, -6], [1, -8], [0, -8], [0, -10]], oncoming: 0, crossings: false }] },
+      // «Кольца» (2026-09-24, вместо «Серпантина») — только геометрия, без трафика: масл-кар на трёх кольцах. Первое — прямо
+      // (полкруга), второе и третье — налево (три четверти круга): курс проходит все стороны экрана, на спуске кнопки «наоборот»
+      { file: 'ind_serp', name: 'Промзона · Кольца', traffic: 0, chaser: null,
+        intro: 'Кольца. Только руль и масл-кар. На круге держи машину короткими нажатиями; съезд там, где разметка уходит с круга. Когда едешь вниз, LEFT уводит вправо.',
+        roads: [{ nodes: [[0, 0], [0, -3], [0, -5], [2, -5], [2, -8], [0, -8], [0, -10]], rings: [[0, -3], [2, -5], [2, -8]], oncoming: 0, crossings: false }] },
       // «Товарняк» — два длинных состава: первый проходит перед носом (сценарный по дистанции), второй сразу за спиной и снимает копа
       { file: 'ind_train', name: 'Промзона · Товарняк', traffic: 0.2, chaserAt: [3, -0.5], intro: 'Товарняк. Составы длинные. Первый пройдёт перед носом, второй — сразу за спиной. Не сбавляй.',
         events: [{ type: 'post', at: [3, -2.2] }, { type: 'rails', at: [5, -6], offset: 'ahead', length: 1200 }, { type: 'rails', at: [5, -8], offset: 'behind', length: 1200 }],
