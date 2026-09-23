@@ -63,17 +63,17 @@
     {"s":8049,"period":14,"speed":260,"length":500,"offset":0,"after":0.5}
   ],
   "crossings": [
-    {"s":519,"period":12,"offset":3.5},
-    {"s":1043,"period":12,"offset":5},
-    {"s":2077,"period":12,"offset":7.9},
-    {"s":3113,"period":12,"offset":10.9},
+    {"s":519,"period":12,"offset":0,"before":-150},
+    {"s":1043,"period":12,"offset":0,"before":-150},
+    {"s":2077,"period":12,"offset":0,"before":-150},
+    {"s":3113,"period":12,"offset":0,"before":-150},
     {"s":3633,"period":12,"offset":0,"before":1068},
-    {"s":4156,"period":12,"offset":1.9},
+    {"s":4156,"period":12,"offset":0,"before":-150},
     {"s":4676,"period":12,"offset":0,"before":1068},
-    {"s":5712,"period":12,"offset":6.3},
+    {"s":5712,"period":12,"offset":0,"before":-150},
     {"s":6753,"period":12,"offset":0,"before":1068},
-    {"s":7269,"period":12,"offset":10.8},
-    {"s":7791,"period":12,"offset":0.3},
+    {"s":7269,"period":12,"offset":0,"before":-150},
+    {"s":7791,"period":12,"offset":0,"before":-150},
     {"s":8307,"period":12,"offset":0,"before":1068}
   ],
   "branches": [

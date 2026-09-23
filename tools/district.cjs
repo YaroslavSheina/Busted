@@ -167,9 +167,11 @@ function build(district, route) {
       const s = sAt(r.sm, x, y), arrive = s / SPEED, m = mode(k, x, y);
       if (m === 'red' && s < 3.05 * SPEED + 60) console.log(`   ! ${spec.name}: перекрёсток s${s} ближе ${Math.round(3.05 * SPEED)} px к старту — сценарный красный не успеет, оставлен зелёный`);
       if (m === 'red' && s >= 3.05 * SPEED + 60) return { s, period: 12, offset: 0, before: Math.round(3.05 * SPEED), arrive: +arrive.toFixed(1) };
-      if (m === 'red') return { s, period: 12, offset: +(((arrive + 2) % 12).toFixed(1)), arrive: +arrive.toFixed(1) };
-      const offset = m === 'green' ? +(((arrive + 2) % 12).toFixed(1)) : m;
-      return { s, period: 12, offset, arrive: +arrive.toFixed(1) };
+      // зелёный — до проезда игрока (сценарный, before < 0): цикл стоит с очередью поперечных, пока игрок не проехал перекрёсток
+      // на 150 px, потом жёлтый и красный — поток уже за спиной. Цикл по оценке прибытия s/скорость на длинных маршрутах ошибался
+      // на секунды: бот в «Промзона · 3» попадал на красный у самого гаража (2026-09-24)
+      if (m === 'green' || m === 'red') return { s, period: 12, offset: 0, before: -150, arrive: +arrive.toFixed(1) };
+      return { s, period: 12, offset: m, arrive: +arrive.toFixed(1) };
     });
   });
 

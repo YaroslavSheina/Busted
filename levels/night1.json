@@ -56,18 +56,18 @@
     {"from":7560,"to":7715,"width":120}
   ],
   "crossings": [
-    {"s":518,"period":12,"offset":3.5},
-    {"s":1041,"period":12,"offset":5},
+    {"s":518,"period":12,"offset":0,"before":-150},
+    {"s":1041,"period":12,"offset":0,"before":-150},
     {"s":1559,"period":12,"offset":0,"before":1068},
-    {"s":2598,"period":12,"offset":9.4},
-    {"s":3632,"period":12,"offset":0.4},
+    {"s":2598,"period":12,"offset":0,"before":-150},
+    {"s":3632,"period":12,"offset":0,"before":-150},
     {"s":4154,"period":12,"offset":0,"before":1068},
-    {"s":4677,"period":12,"offset":3.4},
-    {"s":5710,"period":12,"offset":6.3},
-    {"s":6314,"period":12,"offset":8},
-    {"s":7352,"period":12,"offset":11},
-    {"s":7870,"period":12,"offset":0.5},
-    {"s":8393,"period":12,"offset":2}
+    {"s":4677,"period":12,"offset":0,"before":-150},
+    {"s":5710,"period":12,"offset":0,"before":-150},
+    {"s":6314,"period":12,"offset":0,"before":-150},
+    {"s":7352,"period":12,"offset":0,"before":-150},
+    {"s":7870,"period":12,"offset":0,"before":-150},
+    {"s":8393,"period":12,"offset":0,"before":-150}
   ],
   "branches": [
 

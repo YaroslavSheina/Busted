@@ -52,15 +52,15 @@
     {"s":6530,"police":[0,1]}
   ],
   "crossings": [
-    {"s":519,"period":12,"offset":4.2},
-    {"s":1037,"period":12,"offset":6.3},
-    {"s":1557,"period":12,"offset":8.5},
-    {"s":2608,"period":12,"offset":0.9},
-    {"s":3655,"period":12,"offset":5.2},
-    {"s":4702,"period":12,"offset":9.6},
-    {"s":5753,"period":12,"offset":2},
-    {"s":6273,"period":12,"offset":4.1},
-    {"s":6792,"period":12,"offset":6.3}
+    {"s":519,"period":12,"offset":0,"before":-150},
+    {"s":1037,"period":12,"offset":0,"before":-150},
+    {"s":1557,"period":12,"offset":0,"before":-150},
+    {"s":2608,"period":12,"offset":0,"before":-150},
+    {"s":3655,"period":12,"offset":0,"before":-150},
+    {"s":4702,"period":12,"offset":0,"before":-150},
+    {"s":5753,"period":12,"offset":0,"before":-150},
+    {"s":6273,"period":12,"offset":0,"before":-150},
+    {"s":6792,"period":12,"offset":0,"before":-150}
   ],
   "branches": [
 

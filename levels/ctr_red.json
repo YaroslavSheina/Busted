@@ -25,7 +25,7 @@
 
   ],
   "crossings": [
-    {"s":522,"period":12,"offset":3.7},
+    {"s":522,"period":12,"offset":0,"before":-150},
     {"s":1043,"period":12,"offset":0,"before":915},
     {"s":1561,"period":12,"offset":0,"before":915},
     {"s":2077,"period":12,"offset":0,"before":915},

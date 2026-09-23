@@ -43,14 +43,14 @@
     {"s":4336,"lane":2,"speed":0,"model":"truck"}
   ],
   "crossings": [
-    {"s":518,"period":12,"offset":4.2},
-    {"s":1041,"period":12,"offset":6.3},
-    {"s":1559,"period":12,"offset":8.5},
-    {"s":2079,"period":12,"offset":10.7},
-    {"s":3128,"period":12,"offset":3},
-    {"s":4179,"period":12,"offset":7.4},
-    {"s":4700,"period":12,"offset":9.6},
-    {"s":5218,"period":12,"offset":11.7}
+    {"s":518,"period":12,"offset":0,"before":-150},
+    {"s":1041,"period":12,"offset":0,"before":-150},
+    {"s":1559,"period":12,"offset":0,"before":-150},
+    {"s":2079,"period":12,"offset":0,"before":-150},
+    {"s":3128,"period":12,"offset":0,"before":-150},
+    {"s":4179,"period":12,"offset":0,"before":-150},
+    {"s":4700,"period":12,"offset":0,"before":-150},
+    {"s":5218,"period":12,"offset":0,"before":-150}
   ],
   "branches": [
 
