@@ -1,12 +1,12 @@
 // Одна попытка: состояние, обновление, цикл. Используется игрой (main.ts) и редактором («Играть»).
-import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CARD_HOLD, CHASER_FOLLOW, CHASER_LINE, MAX_DT, P, PANIC, RAMP, SCORE, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
+import { BLOCK, BRANCH, CAM_AHEAD, CAM_LERP, CARD_HOLD, CHASER_FOLLOW, CHASER_LINE, MAX_DT, MENTOR, P, PANIC, RAMP, SCORE, TALK_HOLD, TRAFFIC_AI, TRAFFIC_SIZE } from './config';
 import { layoutRails, trainObb, untilTrain, type Rail } from './rails';
 import { RAIL } from './config';
 import { engine as sfxEngine, play as sfx, siren as sfxSiren } from './audio';
 import { crossCars, layoutCrossings, lightAt, type Crossing } from './crossings';
 import { carByKey, type CarSpec } from './cars';
 import { step, type CarState } from './physics';
-import { buildPath, curvatureAt, heading, laneOff, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
+import { buildPath, curvatureAt, heading, laneOff, lanesFor, nearest, nearestGlobal, pathAt, pathAtExt, type Path } from './road';
 import { buildRoadPaths, parentEquivalent, parentRoad, type BranchDef } from './roads';
 import { layoutBlocks, type Block, type Layout } from './blocks';
 import { makeWidthFn, widthAt, type Narrow, type WidthFn } from './narrow';
@@ -29,6 +29,7 @@ export interface GameUI {
   // игровой HUD (в редакторе и харнессе нет): очки, полоса маршрута с меткой машины, шкала копа, событие
   gscore?: HTMLElement; barFill?: HTMLElement; barCar?: HTMLElement; cop?: HTMLElement; copFill?: HTMLElement; gflash?: HTMLElement;
   ovBody?: HTMLElement;   // экран результата (BUSTED/DELIVERED): причина, очки, звёзды, кнопка — docs/ui.md
+  talk?: HTMLElement;     // реплика друга-наставника строкой в HUD (уроки)
   barMarks?: HTMLElement; // метки событий маршрута на полосе HUD (пост, ремонт, ежи, переезд, автовоз, сужение) — пройденные гаснут
   left: HTMLElement;
   right: HTMLElement;
@@ -158,6 +159,20 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   // цель урока (docs/teaching.md): события с полного старта уровня — продолжение с контрольной их не сбрасывает
   const freshGoals = (): Record<GoalType, number> => ({ near: 0, police: 0, jump: 0, flyover: 0, copOut: 0, panic: 0, noskid: 0, red: 0 });
   let goalN = freshGoals(), wasSkid = false;
+  // Наставник (docs/teaching.md): друг впереди на скорости игрока по плану полос уровня; с рампы в своей полосе прыгает, как
+  // игрок; с until растворяется («дальше сам») и ждёт у гаража. Физики и столкновений у него нет: это пример, а не препятствие.
+  // Трафик его не видит — на его участке случайного трафика нет (trafficFrom), явные машины он объезжает по плану
+  let mentor: { s: number; off: number; vOff: number; air: number; fade: number } | null = null;
+  let mentorHome = false;
+  let talkIdx = 0, talkSeen = 0, talkT = 0; // реплики друга: следующая, сколько уже показано с загрузки уровня, остаток показа
+  const mentorOff = (s: number): number => {
+    let lane = 1; for (const [ps, l] of level.mentor!.plan) if (s >= ps) lane = l;
+    const w = widthAt(roads[0].width, s); return laneOff(w, Math.min(lane, lanesFor(w) - 1));
+  };
+  function say(text: string): void {
+    talkT = TALK_HOLD; sfx('card');
+    if (ui.talk) { ui.talk.innerHTML = `<b>${MENTOR.name}</b>${text}`; ui.talk.classList?.add('on'); }
+  }
   let frames = 0, frameSum = 0, slowFrames = 0;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
@@ -177,7 +192,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   function load(l: LevelData): void {
     abandon();
-    level = l; firstStart = true; cpS = 0; busts = 0; cardsSeen = 0; goalN = freshGoals();
+    level = l; firstStart = true; cpS = 0; busts = 0; cardsSeen = 0; goalN = freshGoals(); talkSeen = 0;
     levelTheme(l.theme); // палитра района
     spec = carByKey(l.car);
     // Машина и уровень задают стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
@@ -218,6 +233,8 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     cam = { x: car.x, y: car.y };
     state = 'play'; timeAlive = 0; resetHold();
     roads.forEach((r, i) => { refreshRoad(r); r.traffic = spawnTraffic(r.path, P.traffic.v, P.speed.v, level.seed + i * 7919, r.cars, r.blocks, r.width, r.oncoming, level.mix ?? 0, level.pace); });
+    // участок с другом-наставником — без случайного трафика: друг его не видит, а игрок должен видеть пример, а не помехи
+    if (level.trafficFrom) roads[0].traffic = roads[0].traffic.filter(c => c.fixed || c.s >= level.trafficFrom!);
     // перед ловушкой трафика нет: иначе к перекрытию собирается очередь, и игрок врезается в неё раньше, чем сработает сценарий
     if (level.trap) roads[0].traffic = roads[0].traffic.filter(c => c.kind === 'ramp' || c.s < level.trap!.s - 1200);
     chaser = null; copIdx = 0;
@@ -241,6 +258,13 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       copIdx = Math.max(0, copAts().filter(a => a <= cpS).length - 1); // последняя пройденная точка копа срабатывает снова
     }
     attemptOpen = true; attemptT0 = timeAlive; attemptCp = cpS; lastWhy = ''; frames = frameSum = slowFrames = 0;
+    // друг: с начала или с контрольной — снова впереди; если контрольная дальше «дальше сам» — уже ждёт у гаража
+    mentor = null; mentorHome = false; talkT = 0; ui.talk?.classList?.remove('on');
+    if (level.mentor) {
+      if (cpS < level.mentor.until) { const s = cpS + (level.mentor.gap ?? MENTOR.gap); mentor = { s, off: mentorOff(s), vOff: 0, air: -1, fade: 1 }; }
+      else mentorHome = true;
+    }
+    talkIdx = Math.max(talkSeen, (level.talk ?? []).filter(t => t.s <= cpS).length);
     if (cpS === 0) goalN = freshGoals(); wasSkid = false;
     if (firstStart) { firstStart = false; intro = 3; state = 'intro'; ui.overlay.className = 'show intro'; ui.ovTitle.textContent = '3'; ui.ovSub.textContent = level.intro ?? level.name; ui.ovHint.textContent = 'нажми, чтобы начать'; if (ui.ovName) ui.ovName.textContent = level.name; }
   }
@@ -404,6 +428,29 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     }
   }
 
+  // Друг-наставник: едет на скорости игрока, перестраивается по плану, догнал автовоз в своей полосе сзади — прыгает
+  function moveMentor(dt: number): void {
+    const m = mentor!, prev = m.s;
+    m.s += P.speed.v * dt;
+    const d = Math.max(-MENTOR.lane * dt, Math.min(MENTOR.lane * dt, mentorOff(m.s) - m.off));
+    m.off += d; m.vOff = d / dt;
+    if (m.air >= 0) { if ((m.air += dt) >= RAMP.air) m.air = -1; }
+    else for (const c of roads[0].traffic) {
+      if (c.kind !== 'ramp') continue;
+      const rear = c.s - c.L / 2, off = laneOff(widthAt(roads[0].width, c.s), c.lane) + c.shift;
+      if (prev + MENTOR.L / 2 < rear && m.s + MENTOR.L / 2 >= rear && Math.abs(off - m.off) < 24) { m.air = 0; break; }
+    }
+    if (m.s >= level.mentor!.until) {
+      if (m.fade === 1 && level.mentor!.bye) say(level.mentor!.bye); // «дальше сам» — в тот момент, когда он уходит, а не когда игрок доедет до места
+      m.fade -= dt / MENTOR.fade; if (m.fade <= 0) { mentor = null; mentorHome = true; }
+    }
+    else if (m.s >= roads[0].path.L - 80) { mentor = null; mentorHome = true; }
+  }
+  function mentorPose() {
+    const m = mentor!, p = pathAt(roads[0].path, m.s);
+    return { x: p.x + p.nx * m.off, y: p.y + p.ny * m.off, h: heading(p.tx, p.ty) + Math.atan2(m.vOff, P.speed.v), air: m.air >= 0 ? m.air / RAMP.air : undefined, alpha: Math.max(0, m.fade) };
+  }
+
   // Коп выбыл: взрыв поменьше, дым, тряска и короткое слоу-мо — момент, который игра празднует
   function copOut(x: number, y: number): void { boom(x, y, 120, 0.8); puff(x, y, 90, 1.0, 0.3); shake = 8; slow = Math.max(slow, 0.45); }
   function chaserPose() {
@@ -449,6 +496,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (level.cards && cardIdx < level.cards.length && ms >= level.cards[cardIdx].s) {
       card = CARD_HOLD; sfx('card'); ui.overlay.className = 'show card'; ui.ovTitle.textContent = level.cards[cardIdx].text; ui.ovSub.textContent = ''; ui.ovHint.textContent = ''; cardIdx++; cardsSeen = Math.max(cardsSeen, cardIdx);
     }
+    if (level.talk && talkIdx < level.talk.length && ms >= level.talk[talkIdx].s) { say(level.talk[talkIdx].text); talkIdx++; talkSeen = Math.max(talkSeen, talkIdx); }
     if (level.trap && ms >= level.trap.s) return trap(level.trap.text);
     for (const rl of roads[car.road].rails) {
       if (rl.def.after !== undefined && rl.t0 === undefined && car.s >= rl.s) rl.t0 = timeAlive;                       // игрок пересёк рельсы — поезд пошёл
@@ -485,6 +533,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       r.traffic = moveTraffic(r.traffic, r.path, dt, { layout: r.blocks, width: r.width, playerS: r === rd ? car.s : undefined, playerL: car.L, stops, stopsBack, oncoming: r.oncoming });
     }
     if (roads.length > 1) flowTraffic();
+    if (mentor) moveMentor(dt);
     const me = obb(car.x, car.y, car.h, car.W, car.L);
     // Заезд на рампу сзади, ровно и быстрее грузовика — прыжок (M8); с борта или под углом — обычное столкновение
     if (!jump) for (const c of rd.traffic) {
@@ -613,6 +662,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     if (slow > 0) slow -= dt;
     zoom += ((slow > 0 ? PANIC.zoom : 1) - zoom) * Math.min(1, 8 * dt);
     if (flash) { flash.t -= dt; if (flash.t <= 0) flash = null; }
+    if (talkT > 0) { talkT -= dt; if (talkT <= 0) ui.talk?.classList?.remove('on'); }
     // вспышки и тряска идут всегда (и после BUSTED), строки DELIVERED раскрываются по таймеру
     for (const b of blasts) b.age += dt; blasts = blasts.filter(b => b.age < b.dur);
     if (shake > 0) shake = Math.max(0, shake - dt * 30);
@@ -638,6 +688,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings, oncoming: r.oncoming, from: r.def?.from, parent: r.def ? r.parent : undefined }));
     render(ctx, view, {
       roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props, rings: level.rings, signs: level.signs,
+      mentor: mentor ? mentorPose() : undefined, mentorHome,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
       blasts, shake, wrecked,
     });

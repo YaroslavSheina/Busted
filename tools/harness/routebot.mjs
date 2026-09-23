@@ -61,18 +61,30 @@ function freeLane(target) {
   for (const l of [target - 1, target + 1]) if (ok(l) && !near(l)) { lastLane = l; return l; }
   return lastLane !== null && !blocked(lastLane) ? lastLane : target;
 }
+// Друг-наставник (уроки) не должен проезжать сквозь машины и заграждения: у него нет столкновений, план полос — на авторе
+// уровня. Проверка по s и смещению от оси (кривизна не учитывается), в прыжке и при растворении — нет
+const laneOffJS = (w, lane) => { const n = Math.max(1, Math.min(3, Math.floor(w / 45))), l = Math.min(lane, n - 1); return (l - (n - 1) / 2) * (w / n); };
+function mentorCheck(hits) {
+  const m = g.mentor; if (!m || m.air >= 0 || m.fade < 0.5) return;
+  const W0 = g.level.width, lo = l => laneOffJS(W0, l);
+  for (const c of g.roads[0].traffic) if (Math.abs(c.s - m.s) < (c.L + 52) / 2 - (c.kind === 'ramp' ? 12 : 6) && Math.abs(lo(c.lane) + c.shift - m.off) < (c.W + 28) / 2 - 4) hits.set(c, `${c.kind === 'ramp' ? 'автовоз' : 'машину'} @${Math.round(m.s)}`);
+  const b = g.roads[0].blocks;
+  for (const p of b.police) if (Math.abs(p.s - m.s) < (p.w + 52) / 2 - 4 && Math.abs(lo(p.lane) - m.off) < (p.l + 28) / 2 - 4) hits.set(p, `пост @${Math.round(p.s)}`);
+  for (const w of b.works) if (Math.abs(w.s - m.s) < (w.l + 52) / 2 - 4 && Math.abs(lo(w.lane) - m.off) < (w.w + 28) / 2 - 6) hits.set(w, `ремонт @${Math.round(w.s)}`);
+  for (const sp of b.spikes) if (Math.abs(sp.s - m.s) < (sp.l + 52) / 2 && Math.abs(lo(sp.lane) - m.off) < (sp.w + 28) / 2 - 6) hits.set(sp, `ежи @${Math.round(sp.s)}`);
+}
 function run(lvl, lane, frames = +(process.env.FRAMES ?? 2400), stopAt = null) {
   g.load(lvl); press(0); press(0); step(); byId.ovSub.textContent = '';
-  let road = g.car.road, croad = g.chaser?.road; const log = []; let f = 0; let passed = false;
+  let road = g.car.road, croad = g.chaser?.road; const log = []; let f = 0; let passed = false; const mentorHits = new Map();
   for (; f < frames && g.state === 'play'; f++) {
     const planned = PLAN.length ? (PLAN.filter(([ps]) => g.car.s >= ps).at(-1)?.[1] ?? lane) : lane; // PLAN=s:lane,s:lane — полоса по s
-    lastDir = botDir((freeLane(planned) - 1) * laneW); press(lastDir); step();
+    lastDir = botDir((freeLane(planned) - 1) * laneW); press(lastDir); step(); mentorCheck(mentorHits);
     if (process.env.TRACE && f >= +process.env.TRACE && f < +process.env.TRACE + 40) { const near = (path) => { let b = Infinity, bs = 0; for (const p of path.pt) { const d = Math.hypot(p.x - g.car.x, p.y - g.car.y); if (d < b) { b = d; bs = p.s; } } return `${Math.round(b)}@${Math.round(bs)}`; }; console.log(`   f${f} road ${g.car.road} s ${Math.round(g.car.s)} off ${g.car.off.toFixed(0)} xy ${Math.round(g.car.x)},${Math.round(g.car.y)} h ${g.car.h.toFixed(2)} | до оси главной ${near(g.roads[0].path)}${g.roads[1] ? ` | до оси А ${near(g.roads[1].path)}` : ''} | рампы ${g.traffic.filter(c => c.kind === 'ramp').map(c => `${Math.round(c.s)}/${Math.round(c.v)}`).join(',')} | air ${g.air ?? '-'} | w ${g.car.w.toFixed(2)} нажал ${lastDir} | цель ${freeLane(planned)} | рядом ${g.traffic.filter(c => Math.abs(c.s - g.car.s) < 600).map(c => `${c.lane}${c.dir === -1 ? 'в' : ''}:${Math.round(c.s - g.car.s)}/${Math.round(c.v)}${c.panic ? '!' : ''}`).join(' ')}`); }
     if (g.car.road !== road) { road = g.car.road; log.push(`→ ${road} @s${Math.round(g.car.s)} ${(f / 60).toFixed(1)}с`); }
     if (g.chaser && g.chaser.road !== croad) { croad = g.chaser.road; log.push(`коп → ${croad}`); }
     if (stopAt && g.car.road === stopAt.road && g.car.s > stopAt.s + 100) { passed = true; break; }
   }
-  return { state: g.state, why: why(), s: Math.round(g.car.s), road: g.car.road, log, t: f / 60, passed };
+  return { state: g.state, why: why(), s: Math.round(g.car.s), road: g.car.road, log, t: f / 60, passed, mentor: [...mentorHits.values()] };
 }
 if (process.env.SWEEP) {
   const [ri, ci] = process.env.SWEEP.split(':').map(Number);
@@ -90,9 +102,10 @@ if (process.env.SWEEP) {
   console.log(`дорога ${ri}, перекрёсток s${c.s} (цикл ${c.period}, сейчас offset ${c.offset}): полос проходит →\n   ${line.join('  ')}`);
 } else {
   for (const lane of process.env.LANE ? [+process.env.LANE] : [0, 1, 2]) {
-    const clean = { ...level0, traffic: 0, cars: process.env.KEEPRAMP ? (level0.cars ?? []).filter(c => c.type === 'ramp') : [], chaser: process.env.KEEPCOP ? level0.chaser : undefined, branches: (level0.branches ?? []).map(b => ({ ...b, cars: [], ...(process.env.NOCROSS ? { crossings: [] } : {}) })), ...(process.env.NOCROSS ? { crossings: [] } : {}) };
+    const clean = { ...level0, traffic: 0, cars: process.env.KEEPCARS ? (level0.cars ?? []) : process.env.KEEPRAMP ? (level0.cars ?? []).filter(c => c.type === 'ramp') : [], chaser: process.env.KEEPCOP ? level0.chaser : undefined, branches: (level0.branches ?? []).map(b => ({ ...b, cars: [], ...(process.env.NOCROSS ? { crossings: [] } : {}) })), ...(process.env.NOCROSS ? { crossings: [] } : {}) };
     const r = run(process.env.CLEAN ? clean : level0, lane);
     if (process.env.BODY) console.log(byId.ovBody?._html ?? '', '|', byId.ovSub?.textContent ?? '', '|', byId.gflash?.textContent ?? ''); // BODY=1 — экран результата
+    if (r.mentor.length) console.log(`наставник задел: ${r.mentor.join(', ')}`);
     console.log(`полоса ${lane}: ${r.state} ${r.why} @${r.s} дорога ${r.road} ${r.t.toFixed(1)}с${process.env.KEEPCOP ? (g.chaser ? ` | коп жив, хвост ${Math.round(g.car.s - g.chaser.s)}` : ' | коп выбыл') : ''} | ${r.log.join(' | ') || 'без переходов'}`);
   }
 }

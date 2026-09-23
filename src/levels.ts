@@ -14,6 +14,10 @@ export interface Prop { type: 'building'; x: number; y: number; w: number; h: nu
 // Знак перед препятствием (docs/teaching.md): щит у правого края тротуара на s главной; генератор ставит их сам по событиям
 export interface Sign { s: number; kind: 'works' | 'police' | 'narrow' | 'rails' | 'ring' }
 
+// Наставник (docs/teaching.md): друг впереди на скорости игрока. plan — [s, полоса]: с s едет в этой полосе (как план бота);
+// until — s, где он говорит «дальше сам», растворяется и ждёт у гаража; gap — насколько впереди на старте (по умолчанию MENTOR.gap)
+export interface Mentor { gap?: number; plan: [number, number][]; until: number; bye?: string } // bye — реплика, когда друг уходит
+
 // Цель урока (docs/teaching.md): третья звезда уровня — мастерство его механики, а не общий счёт
 export type GoalType = 'near' | 'police' | 'jump' | 'flyover' | 'copOut' | 'panic' | 'noskid' | 'red';
 export interface Goal { type: GoalType; n: number }
@@ -51,6 +55,9 @@ export interface LevelData {
   narrows?: Narrow[];  // необязательно: сужения дороги (docs/mechanics.md, M6)
   rails?: RailDef[];   // необязательно: переезды на главной дороге (docs/mechanics.md, M7)
   crossings?: CrossingDef[]; // необязательно: перекрёстки со светофором (docs/mechanics.md, M9)
+  mentor?: Mentor;     // необязательно: друг впереди показывает линию (уроки)
+  talk?: Card[];       // необязательно: реплики друга по ходу (s главной) — строкой в HUD, мир не стоит
+  trafficFrom?: number; // необязательно: случайный трафик только дальше этого s — на участке с другом помех нет
   goal?: Goal;         // необязательно: цель урока — третья звезда вместо «очки не ниже цели» (docs/teaching.md)
   signs?: Sign[];      // необязательно: знаки перед препятствиями (docs/teaching.md) — читаются на бегу вместо стоп-кадров
   rings?: Ring[];      // необязательно: кольца на главной дороге (docs/mechanics.md, M11) — маршрут в points, здесь остальной круг

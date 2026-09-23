@@ -29,7 +29,7 @@ let carOverride: CarKey | null = null; // выбор в меню «авто» д
 const game = createGame({
   canvas: $('c') as HTMLCanvasElement,
   hud: $('hud'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), ovHint: $('ovHint'), ovName: $('ovName'),
-  gscore: $('gscore'), barFill: $('barFill'), barCar: $('barCar'), cop: $('cop'), copFill: $('copFill'), gflash: $('gflash'), ovBody: $('ovBody'), barMarks: $('barMarks'),
+  gscore: $('gscore'), barFill: $('barFill'), barCar: $('barCar'), cop: $('cop'), copFill: $('copFill'), gflash: $('gflash'), ovBody: $('ovBody'), barMarks: $('barMarks'), talk: $('talk'),
   left: $('left'), right: $('right'),
 }, levelByName(FIRST));
 // Очки пройденного уровня — в славу (только уровни кампании)

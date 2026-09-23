@@ -22,8 +22,9 @@ m = m.replace(/^import [^\n]*\n/, '');
 const carv = /let (roads\d*);\n\s*let (car\d*);\n\s*let marks;/.exec(g);
 if (!carv) throw new Error('не нашёл объявления roads/car');
 const [, roads, car] = carv, chaser = /let (chaser\d*) = null;/.exec(g)[1], anchor = `let ${chaser} = null;`;
+const mentorVar = /let (mentor\d*) = null;/.exec(g)?.[1] ?? 'undefined'; // друг-наставник (уроки)
 const hook = ` globalThis.__lr = { get car(){return ${car}}, get traffic(){return ${roads}[${car}.road].traffic}, get cam(){return cam}, get state(){return state},`
-  + ` get chaser(){return ${chaser}}, get level(){return level}, reset: () => reset(), load: l => load(l), get roads(){return ${roads}}, get path(){return ${roads}[${car}.road].path}, get fx(){return fx}, get P(){return P}, get air(){return jump ? jump.t / 1.4 : undefined} };`;
+  + ` get chaser(){return ${chaser}}, get level(){return level}, reset: () => reset(), load: l => load(l), get roads(){return ${roads}}, get path(){return ${roads}[${car}.road].path}, get fx(){return fx}, get P(){return P}, get air(){return jump ? jump.t / 1.4 : undefined}, get mentor(){return ${mentorVar}} };`;
 g = once(g, anchor, anchor + hook, 'хук');
 if (process.argv[2]) g = once(g, 'const CHASER_LINE = 25;', `const CHASER_LINE = ${process.argv[2]};`, 'CHASER_LINE');
 // в харнессе отсчёта 3-2-1 нет: в load() firstStart = false (объявление let не трогаем)

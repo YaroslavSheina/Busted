@@ -1,6 +1,6 @@
 // Камера, дорога, машины, следы заноса, HUD. drawGrid/drawRoad также использует редактор.
 import { RING, type Ring } from './rings';
-import { BRANCH, LANES, TRAFFIC_SIZE } from './config';
+import { BRANCH, LANES, MENTOR, TRAFFIC_SIZE } from './config';
 import { heading, laneOff, lanesFor, pathAt, type Path } from './road';
 import { vehiclePose, type Vehicle } from './traffic';
 import type { CarState } from './physics';
@@ -43,6 +43,8 @@ export interface Scene {
   wrecked?: boolean;                                             // машина игрока разбита: тёмная, повёрнута
   rings?: Ring[];                                                // кольца главной дороги (M11)
   signs?: Sign[];                                                // знаки перед препятствиями на главной
+  mentor?: { x: number; y: number; h: number; air?: number; alpha: number }; // друг-наставник впереди (уроки)
+  mentorHome?: boolean;                                          // друг уже ждёт у гаража
 }
 
 // Тема. comic — рисованный вид сверху в духе ранних GTA (диздок): контуры, плоские цвета, тротуары в городе,
@@ -195,7 +197,8 @@ function propSprite(ctx: CanvasRenderingContext2D, key: string, dw?: number, dh?
   return true;
 }
 // Пул легковых спрайтов трафика (pixel): по «монетке» машины — у каждой своя модель, но одна и та же каждый кадр
-const PIXEL_POOL = ['px_gray_sedan', 'px_white_sedan', 'px_pick_up', 'px_jeep', 'px_retro_1', 'px_retro_2', 'px_retro_3', 'px_roadster', 'px_sport_car', 'px_muscle_car'];
+// кремовый кабриолет (retro_3) — машина друга-наставника, в трафике его нет, чтобы не спутать
+const PIXEL_POOL = ['px_gray_sedan', 'px_white_sedan', 'px_pick_up', 'px_jeep', 'px_retro_1', 'px_retro_2', 'px_roadster', 'px_sport_car', 'px_muscle_car'];
 const poolKey = (pick: number) => PIXEL_POOL[Math.floor(((Math.abs(pick) * 7919) % 1) * PIXEL_POOL.length)];
 // Спрайт по модели трафика (pixel): длинные — из референсов, легковые — из пула
 function modelKey(model: string | undefined, pick: number): string {
@@ -657,6 +660,28 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
   ctx.restore();
 }
 
+// ---------- друг-наставник: кабриолет, в прыжке крупнее с тенью, над ним имя, пока ведёт ----------
+function drawMentor(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, alpha: number, air: number | undefined, tag: boolean): void {
+  if (!visible(x, y, 90) || alpha <= 0) return;
+  const k = air !== undefined ? Math.sin(Math.PI * air) : 0;
+  ctx.save(); ctx.globalAlpha = alpha;
+  if (k) { ctx.fillStyle = `rgba(0,0,0,${0.35 - 0.2 * k})`; ctx.beginPath(); ctx.ellipse(x, y, MENTOR.W * 0.7, MENTOR.L * 0.55, h, 0, 7); ctx.fill(); }
+  ctx.save(); ctx.translate(x, y - 30 * k); ctx.scale(1 + 0.45 * k, 1 + 0.45 * k); ctx.rotate(h);
+  if (!(T.sprites === 'pixel' && carSprite(ctx, 'px_retro_3', MENTOR.W, MENTOR.L))) {
+    carUnder(ctx, MENTOR.W, MENTOR.L, 8);
+    ctx.fillStyle = '#e8dcbc'; ctx.beginPath(); ctx.roundRect(-MENTOR.W / 2, -MENTOR.L / 2, MENTOR.W, MENTOR.L, 8); ctx.fill();
+    ctx.fillStyle = '#7a2a2a'; ctx.fillRect(-MENTOR.W / 2 + 5, -4, MENTOR.W - 10, 16);
+  }
+  ctx.restore();
+  if (tag) { // имя над машиной — пиксельным шрифтом, прямо на экране
+    ctx.font = '8px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const ty = y - 40 - 30 * k, name = MENTOR.name.toUpperCase(), w = ctx.measureText(name).width + 10;
+    ctx.fillStyle = '#1a1408'; ctx.fillRect(x - w / 2, ty - 7, w, 14);
+    ctx.fillStyle = '#f4b942'; ctx.fillText(name, x, ty + 1);
+  }
+  ctx.restore();
+}
+
 // ---------- знаки перед препятствиями (docs/teaching.md): щит на столбе у правого края тротуара ----------
 // Щит всегда прямо на экране, а не по курсу: на спуске знак стоит справа по ходу (слева на экране), но читается так же
 export function drawSigns(ctx: CanvasRenderingContext2D, path: Path, w: number | WidthFn, signs: Sign[] | undefined): void {
@@ -842,6 +867,11 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
     }
   }
   if (sc.chaser) drawPolice(ctx, sc.chaser.x, sc.chaser.y, sc.chaser.h, sc.t ?? 0, true);
+  if (sc.mentor) drawMentor(ctx, sc.mentor.x, sc.mentor.y, sc.mentor.h, sc.mentor.alpha, sc.mentor.air, true);
+  if (sc.mentorHome && roads[0]) { // ждёт у гаража в правой полосе
+    const path = roads[0].path, s = path.L - 170, p = pathAt(path, s), off = laneOff(widthAt(roads[0].width, s), LANES - 1);
+    drawMentor(ctx, p.x + p.nx * off, p.y + p.ny * off, heading(p.tx, p.ty), 1, undefined, false);
+  }
   if (sc.air !== undefined) {
     // в полёте: тень на земле, машина крупнее по дуге
     const k = Math.sin(Math.PI * sc.air), sc2 = 1 + 0.45 * k;

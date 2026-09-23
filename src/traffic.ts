@@ -33,6 +33,7 @@ export interface Vehicle {
   hold?: number;  // остаток реакции после стоп-линии, с: зелёный уже горит, а машина ещё стоит
   ramp?: boolean; // разгоняется с места (до целевой скорости)
   buzzed?: boolean;        // игрок уже проезжал впритирку — одна провокация на машину
+  fixed?: boolean;         // явная машина уровня (cars), а не случайный трафик — её не убирает trafficFrom
   panic?: { side: 1 | -1; back?: boolean }; // паника: рывок от игрока, затем перекоррекция через всю дорогу к другому краю
   crashed?: boolean;       // встала в отбойник — стоит и не двигается
   scored?: boolean;        // очки за провокацию уже начислены
@@ -140,8 +141,8 @@ export function spawnTraffic(path: Path, density: number, playerSpeed: number, s
   }
   // Явные машины уровня добавляются к seeded-трафику; при density 0 остаются только они
   cars.forEach((c, i) => traffic.push(c.type === 'ramp'
-    ? { s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: RAMP.W, L: RAMP.L, col: '#5d6470', pick: (i + 0.5) / (cars.length + 1), kind: 'ramp' }
-    : { s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: MODELS[c.model ?? 'car'].W, L: MODELS[c.model ?? 'car'].L, col: COLORS[i % COLORS.length], pick: (i + 0.5) / (cars.length + 1), ...(c.oncoming ? { dir: -1 as const } : {}), ...(c.model && c.model !== 'car' ? { model: c.model } : {}) }));
+    ? { s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: RAMP.W, L: RAMP.L, col: '#5d6470', pick: (i + 0.5) / (cars.length + 1), kind: 'ramp', fixed: true }
+    : { s: c.s, lane: c.lane, shift: 0, spd: c.speed, v: c.speed, W: MODELS[c.model ?? 'car'].W, L: MODELS[c.model ?? 'car'].L, col: COLORS[i % COLORS.length], pick: (i + 0.5) / (cars.length + 1), fixed: true, ...(c.oncoming ? { dir: -1 as const } : {}), ...(c.model && c.model !== 'car' ? { model: c.model } : {}) }));
   return traffic;
 }
 

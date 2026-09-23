@@ -23,12 +23,13 @@ for (const key of keys) {
   const p = plans[key] ?? {};
   const lane = String(p.lane ?? 1);
   const env = { ...process.env, LEVEL: level.name, LANE: lane, PLAN: p.plan ?? '', LOOK: String(p.look ?? 220), FRAMES: String(p.frames ?? 4000),
-    TAKE: p.take ?? '', CLEAN: '1', KEEPRAMP: '1', KEEPCOP: '1' };
+    TAKE: p.take ?? '', CLEAN: '1', KEEPRAMP: '1', KEEPCOP: '1', KEEPCARS: p.cars ? '1' : '' }; // cars — явные машины уровня остаются (уроки)
   const r = spawnSync(process.execPath, [join(here, 'routebot.mjs')], { env, encoding: 'utf8' });
   const line = (r.stdout ?? '').split('\n').find(s => s.startsWith(`полоса ${lane}:`)) ?? `ошибка: ${(r.stderr ?? '').split('\n').find(Boolean) ?? 'нет вывода'}`;
-  const ok = /^полоса \d: (done|trap) /.test(line);
+  const mentorLine = (r.stdout ?? '').split('\n').find(s => s.startsWith('наставник задел'));
+  const ok = /^полоса \d: (done|trap) /.test(line) && !mentorLine; // друг-наставник проехал сквозь машину или заграждение — уровень сломан
   if (!ok) failed++;
-  console.log(`${ok ? '✓' : '✗'} ${key.padEnd(13)} ${level.name.padEnd(24)} ${line.replace(/^полоса \d: /, '').replace(' | без переходов', '')}${p.plan ? `  [${p.plan}]` : ''}`);
+  console.log(`${ok ? '✓' : '✗'} ${key.padEnd(13)} ${level.name.padEnd(24)} ${line.replace(/^полоса \d: /, '').replace(' | без переходов', '')}${p.plan ? `  [${p.plan}]` : ''}${mentorLine ? `\n    ${mentorLine}` : ''}`);
 }
 console.log(failed ? `\nНЕ ДОЕХАЛ: ${failed}` : '\nВСЕ УРОВНИ КАМПАНИИ ПРОХОДИМЫ');
 process.exit(failed ? 1 : 0);
