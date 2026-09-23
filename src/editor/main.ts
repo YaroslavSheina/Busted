@@ -8,9 +8,10 @@ import { pathAt } from '../road';
 import { buildRoadPaths } from '../roads';
 import { createGame, type Game } from '../game';
 import { buildPath } from '../road';
-import { initCanvas, type Sel } from './canvas';
+import { initCanvas, type LogMark, type Sel } from './canvas';
 import { fileName, formatLevel, parseLevel } from './io';
 import { loadArt } from '../art';
+import type { LogEntry } from '../log';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const inp = (id: string) => $<HTMLInputElement>(id);
@@ -18,6 +19,10 @@ const inp = (id: string) => $<HTMLInputElement>(id);
 // Стартовые значения — из config, чтобы новый уровень совпадал с тем, что крутится в панели тюнинга
 const level: LevelData = { name: 'Новый уровень', points: [], width: P.width.v, traffic: P.traffic.v, seed: 1, car: DEFAULT_CAR };
 let sel: Sel = null;
+// журнал теста (ниже): объявлен до холста — холст рисуется сразу при создании и спрашивает marks()
+let levelKey = ''; // ключ открытого файла уровня — по нему журнал теста находит попытки
+let logs: { name: string; entries: LogEntry[] }[] = [];
+const logFor = (key: string) => logs.flatMap(l => l.entries).filter(e => (e.ev === 'try' || e.ev === 'note') && e.lvl === key);
 
 // ---------- холст ----------
 const canvas = initCanvas($<HTMLCanvasElement>('ec'), {
@@ -36,6 +41,7 @@ const canvas = initCanvas($<HTMLCanvasElement>('ec'), {
   moveCar: (i, c) => { level.cars![i] = { ...c, ...(level.cars![i].type ? { type: level.cars![i].type } : {}) }; changed(); },
   removeCar: i => { level.cars!.splice(i, 1); select(null); changed(); },
   hint: t => { $('cursor').textContent = t; },
+  marks: () => logFor(levelKey).flatMap((e): LogMark[] => e.ev === 'try' ? (e.end === 'busted' || e.end === 'quit' ? [{ x: e.x, y: e.y, kind: e.end }] : []) : e.ev === 'note' ? [{ x: e.x, y: e.y, kind: 'note' }] : []),
 });
 loadArt(() => canvas.draw()); // спрайты темы pixel: редактор рисует по событиям, после каждой картинки — перерисовка
 
@@ -254,6 +260,7 @@ function load(l: LevelData): void {
 const open = $<HTMLSelectElement>('open');
 open.innerHTML = '<option value="">— новый —</option>' + LEVEL_KEYS.map(k => `<option value="${k}">${k} — ${LEVELS[k].name}</option>`).join('');
 open.onchange = () => {
+  levelKey = open.value; syncLog();
   if (open.value) load(LEVELS[open.value]);
   else load({ name: 'Новый уровень', points: [], width: level.width, traffic: level.traffic, seed: level.seed, car: level.car });
   status('');
@@ -280,6 +287,34 @@ file.onchange = async () => {
   if (!f) return;
   try { const l = parseLevel(JSON.parse(await f.text())); load(l); open.value = ''; status(`Импортирован «${l.name}»`); }
   catch (err) { status('Ошибка импорта: ' + (err as Error).message); }
+};
+
+// ---------- журнал теста: попытки тестеров поверх уровня (src/log.ts) ----------
+// Несколько файлов складываются — у каждого тестера свой журнал. Сводка: попытки, доставки, аварии по причинам, брошенные, заметки
+function syncLog(): void {
+  const box = $('logInfo');
+  if (!logs.length) { box.textContent = ''; return; }
+  const es = logFor(levelKey), tries = es.filter(e => e.ev === 'try');
+  const count = (end: string) => tries.filter(e => e.ev === 'try' && e.end === end).length;
+  const why = new Map<string, number>(); for (const e of tries) if (e.ev === 'try' && e.end === 'busted') why.set(e.why ?? '?', (why.get(e.why ?? '?') ?? 0) + 1);
+  const players = logs.filter(l => l.entries.some(e => (e.ev === 'try' || e.ev === 'note') && e.lvl === levelKey)).length;
+  const fps = tries.filter(e => e.ev === 'try' && e.fps).map(e => e.ev === 'try' ? e.fps : 0);
+  const notes = es.filter(e => e.ev === 'note').map(e => e.ev === 'note' ? `«${e.text}» — попытка ${e.n}, ${e.L ? Math.round(e.s / e.L * 100) : 0}%` : '');
+  box.innerText = `Журналов ${logs.length}, по этому уровню тестеров ${players}.\n`
+    + (tries.length ? `Попыток ${tries.length}: доставок ${count('done') + count('trap')}, аварий ${count('busted')}, брошено ${count('quit')}.\n` : 'По этому уровню попыток нет.\n')
+    + (why.size ? `Аварии: ${[...why].sort((a, b) => b[1] - a[1]).map(([w, n]) => `${w} ${n}`).join(', ')}.\n` : '')
+    + (fps.length ? `Кадров в секунду: от ${Math.min(...fps)} до ${Math.max(...fps)}.\n` : '')
+    + notes.join('\n');
+}
+const logFile = inp('logFile');
+$('logLoad').onclick = () => logFile.click();
+$('logClear').onclick = () => { logs = []; syncLog(); canvas.draw(); };
+logFile.onchange = async () => {
+  for (const f of Array.from(logFile.files ?? [])) {
+    try { const j = JSON.parse(await f.text()); if (!Array.isArray(j.entries)) throw new Error('нет entries'); logs.push({ name: f.name, entries: j.entries }); }
+    catch (err) { status(`Журнал ${f.name}: ${(err as Error).message}`); }
+  }
+  logFile.value = ''; syncLog(); canvas.draw();
 };
 
 // ---------- играть ----------

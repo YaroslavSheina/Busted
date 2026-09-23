@@ -44,6 +44,9 @@
       <div id="railList"></div>
       <div class="row"><label>Перекрёсток<br><small>s, период с, красный в с</small></label><input id="crossS" type="number" step="10" placeholder="s"><input id="crossPeriod" type="number" step="0.5" placeholder="с"><input id="crossOffset" type="number" step="0.5" placeholder="с"><button id="crossAdd" class="mini">+</button></div>
       <div id="crossList"></div>
+      <div class="row"><label>Журнал теста<br><small>файлы тестеров: смерти поверх уровня</small></label><button id="logLoad" class="mini">+</button><button id="logClear" class="mini">×</button></div>
+      <div id="logInfo" class="hint"></div>
+      <input id="logFile" type="file" accept=".txt,.json,text/plain,application/json" multiple hidden>
       <div id="stats"></div>
       <div class="buttons"><button id="export">Экспорт</button><button id="import">Импорт</button><button id="play" class="primary">Играть</button></div>
       <input id="file" type="file" accept=".json,application/json" hidden>

@@ -28,7 +28,9 @@ export interface CanvasHooks {
   moveCar(i: number, c: TrafficCar): void;
   removeCar(i: number): void;
   hint(text: string): void;   // подсказка под курсором: дорога и s по ней
+  marks?(): LogMark[];        // журнал теста поверх уровня: где разбивались, бросали, писали заметки
 }
+export interface LogMark { x: number; y: number; kind: 'busted' | 'quit' | 'note' }
 
 export interface EditorCanvas {
   draw(): void;
@@ -134,6 +136,7 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       const p0 = path.pt[0]; drawPlayer(ctx, p0.x, p0.y, Math.atan2(p0.tx, -p0.ty), spec);
     }
 
+
     // контрольный полигон и точки — поверх дороги, размер не зависит от зума
     ctx.lineWidth = 1 / zoom; ctx.strokeStyle = 'rgba(244,185,66,.35)'; ctx.setLineDash([6 / zoom, 6 / zoom]);
     ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.setLineDash([]);
@@ -145,6 +148,13 @@ export function initCanvas(cv: HTMLCanvasElement, h: CanvasHooks): EditorCanvas 
       if (on) { ctx.lineWidth = 2 / zoom; ctx.strokeStyle = '#fff'; ctx.stroke(); }
       ctx.fillStyle = 'rgba(236,233,224,.7)'; ctx.fillText(String(i), p[0] + 12 / zoom, p[1] - 10 / zoom);
     });
+
+    // журнал теста поверх всего, полупрозрачно: смерти — красные пятна (частые места сливаются в тепловое пятно), брошенные попытки — серые, заметки — жёлтые
+    for (const m of h.marks?.() ?? []) {
+      ctx.beginPath(); ctx.arc(m.x, m.y, Math.max(18, 7 / zoom), 0, 7);
+      ctx.fillStyle = m.kind === 'busted' ? 'rgba(255,60,60,.28)' : m.kind === 'note' ? 'rgba(244,185,66,.75)' : 'rgba(210,210,210,.3)'; ctx.fill();
+      if (m.kind === 'busted') { ctx.beginPath(); ctx.arc(m.x, m.y, 2.5 / zoom, 0, 7); ctx.fillStyle = '#ff3c3c'; ctx.fill(); }
+    }
   }
 
   function fit(): void {
