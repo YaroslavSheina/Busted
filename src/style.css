@@ -45,8 +45,8 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 .tune.on{border-color:rgba(244,185,66,.5);color:var(--yellow)}
 .details{margin-top:6px}
 /* экраны оболочки: карточка района, гараж, пауза, настройки (shell.ts) */
-.sheet,#dcard,#garage,#pause,#settings{position:fixed;inset:0;z-index:7;background:var(--night);color:var(--paper);overflow-y:auto;pointer-events:auto;-webkit-user-select:none;user-select:none;padding:calc(14px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom))}
-#dcard.hide,#garage.hide,#pause.hide,#settings.hide{display:none}
+.sheet,#dcard,#garage,#pause,#settings,#note{position:fixed;inset:0;z-index:7;background:var(--night);color:var(--paper);overflow-y:auto;pointer-events:auto;-webkit-user-select:none;user-select:none;padding:calc(14px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom))}
+#dcard.hide,#garage.hide,#pause.hide,#settings.hide,#note.hide{display:none}
 #dcard{display:flex;align-items:center;justify-content:center;background:rgba(12,24,44,.92)}
 .dbox{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;max-width:340px}
 .dsign{font-family:var(--display);font-size:14px;text-transform:uppercase;padding:12px 24px;background:var(--yellow);color:var(--ink);transform:var(--skew);box-shadow:var(--hard);animation:stamp .35s cubic-bezier(.2,1.6,.4,1) both}
@@ -67,6 +67,12 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 .gcar .stats{width:auto} .gcar.locked{opacity:.5} .gcar.locked img{filter:grayscale(1)} .gcar.sel{border-color:var(--yellow)}
 .gpick{justify-self:start;margin-top:4px;background:var(--yellow);color:var(--ink);border:2px solid var(--ink);padding:8px 12px;font-size:11px;font-family:var(--display);box-shadow:var(--hard-s)} .gcar.sel .gpick{background:var(--paper)}
 #pause{display:flex;align-items:center;justify-content:center;background:rgba(12,24,44,.85)}
+/* заметка тестера: поле ввода выделяется и печатается (страница целиком без выделения — иначе iOS не даст печатать) */
+#note{display:flex;align-items:flex-start;justify-content:center;background:rgba(12,24,44,.94)}
+.nbox{display:flex;flex-direction:column;gap:10px;width:min(360px,92vw)} .nbox h1{margin:0;font-family:var(--display);font-size:16px;font-weight:400;color:var(--yellow)}
+.nctx{margin:0;font-size:12px;line-height:1.45;opacity:.75}
+.nbox textarea{width:100%;box-sizing:border-box;padding:10px 12px;font:15px/1.4 -apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--paper);border:3px solid var(--ink);box-shadow:var(--hard-s);resize:none;-webkit-user-select:text;user-select:text;touch-action:auto}
+.nres{min-height:14px;font-size:12px;color:var(--yellow)}
 .pbox{display:flex;flex-direction:column;gap:10px;width:min(300px,84vw)} .pbox h1{margin:0 0 8px;text-align:center;font-family:var(--display);font-size:18px;font-weight:400;color:var(--yellow);text-shadow:3px 3px 0 var(--ink)}
 .pbtn,.srow{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:14px 16px;background:var(--paper);color:var(--ink);border:3px solid var(--ink);box-shadow:var(--hard-s);font-size:14px;text-align:left}
 .pbtn{justify-content:flex-start;font-family:var(--display);font-size:11px;text-transform:uppercase} .pbtn .ico{margin-right:4px}
@@ -163,6 +169,8 @@ body.debug #hud{display:block} .pill.dbg{display:none} body.debug .pill.dbg{disp
 .res .hint{font-size:13px;line-height:1.45;text-align:center;opacity:.85;padding:8px 10px;border-top:2px dashed rgba(26,20,8,.25)}
 .rbtn{margin-top:4px;padding:14px 22px;font-family:var(--display);font-size:11px;text-transform:uppercase;background:var(--yellow);color:var(--ink);border:3px solid var(--ink);box-shadow:var(--hard-s);transform:skew(-6deg);pointer-events:none}
 .rbtn .ico{vertical-align:-3px}
+.res .nbtn{align-self:flex-end;margin-top:-4px;padding:6px 10px;font-size:11px;background:transparent;color:var(--ink);border:2px dashed rgba(26,20,8,.45);pointer-events:auto}
+.res .nbtn .ico{vertical-align:-2px}
 .res .stars{display:flex;gap:14px} .res .st{opacity:0;transform:scale(2.4);animation:pop .3s cubic-bezier(.2,1.6,.4,1) forwards}
 @keyframes pop{from{opacity:0;transform:scale(2.4) rotate(-15deg)}to{opacity:1;transform:none}}
 .res .st:not(.got){filter:none;opacity:0;animation-name:fade} @keyframes fade{to{opacity:.35}}

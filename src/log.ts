@@ -33,7 +33,9 @@ export function logOpen(): void { push({ ev: 'open', ts: Date.now(), b: __BUILD_
 // номер попытки уровня с учётом прошлых запусков: «разбился на 7-й попытке»
 export function tries(lvl: string): number { return all().reduce((n, e) => n + (e.ev === 'try' && e.lvl === lvl ? 1 : 0), 0); }
 export function logAttempt(lvl: string, a: Attempt): void { push({ ev: 'try', ts: Date.now(), b: __BUILD__, lvl, n: tries(lvl) + 1, ...a }); }
-export function logNote(lvl: string, info: GameInfo, text: string): void { push({ ev: 'note', ts: Date.now(), b: __BUILD__, lvl, n: tries(lvl), text, ...info }); }
+// заметка посреди заезда относится к идущей попытке, на экране BUSTED — к только что закончившейся
+export function attemptNo(lvl: string, state: string): number { return tries(lvl) + (state === 'play' || state === 'intro' ? 1 : 0); }
+export function logNote(lvl: string, info: GameInfo, text: string): void { push({ ev: 'note', ts: Date.now(), b: __BUILD__, lvl, n: attemptNo(lvl, info.state), text, ...info }); }
 export function logCount(): number { return all().reduce((n, e) => n + (e.ev === 'try' ? 1 : 0), 0); }
 export function clearLog(): void { logCache = []; try { localStorage.removeItem(LOG_KEY); } catch { /* приватный режим */ } }
 
@@ -54,6 +56,14 @@ export async function shareLog(): Promise<string> {
     setTimeout(() => URL.revokeObjectURL(a.href), 2000); return 'сохранён файлом';
   }
   return await copyText(text) ? 'скопирован' : 'не вышло';
+}
+
+// Отправить текст заметки сразу: системное меню на телефоне, иначе в буфер обмена — вставить в чат
+export async function shareText(text: string): Promise<string> {
+  try {
+    if (typeof navigator.share === 'function' && /Android|iPhone|iPad/.test(navigator.userAgent)) { await navigator.share({ text }); return 'отправлено'; }
+  } catch (e) { if ((e as Error).name === 'AbortError') return 'сохранено, не отправлено'; }
+  return await copyText(text) ? 'скопировано — вставь в чат' : 'сохранено в журнал';
 }
 
 // Копирование в буфер: Clipboard API есть только по https — на локальном сервере по сети выручает скрытое поле

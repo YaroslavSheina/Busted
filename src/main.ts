@@ -13,9 +13,9 @@ import { CARS, type CarKey, type CarSpec } from './cars';
 import { CAMPAIGN, DISTRICTS, addFame, campaign, fame, progressOf, recordLevel, resetAll } from './campaign';
 import { renderMap } from './map';
 import { icon } from './icons';
-import { chosenCar, districtToIntroduce, renderGarage, renderSettings, showDistrict, showPause, type ShellUi } from './shell';
+import { chosenCar, districtToIntroduce, renderGarage, renderSettings, showDistrict, showNote, showPause, type ShellUi } from './shell';
 import { setTester } from './tester';
-import { logAttempt, logOpen } from './log';
+import { attemptNo, device, logAttempt, logNote, logOpen, shareText } from './log';
 if (query.get('tester') !== null) setTester(query.get('tester') === '1'); // ?tester=1 — все уровни открыты (tester.ts)
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -117,7 +117,7 @@ addEventListener('keydown', e => { if (e.key === 'ArrowLeft' || e.key === 'a') $
 function hands(): void { const on = levelKey === 'prologue' && !progressOf('prologue').done; $('handL').classList.toggle('hide', !on); $('handR').classList.toggle('hide', !on); }
 hands();
 // Экраны оболочки: гараж, пауза, настройки, карточка района (shell.ts). Любой открытый экран ставит мир на паузу
-const shellEls = () => [$('dcard'), $('garage'), $('pause'), $('settings')];
+const shellEls = () => [$('dcard'), $('garage'), $('pause'), $('settings'), $('note')];
 const shell: ShellUi = {
   onChange: () => syncPause(),
   onMap: () => openMap(),
@@ -125,7 +125,22 @@ const shell: ShellUi = {
   onRestart: () => { game.restartLevel(); syncPause(); },
   onReset: () => { resetAll(); selectLevel(campaign.current()); },
   onSettings: () => renderSettings($('settings'), shell),
+  onNote: () => openNote(),
 };
+// Заметка тестера (пауза, экран BUSTED): уровень, попытка, место на маршруте, причина и сборка подставляются сами —
+// тестер пишет только «что не так». Сохраняется в журнал; «отправить» — ещё и сразу в мессенджер текстом
+function openNote(): void {
+  const i = game.info(), name = levelByName(levelKey).name;
+  const ctx = `${name} · попытка ${attemptNo(levelKey, i.state)} · ${i.L ? Math.round(i.s / i.L * 100) : 0}% маршрута${i.state === 'busted' ? ` · ${i.why}` : ''} · сборка ${__BUILD__}`;
+  showNote($('note'), ctx, shell, async (text, send) => {
+    logNote(levelKey, i, text);
+    if (!send) return 'сохранено в журнал';
+    const d = device();
+    return shareText(`BUSTED · ${ctx}\n${text}\n${d.vw}×${d.vh} @${d.dpr} · ${d.app ? 'с экрана «Домой»' : 'в браузере'} · ${d.ua}`);
+  });
+}
+// кнопка «заметка» на экране BUSTED ловится до тапа по экрану, который перезапускает попытку
+$('overlay').addEventListener('pointerdown', e => { if ((e.target as HTMLElement).closest('.nbtn')) { e.preventDefault(); e.stopPropagation(); openNote(); } }, true);
 // Карта карьеры: районы и уровни, прогресс; открывается после загрузочного экрана (без ?level=) и по кнопке ☰; мир стоит
 const mapEl = $('map');
 function openMap(): void {

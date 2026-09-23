@@ -45,7 +45,9 @@ export function initInput(zones: { left: HTMLElement; right: HTMLElement }, onRe
       off();
     });
   }
+  const typing = (e: KeyboardEvent) => !!(e.target as HTMLElement | null)?.closest?.('textarea, input');
   const keydown = (e: KeyboardEvent) => {
+    if (typing(e)) return; // пробел и буквы в поле заметки не рулят и не перезапускают
     if (e.key === 'ArrowLeft' || e.key === 'a') { held.left = true; zones.left.classList.add('on'); }
     if (e.key === 'ArrowRight' || e.key === 'd') { held.right = true; zones.right.classList.add('on'); }
     if (e.key === ' ') onRestart();

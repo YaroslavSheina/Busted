@@ -29,7 +29,7 @@ const CAR_KEY = 'lr.car';
 export function chosenCar(): CarKey | null { try { const k = localStorage.getItem(CAR_KEY); return k && k in CARS && carUnlocked(k) ? k as CarKey : null; } catch { return null; } }
 export function chooseCar(k: CarKey | null): void { try { k ? localStorage.setItem(CAR_KEY, k) : localStorage.removeItem(CAR_KEY); } catch { /* приватный режим */ } }
 
-export interface ShellUi { onChange: () => void; onMap: () => void; onRestart: () => void; onResume: () => void; onReset: () => void; onSettings?: () => void }
+export interface ShellUi { onChange: () => void; onMap: () => void; onRestart: () => void; onResume: () => void; onReset: () => void; onSettings?: () => void; onNote?: () => void }
 
 // ---------- карточка района: табличка, машина въезжает, характеристики, строка истории ----------
 export function showDistrict(el: HTMLElement, d: District, ui: ShellUi, done: () => void): void {
@@ -66,7 +66,8 @@ export function showPause(el: HTMLElement, ui: ShellUi): void {
       <button class="pbtn" data-a="restart">${icon('retry', 16)} заново</button>
       <button class="pbtn" data-a="map">${icon('map', 16)} карта</button>
       <button class="pbtn" data-a="sound">${icon(audioEnabled() ? 'sound' : 'mute', 16)} звук ${audioEnabled() ? 'вкл' : 'выкл'}</button>
-      <button class="pbtn" data-a="settings">${icon('gear', 16)} настройки</button></div>`;
+      <button class="pbtn" data-a="settings">${icon('gear', 16)} настройки</button>
+      <button class="pbtn" data-a="note">${icon('note', 16)} заметка</button></div>`;
     el.querySelectorAll<HTMLButtonElement>('.pbtn').forEach(b => { b.onclick = () => act(b.dataset.a!); });
   };
   const hide = () => { el.classList.add('hide'); ui.onChange(); };
@@ -74,6 +75,7 @@ export function showPause(el: HTMLElement, ui: ShellUi): void {
     if (a === 'sound') { setAudioEnabled(!audioEnabled()); draw(); return; }
     hide();
     if (a === 'resume') ui.onResume(); else if (a === 'restart') ui.onRestart(); else if (a === 'map') ui.onMap(); else if (a === 'settings') ui.onSettings?.();
+    else if (a === 'note') ui.onNote?.();
   };
   draw(); el.classList.remove('hide'); ui.onChange();
 }
@@ -107,6 +109,27 @@ export function renderSettings(el: HTMLElement, ui: ShellUi): void {
     draw();
   };
   draw(); el.classList.remove('hide'); ui.onChange();
+}
+
+// ---------- заметка тестера: что не так — с уровнем, местом, попыткой и сборкой (main.ts: openNote) ----------
+// save сохраняет в журнал; send — ещё и отправить сразу. Поле в фокусе синхронно с тапом: иначе iOS не откроет клавиатуру
+export function showNote(el: HTMLElement, context: string, ui: ShellUi, save: (text: string, send: boolean) => Promise<string>): void {
+  el.innerHTML = `<div class="nbox"><h1>${icon('note', 18)} заметка</h1><p class="nctx">${context}</p>
+    <textarea rows="5" placeholder="Что не так? Где было непонятно, нечестно, скучно, тормозило?"></textarea>
+    <button class="pbtn" data-a="save">${icon('note', 16)} сохранить в журнал</button>
+    <button class="pbtn" data-a="send">${icon('next', 16)} сохранить и отправить</button>
+    <button class="pbtn" data-a="close">${icon('retry', 16)} отмена</button><small class="nres"></small></div>`;
+  const ta = el.querySelector('textarea')!;
+  const close = () => { el.classList.add('hide'); ui.onChange(); };
+  el.querySelectorAll<HTMLButtonElement>('.pbtn').forEach(b => {
+    b.onclick = () => {
+      if (b.dataset.a === 'close') { close(); return; }
+      const text = ta.value.trim(); if (!text) { ta.focus(); return; }
+      void save(text, b.dataset.a === 'send').then(r => { el.querySelector('.nres')!.textContent = r; setTimeout(close, 900); });
+    };
+  });
+  el.classList.remove('hide'); ui.onChange();
+  ta.focus();
 }
 
 // первый уровень района, который ещё не начат — показать карточку района
