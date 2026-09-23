@@ -474,9 +474,11 @@ const DISTRICTS = [
   { seed: 5202, car: 'muscle', speed: 330, traffic: 0.25, panic: 0.2, mix: 0.3, chaser: { gap: 200, speed: 1 }, theme: 'pixeldusk', grid: { bx: 700, by: 600, road: 200, r: 260 }, blocks: { i: [-1, 6], j: [-11, 0] },
     routes: [
       { file: 'ind1', name: 'Промзона · 1', chaser: null, intro: 'Масл-кар из порта — плата за центр. Быстрый на прямой, в заносе широкий. Рельсы режут район, автовозы ходят колоннами.',
+        // спуск (2,−5)→(2,−2): поезд проходит сразу за спиной, пока кнопки наоборот (docs/teaching.md, §6)
         events: [{ type: 'rails', at: [0, -2.5], offset: 'behind', length: 600 }, { type: 'works', at: [0, -3.3], lanes: [2], len: 200 },
-          { type: 'ramp', at: [2, -6.3], lane: 1, speed: 110 }, { type: 'post', at: [2, -6.6] }, { type: 'narrow', at: [3.4, -9], to: [3.7, -9], width: 140 }],
-        roads: [{ nodes: [[0, 0], [0, -5], [2, -5], [2, -9], [5, -9]], oncoming: 0, offsets: 'green' }] },
+          { type: 'rails', at: [2, -3.5], offset: 'behind', length: 600 },
+          { type: 'ramp', at: [4, -4.3], lane: 1, speed: 110 }, { type: 'post', at: [4, -4.6] }, { type: 'narrow', at: [4, -6.3], to: [4, -6.6], width: 140 }],
+        roads: [{ nodes: [[0, 0], [0, -5], [2, -5], [2, -2], [4, -2], [4, -7]], oncoming: 0, offsets: 'green' }] },
       // «Кольца» (2026-09-24, вместо «Серпантина») — только геометрия, без трафика: масл-кар на трёх кольцах. Первое — прямо
       // (полкруга), второе и третье — налево (три четверти круга): курс проходит все стороны экрана, на спуске кнопки «наоборот»
       { file: 'ind_serp', name: 'Промзона · Кольца', traffic: 0, chaser: null,
@@ -496,13 +498,13 @@ const DISTRICTS = [
       { file: 'ind2', name: 'Промзона · 2', traffic: 0.25, chaserAt: [3, -3.3], intro: 'Промзона · 2. Коп появится в середине. Поезд в спину его снимет — держи темп после переезда.',
         events: [{ type: 'post', at: [3, -1.5] }, { type: 'works', at: [1.75, -3], lanes: [0, 1], len: 200 }, { type: 'spikes', at: [1, -4.3] }, // ежи ≥400 px после дуги: ремонт выгоняет в крайнюю, обратно после угла
           { type: 'rails', at: [1, -4.9], offset: 'behind', length: 600 }, { type: 'ramp', at: [1, -5.6], lane: 1, speed: 110 }, { type: 'closure', at: [1, -5.9] },
-          { type: 'post', at: [2.2, -7], lanes: [1, 2] }, { type: 'narrow', at: [4, -7.9], to: [4, -8.3], width: 140 }],
-        roads: [{ nodes: [[3, 0], [3, -3], [1, -3], [1, -7], [4, -7], [4, -9]], oncoming: 0, crossings: false }] },
+          { type: 'post', at: [2, -7], lanes: [1, 2] }, { type: 'narrow', at: [3, -6.3], to: [3, -5.95], width: 140 }], // сужение на спуске
+        roads: [{ nodes: [[3, 0], [3, -3], [1, -3], [1, -7], [3, -7], [3, -5], [5, -5], [5, -7]], oncoming: 0, crossings: false }] },
       { file: 'ind3', name: 'Промзона · 3', traffic: 0.3, chaserAt: [[1, -0.5], [2, -6.5]], intro: 'Промзона · 3. Два копа за маршрут: обоих снимают поезда. Между ними — всё остальное.',
         events: [{ type: 'post', at: [2.3, -2], lanes: [0, 2] }, { type: 'works', at: [3.2, -2], lanes: [2], len: 250 }, { type: 'spikes', at: [4, -3.5] },
           { type: 'rails', at: [4, -4.5], offset: 'behind', length: 600 }, { type: 'narrow', at: [2, -7.35], to: [2, -7.65], width: 140 }, { type: 'post', at: [2, -8.35], lanes: [1, 2] },
-          { type: 'rails', at: [3.5, -9], offset: 'behind', length: 600 }],
-        roads: [{ nodes: [[1, 0], [1, -2], [4, -2], [4, -6], [2, -6], [2, -9], [5, -9]], oncoming: 0, reds: [[4, -5], [2, -8]] }] },
+          { type: 'rails', at: [4, -7.6], offset: 'behind', length: 600 }], // второй коп — под поездом на спуске к гаражу
+        roads: [{ nodes: [[1, 0], [1, -2], [4, -2], [4, -6], [2, -6], [2, -9], [4, -9], [4, -7]], oncoming: 0, reds: [[4, -5], [2, -8]] }] },
     ] },
   // «Ночной город»: спорт, кварталы мельче и углы теснее (R 200 при радиусе спорта ~150), встречка, плотный трафик, повторные погони
   { seed: 6303, car: 'sport', speed: 350, traffic: 0.4, panic: 0.3, mix: 0.15, chaser: { gap: 200, speed: 1.02 }, grid: { bx: 600, by: 520, road: 180, r: 200 }, blocks: { i: [-1, 7], j: [-13, 0] },
