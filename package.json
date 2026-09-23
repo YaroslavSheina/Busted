@@ -9,7 +9,8 @@
     "preview": "vite preview --host",
     "harness:build": "vite build --minify false && node tools/harness/bundle.mjs",
     "harness:compare": "node tools/harness/compare.mjs",
-    "harness": "npm run harness:build && npm run harness:compare"
+    "harness": "npm run harness:build && npm run harness:compare && npm run harness:sweep",
+    "harness:sweep": "node tools/harness/sweep.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
