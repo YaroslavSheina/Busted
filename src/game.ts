@@ -16,7 +16,7 @@ import { fmtScore, hudHtml, levelTheme, render, type Blast, type Cam, type Fx, t
 import { icon } from './icons';
 import { buzz } from './haptics';
 import { ringZone } from './rings';
-import type { LevelData } from './levels';
+import { goalLabel, type GoalType, type LevelData } from './levels';
 
 export interface GameUI {
   canvas: HTMLCanvasElement;
@@ -37,7 +37,7 @@ export interface GameUI {
 export type EndHook = (how: 'done' | 'trap') => boolean;
 // Уровень пройден: очки в славу, возвращает её сумму (для экрана DELIVERED). meta — цели уровня (docs/career.md): без аварий за этот
 // заход и цель по очкам (полтора «чистых» проезда: длина × perPx × множитель × 1.5, округлено до сотен)
-export interface LevelResult { clean: boolean; target: number; time: number }
+export interface LevelResult { clean: boolean; target: number; time: number; goal?: boolean } // goal — цель урока выполнена (если она у уровня есть)
 // Ответ оболочки на пройденный уровень: слава всего, лучший до этого, побит ли рекорд, что открылось («Промзона · Масл-кар»)
 export interface ScoreReply { fame: number; best: number; record: boolean; unlock?: string }
 export type ScoreHook = (points: number, meta: LevelResult) => ScoreReply | number;
@@ -155,6 +155,9 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let attemptHook: AttemptHook | null = null;
   // журнал теста: попытка открыта с reset, закрывается итогом; кадры считаются, пока мир едет
   let attemptOpen = false, attemptT0 = 0, attemptCp = 0, lastWhy = '';
+  // цель урока (docs/teaching.md): события с полного старта уровня — продолжение с контрольной их не сбрасывает
+  const freshGoals = (): Record<GoalType, number> => ({ near: 0, police: 0, jump: 0, flyover: 0, copOut: 0, panic: 0, noskid: 0, red: 0 });
+  let goalN = freshGoals(), wasSkid = false;
   let frames = 0, frameSum = 0, slowFrames = 0;
 
   function makeRoad(path: Path, def: BranchDef | null, blocks: Block[] | undefined, cars: TrafficCar[] | undefined, narrows: Narrow[] | undefined): Road {
@@ -174,7 +177,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
 
   function load(l: LevelData): void {
     abandon();
-    level = l; firstStart = true; cpS = 0; busts = 0; cardsSeen = 0;
+    level = l; firstStart = true; cpS = 0; busts = 0; cardsSeen = 0; goalN = freshGoals();
     levelTheme(l.theme); // палитра района
     spec = carByKey(l.car);
     // Машина и уровень задают стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
@@ -238,6 +241,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       copIdx = Math.max(0, copAts().filter(a => a <= cpS).length - 1); // последняя пройденная точка копа срабатывает снова
     }
     attemptOpen = true; attemptT0 = timeAlive; attemptCp = cpS; lastWhy = ''; frames = frameSum = slowFrames = 0;
+    if (cpS === 0) goalN = freshGoals(); wasSkid = false;
     if (firstStart) { firstStart = false; intro = 3; state = 'intro'; ui.overlay.className = 'show intro'; ui.ovTitle.textContent = '3'; ui.ovSub.textContent = level.intro ?? level.name; ui.ovHint.textContent = 'нажми, чтобы начать'; if (ui.ovName) ui.ovName.textContent = level.name; }
   }
 
@@ -282,16 +286,17 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     emit('done');
     ui.ovTitle.textContent = 'DELIVERED';
     const pts = score * SCORE.finishMul, target = targetScore(), clean = busts === 0;
-    const raw = scoreHook ? scoreHook(pts, { clean, target, time: timeAlive }) : null;
+    const goal = level.goal, goalOk = goal ? goalMet() : pts >= target, goalText = goal ? goalLabel(goal) : `цель ${fmtScore(target)}`;
+    const raw = scoreHook ? scoreHook(pts, { clean, target, time: timeAlive, goal: goal ? goalOk : undefined }) : null;
     const reply: ScoreReply | null = raw === null ? null : typeof raw === 'number' ? { fame: raw, best: 0, record: false } : raw;
     // результат раскрывается по строчкам: время, очки, цели, слава — последней (текстовая версия, её видит харнесс)
     reveal = { lines: [`${timeAlive.toFixed(1)} с`, `очки ${fmtScore(score)} × ${SCORE.finishMul} = ${fmtScore(pts)}`,
-      `${clean ? '★' : '☆'} без аварий`, `${pts >= target ? '★' : '☆'} цель ${fmtScore(target)}`, ...(reply ? [`слава ${fmtScore(reply.fame)}`] : [])], at: 1, t: 0.45 };
+      `${clean ? '★' : '☆'} без аварий`, `${goalOk ? '★' : '☆'} ${goalText}`, ...(reply ? [`слава ${fmtScore(reply.fame)}`] : [])], at: 1, t: 0.45 };
     ui.ovSub.textContent = reveal.lines[0]; // время сразу (харнесс сравнивает первую строку), очки и слава — по строчке
     ui.ovHint.textContent = endHook ? 'нажми — дальше' : 'нажми, чтобы повторить';
     // экран результата: звёзды по одной, очки тикают, слава дорастает, рекорд штампом, что открылось
     if (ui.ovBody) {
-      const earned = [true, clean, pts >= target], labels = ['доставил', 'без аварий', `цель ${fmtScore(target)}`];
+      const earned = [true, clean, goalOk], labels = ['доставил', 'без аварий', goalText];
       const fameFrom = reply ? Math.max(0, reply.fame - pts) : 0;
       ui.ovBody.innerHTML = `<div class="res">
         <div class="stars">${earned.map((e, i) => `<span class="st${e ? ' got' : ''}" style="animation-delay:${0.25 + i * 0.3}s">${icon(e ? 'star' : 'starEmpty', 40)}</span>`).join('')}</div>
@@ -316,8 +321,18 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
 
   // Начислить очки с надписью и искрами у борта машины (side: с какой стороны событие)
+  // Событие цели урока: счётчик и прогресс в HUD («впритирку к посту × 3: 2/3»)
+  function bump(t: GoalType, k = 1): void {
+    goalN[t] += k;
+    const g = level.goal; if (!g || g.type !== t) return;
+    flash = t === 'noskid' ? (goalN.noskid === 1 ? { text: 'занос — звезда урока сорвана', t: 1.8 } : flash) : { text: `${goalLabel(g)}: ${Math.min(goalN[t], g.n)}/${g.n}`, t: 1.6 };
+  }
+  function goalMet(): boolean { const g = level.goal; return !!g && (g.type === 'noskid' ? goalN.noskid === 0 : goalN[g.type] >= g.n); }
+
   function addScore(pts: number, label: string, side: 1 | -1): void {
     score += pts;
+    if (label === 'NEAR MISS') bump('near'); else if (label === 'КОП') bump('police'); else if (label === 'ТРЮК') bump('jump');
+    else if (label.startsWith('ПЕРЕЛЁТ')) bump('flyover', +(label.split('×')[1] ?? 1)); else if (label === 'КОП ВЫБЫЛ') bump('copOut'); else if (label === 'ПРОВОКАЦИЯ') bump('panic');
     sfx(label === 'NEAR MISS' ? 'near' : label === 'КОП ВЫБЫЛ' ? 'copOut' : label === 'ТРЮК' ? 'jump' : label === 'ПРОВОКАЦИЯ' ? 'big' : 'score');
     const rx = Math.cos(car.h), ry = Math.sin(car.h);
     const x = car.x + rx * side * (car.W / 2 + 10), y = car.y + ry * side * (car.W / 2 + 10);
@@ -421,6 +436,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     // в полёте руль не работает: та же формула, ввод 0
     step(car, jump ? 0 : dir, { speed: P.speed.v, steer: P.steer.v, damp: P.damp.v, grip, spin: P.spin.v, skidGrip, sens: P.sens.v }, dt);
     if (car.skid) marks.push({ x: car.x, y: car.y, a: 1 });
+    if (car.skid && !wasSkid) bump('noskid'); wasSkid = car.skid;
     for (const m of marks) m.a -= dt * 0.4;
     marks = marks.filter(m => m.a > 0).slice(-200);
 
@@ -443,6 +459,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     // коп повторяет выбор: свернул на ветку — запомнить; передумал в её начале и вернулся — забыть
     if (car.road !== before) { if (roads[car.road].parent === before) taken.add(car.road); else if (beforeS < BRANCH.zone + BRANCH.lead) taken.delete(before); }
     const rd = roads[car.road];
+    if (car.road === before) for (const c of rd.crossings) if (beforeS < c.s && car.s >= c.s && lightAt(c, timeAlive) !== 'green') bump('red'); // проскочил на красный
     score += Math.max(0, mainS(car.road, car.s) - beforeMain) * SCORE.perPx;
     for (const f of fx) { f.t -= dt; if (f.vx !== undefined) { f.x += f.vx * dt; f.y += (f.vy ?? 0) * dt; f.vx *= 0.9; f.vy! *= 0.9; } else f.y -= 40 * dt; }
     fx = fx.filter(f => f.t > 0);

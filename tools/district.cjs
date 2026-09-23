@@ -286,7 +286,7 @@ ${main.pts.map(p => `    [${p[0]}, ${p[1]}]`).join(',\n')}
   "panic": ${spec.panic},
   "mix": ${spec.mix ?? 0.15},${route.pace ? `\n  "pace": ${JSON.stringify(route.pace)},` : ''}${route.grip ? `\n  "grip": ${route.grip},` : ''}${spec.theme ? `\n  "theme": ${JSON.stringify(spec.theme)},` : ''}
   "oncoming": ${main.oncoming},
-  "chaser": ${JSON.stringify(chaser)},${route.intro ? `\n  "intro": ${JSON.stringify(route.intro)},` : ''}${cards.length ? `\n  "cards": [\n${cards.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ],` : ''}${trap ? `\n  "trap": ${JSON.stringify(trap)},` : ''}${checkpoints.length ? `\n  "checkpoints": ${JSON.stringify(checkpoints)},` : ''}
+  "chaser": ${JSON.stringify(chaser)},${route.intro ? `\n  "intro": ${JSON.stringify(route.intro)},` : ''}${route.goal ? `\n  "goal": ${JSON.stringify(route.goal)},` : ''}${cards.length ? `\n  "cards": [\n${cards.map(c => '    ' + JSON.stringify(c)).join(',\n')}\n  ],` : ''}${trap ? `\n  "trap": ${JSON.stringify(trap)},` : ''}${checkpoints.length ? `\n  "checkpoints": ${JSON.stringify(checkpoints)},` : ''}
   "cars": [
 ${mainCars.map(c => '    ' + JSON.stringify(c)).join(',\n')}
   ],${blocks.length ? `\n  "blocks": [\n${blocks.map(b => '    ' + JSON.stringify(b)).join(',\n')}\n  ],` : ''}${narrows.length ? `\n  "narrows": [\n${narrows.map(n => '    ' + JSON.stringify(n)).join(',\n')}\n  ],` : ''}${rails.length ? `\n  "rails": [\n${rails.map(r => '    ' + JSON.stringify(r)).join(',\n')}\n  ],` : ''}

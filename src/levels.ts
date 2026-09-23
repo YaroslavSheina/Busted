@@ -14,6 +14,22 @@ export interface Prop { type: 'building'; x: number; y: number; w: number; h: nu
 // Знак перед препятствием (docs/teaching.md): щит у правого края тротуара на s главной; генератор ставит их сам по событиям
 export interface Sign { s: number; kind: 'works' | 'police' | 'narrow' | 'rails' | 'ring' }
 
+// Цель урока (docs/teaching.md): третья звезда уровня — мастерство его механики, а не общий счёт
+export type GoalType = 'near' | 'police' | 'jump' | 'flyover' | 'copOut' | 'panic' | 'noskid' | 'red';
+export interface Goal { type: GoalType; n: number }
+export function goalLabel(g: Goal): string {
+  switch (g.type) {
+    case 'near': return `near miss × ${g.n}`;
+    case 'police': return `впритирку к посту × ${g.n}`;
+    case 'jump': return `прыжок × ${g.n}`;
+    case 'flyover': return `перелёт × ${g.n}`;
+    case 'copOut': return g.n === 1 ? 'коп выбыл' : `коп выбыл × ${g.n}`;
+    case 'panic': return `провокация × ${g.n}`;
+    case 'noskid': return 'ни одного заноса';
+    case 'red': return `на красный × ${g.n}`;
+  }
+}
+
 // Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же); at — s, с которого он появляется
 export interface Chaser { gap: number; speed: number; at?: number | number[] } // at — s главной, с которого появляется коп; массив — повторные погони: новый коп в каждой точке, если прежний выбыл
 
@@ -35,6 +51,7 @@ export interface LevelData {
   narrows?: Narrow[];  // необязательно: сужения дороги (docs/mechanics.md, M6)
   rails?: RailDef[];   // необязательно: переезды на главной дороге (docs/mechanics.md, M7)
   crossings?: CrossingDef[]; // необязательно: перекрёстки со светофором (docs/mechanics.md, M9)
+  goal?: Goal;         // необязательно: цель урока — третья звезда вместо «очки не ниже цели» (docs/teaching.md)
   signs?: Sign[];      // необязательно: знаки перед препятствиями (docs/teaching.md) — читаются на бегу вместо стоп-кадров
   rings?: Ring[];      // необязательно: кольца на главной дороге (docs/mechanics.md, M11) — маршрут в points, здесь остальной круг
   props?: Prop[];      // необязательно: здания и прочее окружение

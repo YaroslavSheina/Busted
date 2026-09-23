@@ -35,7 +35,7 @@ const game = createGame({
 // Очки пройденного уровня — в славу (только уровни кампании)
 game.onScore((points, meta) => {
   const inCamp = campaign.has(levelKey), prev = progressOf(levelKey).best;
-  if (inCamp) recordLevel(levelKey, points, meta.clean, meta.target);
+  if (inCamp) recordLevel(levelKey, points, meta.clean, meta.target, meta.goal);
   const total = addFame(inCamp ? points : 0);
   // что открылось: следующий уровень в другом районе — его название и машина
   const idx = CAMPAIGN.indexOf(levelKey), next = idx >= 0 ? CAMPAIGN[idx + 1] : undefined;

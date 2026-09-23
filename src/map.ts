@@ -4,7 +4,7 @@
 import { CARS, type CarKey } from './cars';
 import { tester } from './tester';
 import { CAMPAIGN, DISTRICTS, GARAGE, campaign, fame, progressOf, starsOf, type District } from './campaign';
-import { LEVELS } from './levels';
+import { LEVELS, goalLabel } from './levels';
 import { buildPath, pathAt, type Path, type Pt } from './road';
 import { drawGround, drawProps, drawRoad, fmtScore, setCity, setClip, withTheme } from './render';
 import { icon, stars as starIcons } from './icons';
@@ -124,7 +124,7 @@ export function renderMap(ui: MapUi): void {
     const lv = LEVELS[key], p = progressOf(key), d = DISTRICTS.find(x => x.levels.includes(key));
     const st = starsOf(key);
     foot.innerHTML = `<div class="mcard"><div class="mcard-t"><small>${d?.name ?? ''}</small><b>${lv?.name ?? key}</b></div>
-      <div class="mcard-s">${starIcons(st, 16)}${p.done ? `<small>лучший ${fmtScore(p.best)}${p.target ? ` · цель ${fmtScore(p.target)}` : ''}</small>` : `<small>${key === cur ? 'текущий' : ''}</small>`}</div>
+      <div class="mcard-s">${starIcons(st, 16)}${lv?.goal ? `<small>звезда: ${goalLabel(lv.goal)}${p.done ? ` · лучший ${fmtScore(p.best)}` : ''}</small>` : p.done ? `<small>лучший ${fmtScore(p.best)}${p.target ? ` · цель ${fmtScore(p.target)}` : ''}</small>` : `<small>${key === cur ? 'текущий' : ''}</small>`}</div>
       <button class="mgo">${!p.done ? 'ехать' : 'ещё раз'} ${icon('next', 14)}</button></div>`;
     foot.querySelector<HTMLButtonElement>('.mgo')!.onclick = () => ui.onPlay(selected);
   }

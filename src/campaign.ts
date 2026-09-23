@@ -1,5 +1,5 @@
 // Кампания: порядок уровней и локальный прогресс (docs/progression.md). Меню уровней — отладочное и идёт мимо.
-import { LEVEL_KEYS } from './levels';
+import { LEVEL_KEYS, LEVELS } from './levels';
 import { tester } from './tester';
 
 // Порядок пока из того, что есть; по мере сборки пролога и обучения список заменяется
@@ -45,18 +45,22 @@ export function addFame(points: number): number { const n = fame() + Math.round(
 
 // Прогресс по уровням для карты: пройден и лучший результат (очки с множителем)
 const PROG = 'lr.progress';
-// done — пройден; best — лучшие очки; clean — хоть раз без аварий; target — цель по очкам (задаёт игра при первом прохождении)
-export interface LevelProgress { done: boolean; best: number; clean: boolean; target: number }
-const EMPTY: LevelProgress = { done: false, best: 0, clean: false, target: 0 };
+// done — пройден; best — лучшие очки; clean — хоть раз без аварий; target — цель по очкам (задаёт игра при первом прохождении);
+// goal — хоть раз выполнена цель урока (у уровней с goal она заменяет цель по очкам)
+export interface LevelProgress { done: boolean; best: number; clean: boolean; target: number; goal: boolean }
+const EMPTY: LevelProgress = { done: false, best: 0, clean: false, target: 0, goal: false };
 function readProg(): Record<string, LevelProgress> { try { const p = JSON.parse(localStorage.getItem(PROG) ?? '{}'); return p && typeof p === 'object' ? p : {}; } catch { return {}; } }
 export function progressOf(key: string): LevelProgress { return { ...EMPTY, ...(readProg()[key] ?? {}) }; }
-export function recordLevel(key: string, points: number, clean: boolean, target: number): void {
+export function recordLevel(key: string, points: number, clean: boolean, target: number, goal = false): void {
   const all = readProg(); const p = { ...EMPTY, ...(all[key] ?? {}) };
-  all[key] = { done: true, best: Math.max(p.best, Math.round(points)), clean: p.clean || clean, target: target || p.target };
+  all[key] = { done: true, best: Math.max(p.best, Math.round(points)), clean: p.clean || clean, target: target || p.target, goal: p.goal || goal };
   try { localStorage.setItem(PROG, JSON.stringify(all)); } catch { /* приватный режим */ }
 }
-// Звёзды уровня: доставил, без аварий, очки не ниже цели
-export function starsOf(key: string): number { const p = progressOf(key); return (p.done ? 1 : 0) + (p.clean ? 1 : 0) + (p.target > 0 && p.best >= p.target ? 1 : 0); }
+// Звёзды уровня: доставил, без аварий, третья — цель урока или очки не ниже цели
+export function starsOf(key: string): number {
+  const p = progressOf(key), third = LEVELS[key]?.goal ? p.goal : p.target > 0 && p.best >= p.target;
+  return (p.done ? 1 : 0) + (p.clean ? 1 : 0) + (third ? 1 : 0);
+}
 // Гараж: машины по ярусам; открыта, когда открыт район, где она выдаётся
 export const GARAGE: { car: string; district: string }[] = [
   { car: 'minivan', district: 'Обучение' }, { car: 'sedan', district: 'Центр' }, { car: 'muscle', district: 'Промзона' },

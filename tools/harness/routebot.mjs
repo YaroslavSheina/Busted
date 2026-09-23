@@ -92,6 +92,7 @@ if (process.env.SWEEP) {
   for (const lane of process.env.LANE ? [+process.env.LANE] : [0, 1, 2]) {
     const clean = { ...level0, traffic: 0, cars: process.env.KEEPRAMP ? (level0.cars ?? []).filter(c => c.type === 'ramp') : [], chaser: process.env.KEEPCOP ? level0.chaser : undefined, branches: (level0.branches ?? []).map(b => ({ ...b, cars: [], ...(process.env.NOCROSS ? { crossings: [] } : {}) })), ...(process.env.NOCROSS ? { crossings: [] } : {}) };
     const r = run(process.env.CLEAN ? clean : level0, lane);
+    if (process.env.BODY) console.log(byId.ovBody?._html ?? '', '|', byId.ovSub?.textContent ?? '', '|', byId.gflash?.textContent ?? ''); // BODY=1 — экран результата
     console.log(`полоса ${lane}: ${r.state} ${r.why} @${r.s} дорога ${r.road} ${r.t.toFixed(1)}с${process.env.KEEPCOP ? (g.chaser ? ` | коп жив, хвост ${Math.round(g.car.s - g.chaser.s)}` : ' | коп выбыл') : ''} | ${r.log.join(' | ') || 'без переходов'}`);
   }
 }
