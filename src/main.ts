@@ -21,7 +21,7 @@ if (query.get('tester') !== null) setTester(query.get('tester') === '1'); // ?te
 const $ = (id: string) => document.getElementById(id)!;
 const panel = $('panel'), carPanel = $('carPanel');
 if (query.get('debug')) document.body.classList.add('debug'); // ?debug=1 — отладочный HUD с ω и меню «авто»/«уровень»
-// ?level=gfx — открыть сразу нужный уровень (ключ = имя файла в levels/); без параметра — текущий уровень кампании
+// ?level=tut04 — открыть сразу нужный уровень (ключ = имя файла в levels/); без параметра — текущий уровень кампании
 const FIRST = LEVEL_KEYS.includes(query.get('level') ?? '') ? query.get('level')! : campaign.current();
 let levelKey = FIRST;
 let carOverride: CarKey | null = null; // выбор в меню «авто» действует поверх машины уровня
