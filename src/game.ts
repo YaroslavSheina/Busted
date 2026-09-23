@@ -620,7 +620,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     sfxSiren(chaser && state === 'play' && !paused ? Math.max(0, 1 - tail! / level.chaser!.gap) : 0);
     const scene: RoadScene[] = roads.map(r => ({ path: r.path, traffic: r.traffic, blocks: r.blocks, width: r.width, rails: r.rails, crossings: r.crossings, oncoming: r.oncoming, from: r.def?.from, parent: r.def ? r.parent : undefined }));
     render(ctx, view, {
-      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props, rings: level.rings,
+      roads: scene, car, spec, marks, cam, t: timeAlive, zoom, fx, air: jump ? jump.t / RAMP.air : undefined, props: level.props, rings: level.rings, signs: level.signs,
       chaser: chaser ? { ...chaserPose(), danger: 1 - tail! / level.chaser!.gap } : undefined,
       blasts, shake, wrecked,
     });

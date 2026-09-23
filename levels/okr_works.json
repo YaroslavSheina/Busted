@@ -47,6 +47,14 @@
   "branches": [
 
   ],
+  "signs": [
+    {"s":270,"kind":"works"},
+    {"s":908,"kind":"works"},
+    {"s":1722,"kind":"works"},
+    {"s":2454,"kind":"works"},
+    {"s":2990,"kind":"works"},
+    {"s":3908,"kind":"works"}
+  ],
   "props": [
     {"type":"building","x":-504,"y":-5084,"w":158,"h":288,"tone":0.73},
     {"type":"building","x":-306,"y":-5084,"w":190,"h":288,"tone":0.55},

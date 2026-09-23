@@ -49,6 +49,10 @@
   "branches": [
 
   ],
+  "signs": [
+    {"s":2783,"kind":"narrow"},
+    {"s":6266,"kind":"rails"}
+  ],
   "props": [
     {"type":"building","x":-484,"y":-6644,"w":368,"h":288,"tone":0.4},
     {"type":"building","x":-484,"y":-6124,"w":368,"h":260,"tone":0.55},

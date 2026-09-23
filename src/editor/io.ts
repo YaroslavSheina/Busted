@@ -18,6 +18,7 @@ export function formatLevel(l: LevelData): string {
   const chaser = l.chaser ? `,\n  "chaser": { "gap": ${l.chaser.gap}, "speed": ${l.chaser.speed}${l.chaser.at !== undefined ? `, "at": ${JSON.stringify(l.chaser.at)}` : ''} }` : '';
   const panic = l.panic ? `,\n  "panic": ${l.panic}` : '';
   const mix = l.mix ? `,\n  "mix": ${l.mix}` : '';
+  const signs = l.signs?.length ? `,\n  "signs": [\n${l.signs.map(g => '    ' + JSON.stringify(g)).join(',\n')}\n  ]` : '';
   const rings = l.rings?.length ? `,\n  "rings": [\n${l.rings.map(g => '    ' + JSON.stringify(g)).join(',\n')}\n  ]` : '';
   const pace = l.pace ? `,\n  "pace": ${JSON.stringify(l.pace)}` : '';
   const grip = l.grip !== undefined ? `,\n  "grip": ${l.grip}` : '';
@@ -36,7 +37,7 @@ export function formatLevel(l: LevelData): string {
     ? `,\n  "branches": [\n${l.branches.map(b => `    { "from": ${b.from}, "to": ${b.to}${b.parent !== undefined ? `, "parent": ${b.parent}` : ''}, "points": [${b.points.map(p => `[${p[0]}, ${p[1]}]`).join(', ')}]${b.oncoming ? `, "oncoming": ${b.oncoming}` : ''}${b.blocks?.length ? `, "blocks": ${JSON.stringify(b.blocks)}` : ''}${b.cars?.length ? `, "cars": ${JSON.stringify(b.cars)}` : ''}${b.narrows?.length ? `, "narrows": ${JSON.stringify(b.narrows)}` : ''}${b.rails?.length ? `, "rails": ${JSON.stringify(b.rails)}` : ''}${b.crossings?.length ? `, "crossings": ${JSON.stringify(b.crossings)}` : ''} }`).join(',\n')}\n  ]`
     : '';
   const car = l.car ? `,\n  "car": ${JSON.stringify(l.car)}` : '';
-  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${mix}${pace}${grip}${theme}${rings}${intro}${cards}${trap}${checkpoints}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
+  return `{\n  "name": ${JSON.stringify(l.name)},\n  "points": [\n${pts}\n  ],\n  "width": ${l.width},\n  "traffic": ${l.traffic},\n  "seed": ${l.seed}${car}${cars}${chaser}${panic}${mix}${pace}${grip}${theme}${signs}${rings}${intro}${cards}${trap}${checkpoints}${oncoming}${narrows}${rails}${crossings}${blocks}${branches}${props}\n}\n`;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -132,6 +133,10 @@ export function parseLevel(raw: unknown): LevelData {
   if (o.pace !== undefined) { const p = o.pace as unknown[]; if (!Array.isArray(p) || p.length !== 2 || !p.every(isNum) || (p[0] as number) > (p[1] as number)) throw new Error('«pace» — [min, max] доли скорости'); level.pace = [p[0] as number, p[1] as number]; }
   if (o.grip !== undefined) { if (!isNum(o.grip) || o.grip <= 0 || o.grip > 1) throw new Error('«grip» — число 0..1'); level.grip = o.grip; }
   if (o.theme !== undefined) { if (typeof o.theme !== 'string') throw new Error('«theme» — строка'); level.theme = o.theme; }
+  if (o.signs !== undefined) {
+    if (!Array.isArray(o.signs) || !o.signs.every(g => g && isNum(g.s) && typeof g.kind === 'string')) throw new Error('«signs» — массив { s, kind }');
+    level.signs = o.signs as LevelData['signs'];
+  }
   if (o.rings !== undefined) { // кольца пишет генератор: центр, радиус, участок маршрута по кругу, чужие рукава
     if (!Array.isArray(o.rings) || !o.rings.every(g => g && isNum(g.x) && isNum(g.y) && isNum(g.r) && isNum(g.s0) && isNum(g.s1) && Array.isArray(g.arms))) throw new Error('«rings» — массив { x, y, r, s0, s1, arms }');
     level.rings = o.rings as LevelData['rings'];

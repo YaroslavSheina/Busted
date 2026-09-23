@@ -138,6 +138,18 @@
   "branches": [
 
   ],
+  "signs": [
+    {"s":953,"kind":"police"},
+    {"s":2167,"kind":"rails"},
+    {"s":4117,"kind":"works"},
+    {"s":7218,"kind":"police"},
+    {"s":7956,"kind":"police"},
+    {"s":8498,"kind":"rails"},
+    {"s":11732,"kind":"narrow"},
+    {"s":14773,"kind":"police"},
+    {"s":16874,"kind":"rails"},
+    {"s":19333,"kind":"police"}
+  ],
   "props": [
     {"type":"building","x":-624,"y":-8184,"w":488,"h":368,"tone":0.21},
     {"type":"building","x":-624,"y":-7544,"w":488,"h":368,"tone":0.8},

@@ -11,6 +11,9 @@ import type { Ring } from './rings';
 // Окружение — только для отрисовки, физика его не знает (docs/mechanics.md, «город»)
 export interface Prop { type: 'building'; x: number; y: number; w: number; h: number; tone?: number }
 
+// Знак перед препятствием (docs/teaching.md): щит у правого края тротуара на s главной; генератор ставит их сам по событиям
+export interface Sign { s: number; kind: 'works' | 'police' | 'narrow' | 'rails' | 'ring' }
+
 // Преследователь: стартует на gap px позади, speed — доля скорости игрока (1 = та же); at — s, с которого он появляется
 export interface Chaser { gap: number; speed: number; at?: number | number[] } // at — s главной, с которого появляется коп; массив — повторные погони: новый коп в каждой точке, если прежний выбыл
 
@@ -32,6 +35,7 @@ export interface LevelData {
   narrows?: Narrow[];  // необязательно: сужения дороги (docs/mechanics.md, M6)
   rails?: RailDef[];   // необязательно: переезды на главной дороге (docs/mechanics.md, M7)
   crossings?: CrossingDef[]; // необязательно: перекрёстки со светофором (docs/mechanics.md, M9)
+  signs?: Sign[];      // необязательно: знаки перед препятствиями (docs/teaching.md) — читаются на бегу вместо стоп-кадров
   rings?: Ring[];      // необязательно: кольца на главной дороге (docs/mechanics.md, M11) — маршрут в points, здесь остальной круг
   props?: Prop[];      // необязательно: здания и прочее окружение
   oncoming?: number;   // необязательно: сколько левых полос едут навстречу (docs/mechanics.md, M10)

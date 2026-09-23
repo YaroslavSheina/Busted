@@ -84,7 +84,7 @@ function polyline(legs, open, isRing = () => false, rings = []) {
     if (next && isRing(L.b)) {
       const rp = ringPath(L.b, [L.dx, L.dy], [next.dx, next.dy]);
       for (const p of rp.pts) push(p);
-      rings.push({ C: L.b, T: rp.T, U: rp.U, hin: [L.dx, L.dy], u: [next.dx, next.dy] });
+      rings.push({ C: L.b, T: rp.T, U: rp.U, P0: [L.b[0] - L.dx * RD, L.b[1] - L.dy * RD], hin: [L.dx, L.dy], u: [next.dx, next.dy] });
     } else if (next) { // дуга от end к точке после угла
       const cx = end[0] + next.dx * R, cy = end[1] + next.dy * R;
       const a0 = Math.atan2(end[1] - cy, end[0] - cx), a1 = Math.atan2((L.b[1] + next.dy * R) - cy, (L.b[0] + next.dx * R) - cx);
@@ -209,6 +209,17 @@ function build(district, route) {
     }
   }
   blocks.sort((a, b) => a.s - b.s); mainCars.sort((a, b) => a.s - b.s);
+  // знаки перед препятствиями (docs/teaching.md): за ~1.7 с езды, не ближе 150 px к старту и не на поперечной улице;
+  // одинаковые подряд ближе 500 px — один знак на серию
+  const lead = Math.max(300, Math.round(1.7 * SPEED)), signs = [];
+  const want = (s, kind) => { if (s - lead < 150) return; signs.push({ s: s - lead, kind }); };
+  for (const b of blocks) want(b.s, b.works ? 'works' : 'police');
+  for (const n of narrows) want(n.from, 'narrow');
+  for (const r of rails) want(r.s, 'rails');
+  for (const g of ringHits) want(sAt(main0.sm, g.P0[0], g.P0[1]) + lead - 120, 'ring');
+  signs.sort((a, b) => a.s - b.s);
+  for (const g of signs) for (const c of main0.crossings) { const half = c.width ?? 90; if (Math.abs(g.s - c.s) < half + 40) g.s = c.s - half - 40; }
+  const signsOut = signs.filter((g, i) => g.s >= 150 && !signs.slice(0, i).some(o => o.kind === g.kind && g.s - o.s < 500));
   // сценарий (docs/progression.md): карточки, ловушка, контрольные точки — по координатам сетки; коп по событию
   const cards = (route.cards ?? []).map(c => ({ s: atS(c.at), text: c.text }));
   const trap = route.trap ? { s: atS(route.trap.at), text: route.trap.text } : null;
@@ -284,7 +295,7 @@ ${main.crossings.map(c => '    ' + JSON.stringify(strip(c))).join(',\n')}
   ],
   "branches": [
 ${roads.slice(1).map(branchJson).join(',\n')}
-  ],${rings.length ? `\n  "rings": [\n${rings.map(g => '    ' + JSON.stringify(g)).join(',\n')}\n  ],` : ''}
+  ],${signsOut.length ? `\n  "signs": [\n${signsOut.map(g => '    ' + JSON.stringify(g)).join(',\n')}\n  ],` : ''}${rings.length ? `\n  "rings": [\n${rings.map(g => '    ' + JSON.stringify(g)).join(',\n')}\n  ],` : ''}
   "props": [
 ${props.map(p => '    ' + JSON.stringify(p)).join(',\n')}
   ]

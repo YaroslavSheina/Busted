@@ -5,7 +5,7 @@ import { heading, laneOff, lanesFor, pathAt, type Path } from './road';
 import { vehiclePose, type Vehicle } from './traffic';
 import type { CarState } from './physics';
 import type { CarSpec } from './cars';
-import type { Prop } from './levels';
+import type { Prop, Sign } from './levels';
 import type { Layout } from './blocks';
 import { widthAt, type WidthFn } from './narrow';
 import { RAIL } from './config';
@@ -42,6 +42,7 @@ export interface Scene {
   shake?: number;                                                // тряска камеры, px (только рисование — cam не трогается)
   wrecked?: boolean;                                             // машина игрока разбита: тёмная, повёрнута
   rings?: Ring[];                                                // кольца главной дороги (M11)
+  signs?: Sign[];                                                // знаки перед препятствиями на главной
 }
 
 // Тема. comic — рисованный вид сверху в духе ранних GTA (диздок): контуры, плоские цвета, тротуары в городе,
@@ -656,6 +657,40 @@ export function drawRoad(ctx: CanvasRenderingContext2D, path: Path, w: number | 
   ctx.restore();
 }
 
+// ---------- знаки перед препятствиями (docs/teaching.md): щит на столбе у правого края тротуара ----------
+// Щит всегда прямо на экране, а не по курсу: на спуске знак стоит справа по ходу (слева на экране), но читается так же
+export function drawSigns(ctx: CanvasRenderingContext2D, path: Path, w: number | WidthFn, signs: Sign[] | undefined): void {
+  for (const g of signs ?? []) {
+    const p = pathAt(path, g.s), off = widthAt(w, g.s) / 2 + (T.sidewalk && city ? SIDEWALK - 6 : 16);
+    const x = p.x + p.nx * off, y = p.y + p.ny * off;
+    if (!visible(x, y, 50)) continue;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 3, y + 3, 5, 3, 0, 0, 7); ctx.fill(); // тень столба
+    ctx.fillStyle = '#6b7079'; ctx.fillRect(x - 1.5, y - 16, 3, 16);                                          // столб
+    signPlate(ctx, x, y - 26, g.kind);
+  }
+}
+function signPlate(ctx: CanvasRenderingContext2D, x: number, y: number, kind: Sign['kind']): void {
+  const ink = '#1a1408';
+  if (kind === 'ring') { // синий круг со стрелкой по кругу — «круговое движение»
+    ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(x, y, 14, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2f6fd6'; ctx.beginPath(); ctx.arc(x, y, 12, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#f2efe8'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 6, -0.3, Math.PI * 1.45); ctx.stroke();
+    ctx.fillStyle = '#f2efe8'; ctx.beginPath(); ctx.moveTo(x + 9, y - 5); ctx.lineTo(x + 3, y - 7); ctx.lineTo(x + 7, y + 1); ctx.closePath(); ctx.fill();
+    return;
+  }
+  if (kind === 'rails') { // андреевский крест — переезд
+    ctx.save(); ctx.translate(x, y);
+    for (const a of [Math.PI / 4, -Math.PI / 4]) { ctx.save(); ctx.rotate(a); ctx.fillStyle = ink; ctx.fillRect(-15, -4.5, 30, 9); ctx.fillStyle = '#d93b3b'; ctx.fillRect(-14, -3.5, 28, 7); ctx.fillStyle = '#f2efe8'; ctx.fillRect(-9, -3.5, 5, 7); ctx.fillRect(4, -3.5, 5, 7); ctx.restore(); }
+    ctx.restore(); return;
+  }
+  // треугольник «внимание»: белый с красной каймой, пиктограмма внутри
+  const tri = (r: number) => { ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.87, y + r * 0.5); ctx.lineTo(x - r * 0.87, y + r * 0.5); ctx.closePath(); ctx.fill(); };
+  ctx.fillStyle = ink; tri(18); ctx.fillStyle = '#d93b3b'; tri(16); ctx.fillStyle = '#f2efe8'; tri(10.5);
+  if (kind === 'works') { ctx.fillStyle = '#f08a24'; ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x + 4, y + 4); ctx.lineTo(x - 4, y + 4); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#f2efe8'; ctx.fillRect(x - 2.5, y, 5, 1.5); }
+  else if (kind === 'police') { ctx.fillStyle = '#d93b3b'; ctx.fillRect(x - 5, y - 1, 4, 4); ctx.fillStyle = '#3b6cff'; ctx.fillRect(x + 1, y - 1, 4, 4); ctx.fillStyle = ink; ctx.fillRect(x - 5, y + 3, 10, 2); }
+  else if (kind === 'narrow') { ctx.strokeStyle = ink; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x - 4, y + 5); ctx.lineTo(x - 2, y - 1); ctx.lineTo(x - 2, y - 4); ctx.moveTo(x + 4, y + 5); ctx.lineTo(x + 2, y - 1); ctx.lineTo(x + 2, y - 4); ctx.stroke(); }
+}
+
 // ---------- кольцо (M11): полный круг и чужие рукава одним слоем с дорогой; сверху разметка, остров, «кирпичи» ----------
 function ringLayer(ctx: CanvasRenderingContext2D, g: Ring, w: number, extra: number, fill: string | CanvasPattern): void {
   if (!visible(g.x, g.y, g.r + w + RING.arm)) return;
@@ -789,6 +824,7 @@ export function render(ctx: CanvasRenderingContext2D, view: View, sc: Scene): vo
   for (const r of roads) for (const c of r.crossings ?? []) drawCrossingRoad(ctx, c);
   for (let i = roads.length - 1; i >= 0; i--) drawRoad(ctx, roads[i].path, roads[i].width, i === 0, roads[i].oncoming ?? 0, i === 0 ? sc.rings : undefined);
   for (const r of roads) if (r.from !== undefined && r.parent !== undefined) { const pr = roads[r.parent], side = branchSide(pr.path, r.path, r.from); for (const s of arrowSpots(r.from, pr.from !== undefined)) drawTurnArrow(ctx, pr.path, pr.width, s, side); }
+  if (roads[0]) drawSigns(ctx, roads[0].path, roads[0].width, sc.signs);
   for (const r of roads) drawBlocks(ctx, r.path, r.width, r.blocks, sc.t ?? 0);
   for (const r of roads) if (r.rails?.length) drawRails(ctx, r.rails, r.width, sc.t ?? 0);
   for (const r of roads) for (const c of r.crossings ?? []) drawCrossingTop(ctx, c, widthAt(r.width, c.s), sc.t ?? 0);
