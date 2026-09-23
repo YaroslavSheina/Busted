@@ -135,6 +135,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   let firstStart = true;                 // отсчёт 3-2-1 только при первом старте уровня, рестарт после BUSTED мгновенный
   let intro: number | null = null;       // остаток отсчёта, с
   let cardIdx = 0, card: number | null = null; // следующая карточка и остаток стоп-кадра, с
+  let cardsSeen = 0;                     // сколько карточек уже показано с загрузки уровня: на повторе их не показываем снова (2.6 с стоп-кадра каждая)
   let cpS = 0;                           // s последней пройденной контрольной точки (0 — старт)
   let copIdx = 0;                        // сколько точек появления копа (chaser.at) уже пройдено; новый коп — только если прежний выбыл
   const copAts = () => !level.chaser ? [] : Array.isArray(level.chaser.at) ? level.chaser.at : [level.chaser.at ?? 0];
@@ -158,7 +159,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
   }
 
   function load(l: LevelData): void {
-    level = l; firstStart = true; cpS = 0; busts = 0;
+    level = l; firstStart = true; cpS = 0; busts = 0; cardsSeen = 0;
     levelTheme(l.theme); // палитра района
     spec = carByKey(l.car);
     // Машина и уровень задают стартовые значения, слайдеры панели тюнинга дальше крутят их поверх
@@ -207,7 +208,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     score = 0; fx = []; buzzedPosts = new Set(); jump = null;
     blasts = []; shake = 0; wrecked = false; reveal = null; result = null;
     if (ui.ovBody) ui.ovBody.innerHTML = '';
-    cardIdx = 0; card = null; horned.clear(); introN = 0;
+    cardIdx = cardsSeen; card = null; horned.clear(); introN = 0;
     for (const r of roads) { for (const rl of r.rails) rl.t0 = undefined; for (const c of r.crossings) c.t0 = undefined; } // сценарные поезда и светофоры ждут игрока заново
     ui.overlay.className = '';
     // контрольная точка: после BUSTED продолжаем с неё — машина на оси, время как при прибытии с постоянной скоростью,
@@ -217,7 +218,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
       car.x = p.x; car.y = p.y; car.h = heading(p.tx, p.ty); car.vx = p.tx * P.speed.v; car.vy = p.ty * P.speed.v; car.s = cpS;
       timeAlive = cpS / P.speed.v; cam = { x: car.x, y: car.y };
       roads[0].traffic = roads[0].traffic.filter(c => Math.abs(c.s - cpS) > 350);
-      cardIdx = (level.cards ?? []).filter(c => c.s <= cpS).length;
+      cardIdx = Math.max(cardsSeen, (level.cards ?? []).filter(c => c.s <= cpS).length);
       copIdx = Math.max(0, copAts().filter(a => a <= cpS).length - 1); // последняя пройденная точка копа срабатывает снова
     }
     if (firstStart) { firstStart = false; intro = 3; state = 'intro'; ui.overlay.className = 'show intro'; ui.ovTitle.textContent = '3'; ui.ovSub.textContent = level.intro ?? level.name; ui.ovHint.textContent = 'нажми, чтобы начать'; if (ui.ovName) ui.ovName.textContent = level.name; }
@@ -394,7 +395,7 @@ export function createGame(ui: GameUI, first: LevelData): Game {
     const ms = mainS(car.road, car.s);
     for (const c of level.checkpoints ?? []) if (ms >= c && c > cpS) cpS = c;
     if (level.cards && cardIdx < level.cards.length && ms >= level.cards[cardIdx].s) {
-      card = CARD_HOLD; sfx('card'); ui.overlay.className = 'show card'; ui.ovTitle.textContent = level.cards[cardIdx].text; ui.ovSub.textContent = ''; ui.ovHint.textContent = ''; cardIdx++;
+      card = CARD_HOLD; sfx('card'); ui.overlay.className = 'show card'; ui.ovTitle.textContent = level.cards[cardIdx].text; ui.ovSub.textContent = ''; ui.ovHint.textContent = ''; cardIdx++; cardsSeen = Math.max(cardsSeen, cardIdx);
     }
     if (level.trap && ms >= level.trap.s) return trap(level.trap.text);
     for (const rl of roads[car.road].rails) {
